@@ -2,6 +2,9 @@ from flask import Blueprint, request, jsonify
 import jwt
 from datetime import datetime, timedelta
 from src.models.user import User, db
+import logging
+
+logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -11,15 +14,33 @@ SECRET_KEY = 'asdf#FGSgvasgf$5$WGT'  # Em produção, usar variável de ambiente
 def login():
     """Endpoint de login que retorna JWT token"""
     try:
+        logger.info("Tentativa de login recebida")
         data = request.get_json()
         
-        if not data or not data.get('email') or not data.get('password'):
+        if not data:
+            logger.warning("Requisição sem dados JSON")
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        user = User.query.filter_by(email=data['email']).first()
+        if not data.get('email') or not data.get('password'):
+            logger.warning("Email ou senha não fornecidos")
+            return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
-        if not user or not user.check_password(data['password']):
+        email = data.get('email')
+        logger.info(f"Tentativa de login para email: {email}")
+        
+        user = User.query.filter_by(email=email).first()
+        
+        if not user:
+            logger.warning(f"Usuário não encontrado: {email}")
             return jsonify({'error': 'Credenciais inválidas'}), 401
+        
+        if not user.check_password(data['password']):
+            logger.warning(f"Senha incorreta para usuário: {email}")
+            return jsonify({'error': 'Credenciais inválidas'}), 401
+        
+        if not user.is_active:
+            logger.warning(f"Usuário inativo tentou fazer login: {email}")
+            return jsonify({'error': 'Usuário inativo. Entre em contato com o administrador'}), 403
         
         # Gerar JWT token
         payload = {
@@ -31,6 +52,7 @@ def login():
         }
         
         token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+        logger.info(f"Login bem-sucedido para usuário: {email}")
         
         return jsonify({
             'token': token,
@@ -38,6 +60,7 @@ def login():
         }), 200
         
     except Exception as e:
+        logger.error(f"Erro no login: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @auth_bp.route('/verify', methods=['GET'])
@@ -129,3 +152,44 @@ def admin_required(f):
     
     decorated.__name__ = f.__name__
     return decorated
+
+@auth_bp.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    """Endpoint para solicitar recuperação de senha (RN03)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        data = request.get_json()
+        
+        if not data or not data.get('email'):
+            # RN03 - Sempre retornar mensagem genérica
+            return jsonify({
+                'message': 'Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.'
+            }), 200
+        
+        email = data['email']
+        user = User.query.filter_by(email=email).first()
+        
+        # RN03 - Mesmo que o usuário não exista, retornar sucesso
+        # Isso evita enumerar emails válidos no sistema
+        if user:
+            # Aqui você implementaria:
+            # 1. Gerar token de recuperação com expiração (30-60min)
+            # 2. Salvar token no banco de dados
+            # 3. Enviar email com link de recuperação
+            # 
+            # Por enquanto, apenas log (não implementado envio de email)
+            logger.info(f"Solicitação de recuperação de senha para: {email}")
+        
+        # RN03 - Sempre mesma mensagem, não informar se email existe
+        return jsonify({
+            'message': 'Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.'
+        }), 200
+        
+    except Exception as e:
+        # Mesmo em caso de erro, não expor detalhes
+        logger.error(f"Erro em forgot_password: {e}")
+        return jsonify({
+            'message': 'Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.'
+        }), 200

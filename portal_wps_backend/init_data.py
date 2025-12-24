@@ -23,7 +23,8 @@ def init_test_data():
         # Criar usuário administrador
         admin_user = User(
             email='admin@wps.com',
-            role='admin'
+            role='admin',
+            is_active=True
         )
         admin_user.set_password('admin123')
         db.session.add(admin_user)
@@ -49,7 +50,8 @@ def init_test_data():
         supplier1_user = User(
             email='fornecedor1@abc.com',
             role='supplier',
-            supplier_id=supplier1.id
+            supplier_id=supplier1.id,
+            is_active=True
         )
         supplier1_user.set_password('fornecedor123')
         db.session.add(supplier1_user)
@@ -57,7 +59,8 @@ def init_test_data():
         supplier2_user = User(
             email='fornecedor2@xyz.com',
             role='supplier',
-            supplier_id=supplier2.id
+            supplier_id=supplier2.id,
+            is_active=True
         )
         supplier2_user.set_password('fornecedor123')
         db.session.add(supplier2_user)
@@ -69,6 +72,7 @@ def init_test_data():
         appointment1 = Appointment(
             date=today,
             time=time(9, 0),
+            time_end=time(10, 0),  # Agendamento de 1 hora
             purchase_order='PO-2025-001',
             truck_plate='ABC-1234',
             driver_name='João Silva',
@@ -79,12 +83,25 @@ def init_test_data():
         appointment2 = Appointment(
             date=today,
             time=time(14, 0),
+            time_end=time(15, 0),  # Agendamento de 1 hora
             purchase_order='PO-2025-002',
             truck_plate='XYZ-5678',
             driver_name='Maria Santos',
             supplier_id=supplier2.id
         )
         db.session.add(appointment2)
+        
+        # Criar um agendamento com intervalo maior para teste
+        appointment3 = Appointment(
+            date=today,
+            time=time(10, 0),
+            time_end=time(12, 0),  # Agendamento de 2 horas
+            purchase_order='PO-2025-003',
+            truck_plate='DEF-9012',
+            driver_name='Pedro Costa',
+            supplier_id=supplier1.id
+        )
+        db.session.add(appointment3)
         
         db.session.commit()
         
@@ -106,8 +123,9 @@ def init_test_data():
         print("Descrição: Transportadora XYZ S.A.")
         
         print(f"\nAgendamentos criados para hoje ({today}):")
-        print("- 09:00 - PO-2025-001 - ABC-1234 - João Silva")
-        print("- 14:00 - PO-2025-002 - XYZ-5678 - Maria Santos")
+        print("- 09:00-10:00 - PO-2025-001 - ABC-1234 - João Silva")
+        print("- 10:00-12:00 - PO-2025-003 - DEF-9012 - Pedro Costa")
+        print("- 14:00-15:00 - PO-2025-002 - XYZ-5678 - Maria Santos")
         
         print("\n=== INICIALIZAÇÃO CONCLUÍDA ===")
 

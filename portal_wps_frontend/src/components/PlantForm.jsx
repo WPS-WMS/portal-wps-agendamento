@@ -2,19 +2,25 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Save, Loader2, Building2, Copy, Check } from 'lucide-react'
 import { adminAPI } from '../lib/api'
 import { validation } from '../lib/utils'
-import { formatCNPJ } from '../lib/formatters'
+import { formatPhone, formatCEP } from '../lib/formatters'
 
-const SupplierForm = ({ onSubmit, onCancel }) => {
+const PlantForm = ({ onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
-    cnpj: '',
-    description: '',
-    email: ''
+    name: '',
+    code: '',
+    email: '',
+    phone: '',
+    street: '',
+    neighborhood: '',
+    number: '',
+    cep: '',
+    reference: ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -26,9 +32,14 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
     setError('')
   }
 
-  const handleCNPJChange = (e) => {
-    const value = formatCNPJ(e.target.value)
-    handleInputChange('cnpj', value)
+  const handleCEPChange = (e) => {
+    const value = formatCEP(e.target.value)
+    handleInputChange('cep', value)
+  }
+
+  const handlePhoneChange = (e) => {
+    const value = formatPhone(e.target.value)
+    handleInputChange('phone', value)
   }
 
   const handleSubmit = async (e) => {
@@ -38,23 +49,35 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
     setSuccess(null)
 
     // Validações
-    if (!validation.isValidCNPJ(formData.cnpj)) {
-      setError('CNPJ inválido')
+    if (!formData.name.trim()) {
+      setError('Nome é obrigatório')
+      setLoading(false)
+      return
+    }
+
+    if (!formData.code.trim()) {
+      setError('Código é obrigatório')
+      setLoading(false)
+      return
+    }
+
+    if (!formData.email.trim()) {
+      setError('E-mail é obrigatório')
       setLoading(false)
       return
     }
 
     if (!validation.isValidEmail(formData.email)) {
-      setError('Email inválido')
+      setError('E-mail inválido')
       setLoading(false)
       return
     }
 
     try {
-      const result = await adminAPI.createSupplier(formData)
+      const result = await adminAPI.createPlant(formData)
       setSuccess(result)
     } catch (err) {
-      setError(err.message)
+      setError(err.response?.data?.error || err.message || 'Erro ao salvar planta')
     } finally {
       setLoading(false)
     }
@@ -77,10 +100,9 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
   }
 
   const isFormValid = () => {
-    return formData.cnpj.trim() && 
-           formData.description.trim() && 
+    return formData.name.trim() && 
+           formData.code.trim() && 
            formData.email.trim() &&
-           validation.isValidCNPJ(formData.cnpj) &&
            validation.isValidEmail(formData.email)
   }
 
@@ -91,10 +113,10 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-green-800">
               <Building2 className="w-5 h-5" />
-              Fornecedor Criado com Sucesso!
+              Planta Criada com Sucesso!
             </DialogTitle>
             <DialogDescription>
-              O fornecedor foi cadastrado e o usuário foi criado
+              A planta foi cadastrada e o usuário foi criado
             </DialogDescription>
           </DialogHeader>
 
@@ -103,10 +125,10 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
               <CardHeader>
                 <CardTitle className="text-green-800 flex items-center gap-2">
                   <Building2 className="w-5 h-5" />
-                  {success.supplier.description}
+                  {success.plant.name}
                 </CardTitle>
                 <CardDescription className="text-green-700">
-                  CNPJ: {success.supplier.cnpj}
+                  Código: {success.plant.code}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -147,7 +169,7 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
                 <Alert>
                   <AlertDescription>
                     <strong>Importante:</strong> Anote ou copie a senha temporária, pois ela não será exibida novamente. 
-                    O fornecedor deve usar essas credenciais para fazer o primeiro login no sistema.
+                    O usuário deve usar essas credenciais para fazer o primeiro login no sistema.
                   </AlertDescription>
                 </Alert>
               </CardContent>
@@ -170,10 +192,10 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Building2 className="w-5 h-5" />
-            Novo Fornecedor
+            Nova Planta
           </DialogTitle>
           <DialogDescription>
-            Cadastre um novo fornecedor e crie seu usuário de acesso
+            Preencha os dados para criar uma nova planta
           </DialogDescription>
         </DialogHeader>
 
@@ -184,59 +206,135 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
             </Alert>
           )}
 
-          {/* CNPJ */}
+          {/* Nome (Obrigatório) */}
           <div className="space-y-2">
-            <Label htmlFor="cnpj">CNPJ</Label>
+            <Label htmlFor="name">Nome *</Label>
             <Input
-              id="cnpj"
+              id="name"
               type="text"
-              placeholder="00.000.000/0000-00"
-              value={formData.cnpj}
-              onChange={handleCNPJChange}
-              maxLength={18}
+              placeholder="Ex: Planta São Paulo"
+              value={formData.name}
+              onChange={(e) => handleInputChange('name', e.target.value)}
               required
               disabled={loading}
             />
           </div>
 
-          {/* Descrição */}
+          {/* Código (Obrigatório) */}
           <div className="space-y-2">
-            <Label htmlFor="description">Nome/Descrição do Fornecedor</Label>
+            <Label htmlFor="code">Código *</Label>
             <Input
-              id="description"
+              id="code"
               type="text"
-              placeholder="Ex: Transportadora ABC Ltda"
-              value={formData.description}
-              onChange={(e) => handleInputChange('description', e.target.value)}
+              placeholder="Ex: SP-001"
+              value={formData.code}
+              onChange={(e) => handleInputChange('code', e.target.value)}
               required
               disabled={loading}
             />
           </div>
 
-          {/* Email */}
+          {/* E-mail (Obrigatório) */}
           <div className="space-y-2">
-            <Label htmlFor="email">Email de Acesso</Label>
+            <Label htmlFor="email">E-mail *</Label>
             <Input
               id="email"
               type="email"
-              placeholder="contato@fornecedor.com"
+              placeholder="contato@planta.com"
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
               required
               disabled={loading}
             />
-            <p className="text-xs text-gray-500">
-              Este email será usado pelo fornecedor para fazer login no sistema
-            </p>
+          </div>
+
+          {/* Telefone (Opcional) */}
+          <div className="space-y-2">
+            <Label htmlFor="phone">Telefone (opcional)</Label>
+            <Input
+              id="phone"
+              type="text"
+              placeholder="(00) 00000-0000"
+              value={formData.phone}
+              onChange={handlePhoneChange}
+              maxLength={15}
+              disabled={loading}
+            />
+          </div>
+
+          {/* Separador - Endereço */}
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-sm font-semibold mb-6">Endereço (opcional)</h3>
+
+            {/* CEP */}
+            <div className="space-y-2 mb-4">
+              <Label htmlFor="cep">CEP</Label>
+              <Input
+                id="cep"
+                type="text"
+                placeholder="00000-000"
+                value={formData.cep}
+                onChange={handleCEPChange}
+                maxLength={9}
+                disabled={loading}
+              />
+            </div>
+
+            {/* Rua */}
+            <div className="space-y-2 mb-4">
+              <Label htmlFor="street">Rua</Label>
+              <Input
+                id="street"
+                type="text"
+                placeholder="Nome da rua"
+                value={formData.street}
+                onChange={(e) => handleInputChange('street', e.target.value)}
+                disabled={loading}
+              />
+            </div>
+
+            {/* Número e Bairro */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="space-y-2">
+                <Label htmlFor="number">Número</Label>
+                <Input
+                  id="number"
+                  type="text"
+                  placeholder="123"
+                  value={formData.number}
+                  onChange={(e) => handleInputChange('number', e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="neighborhood">Bairro</Label>
+                <Input
+                  id="neighborhood"
+                  type="text"
+                  placeholder="Nome do bairro"
+                  value={formData.neighborhood}
+                  onChange={(e) => handleInputChange('neighborhood', e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            {/* Referência */}
+            <div className="space-y-2">
+              <Label htmlFor="reference">Referência</Label>
+              <Input
+                id="reference"
+                type="text"
+                placeholder="Ponto de referência próximo"
+                value={formData.reference}
+                onChange={(e) => handleInputChange('reference', e.target.value)}
+                disabled={loading}
+              />
+            </div>
           </div>
 
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              disabled={loading}
-            >
+            <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
               Cancelar
             </Button>
             <Button
@@ -247,12 +345,12 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Criando...
+                  Salvando...
                 </>
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  Criar Fornecedor
+                  Salvar
                 </>
               )}
             </Button>
@@ -263,4 +361,5 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
   )
 }
 
-export default SupplierForm
+export default PlantForm
+

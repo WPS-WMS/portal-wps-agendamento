@@ -1,0 +1,209 @@
+/* Garantir que o body não tenha overflow escondido */
+body {
+  overflow-x: visible;
+}
+
+/* Garantir que dropdowns do Radix UI sejam visíveis */
+[data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+}
+
+/* ===================================
+   Estilos para Pickers de Data e Hora
+   =================================== */
+
+/* Inputs de Data e Hora - Aparência Base */
+input[type="date"],
+input[type="time"] {
+  padding: 0.625rem 2.75rem 0.625rem 0.875rem !important; /* Aumentado padding-right para dar espaço ao ícone */
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #1f2937;
+  background-color: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  transition: all 0.15s ease-in-out;
+  cursor: pointer;
+  min-height: 2.75rem;
+  box-sizing: border-box;
+  width: 100%;
+  position: relative;
+  overflow: visible;
+  display: flex;
+  align-items: center;
+}
+
+/* Hover State */
+input[type="date"]:hover:not(:disabled),
+input[type="time"]:hover:not(:disabled) {
+  border-color: #9ca3af;
+  background-color: #f9fafb;
+}
+
+/* Focus State */
+input[type="date"]:focus,
+input[type="time"]:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  background-color: #ffffff;
+}
+
+/* Disabled State */
+input[type="date"]:disabled,
+input[type="time"]:disabled {
+  background-color: #f3f4f6;
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Ícones do Picker (calendário e relógio) */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  padding: 0.375rem;
+  margin-left: 0.5rem;
+  margin-right: -0.5rem; /* Alinha melhor à direita */
+  opacity: 0.6;
+  transition: opacity 0.15s ease-in-out;
+  position: absolute;
+  right: 0.5rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+input[type="date"]:hover::-webkit-calendar-picker-indicator,
+input[type="time"]:hover::-webkit-calendar-picker-indicator {
+  opacity: 1;
+}
+
+/* Customização do Picker de Hora (Chrome/Edge) */
+input[type="time"]::-webkit-datetime-edit {
+  padding: 0.125rem 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+input[type="time"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  max-width: calc(100% - 3rem); /* Garante espaço para o ícone */
+}
+
+input[type="time"]::-webkit-datetime-edit-hour-field,
+input[type="time"]::-webkit-datetime-edit-minute-field {
+  padding: 0.25rem 0.375rem;
+  background-color: transparent;
+  border-radius: 0.25rem;
+  transition: background-color 0.15s ease-in-out;
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+input[type="time"]::-webkit-datetime-edit-hour-field:focus,
+input[type="time"]::-webkit-datetime-edit-minute-field:focus {
+  background-color: #dbeafe;
+  color: #1e40af;
+  outline: none;
+}
+
+input[type="time"]::-webkit-datetime-edit-text {
+  padding: 0 0.25rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Customização do Picker de Data (Chrome/Edge) */
+input[type="date"]::-webkit-datetime-edit {
+  padding: 0.125rem 0;
+  display: inline-flex;
+  align-items: center;
+  overflow: visible;
+}
+
+input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  max-width: calc(100% - 3rem); /* Garante espaço para o ícone */
+  overflow: visible;
+}
+
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+  padding: 0.25rem 0.375rem;
+  background-color: transparent;
+  border-radius: 0.25rem;
+  transition: background-color 0.15s ease-in-out;
+  min-width: 1.5rem;
+  text-align: center;
+}
+
+input[type="date"]::-webkit-datetime-edit-day-field:focus,
+input[type="date"]::-webkit-datetime-edit-month-field:focus,
+input[type="date"]::-webkit-datetime-edit-year-field:focus {
+  background-color: #dbeafe;
+  color: #1e40af;
+  outline: none;
+}
+
+input[type="date"]::-webkit-datetime-edit-text {
+  padding: 0 0.25rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Clear button (X) - esconder */
+input[type="date"]::-webkit-clear-button,
+input[type="time"]::-webkit-clear-button {
+  display: none;
+}
+
+/* Inner spin button - ajustar */
+input[type="date"]::-webkit-inner-spin-button,
+input[type="time"]::-webkit-inner-spin-button {
+  height: auto;
+  margin: 0;
+}
+
+/* Firefox - Customização */
+input[type="date"]::-moz-datetime-edit,
+input[type="time"]::-moz-datetime-edit {
+  padding: 0.125rem 0;
+}
+
+/* Responsividade - Telas Menores */
+@media (max-width: 640px) {
+  input[type="date"],
+  input[type="time"] {
+    font-size: 1rem;
+    padding: 0.75rem 3rem 0.75rem 1rem !important; /* Mantém espaço para o ícone */
+    min-height: 3rem;
+  }
+  
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    right: 0.75rem;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}
+
+/* Estado de Erro (border vermelha mantida) */
+input[type="date"].border-red-500,
+input[type="time"].border-red-500 {
+  border-color: #ef4444 !important;
+}
+
+input[type="date"].border-red-500:focus,
+input[type="time"].border-red-500:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+}
+

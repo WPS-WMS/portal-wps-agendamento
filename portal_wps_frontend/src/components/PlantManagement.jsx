@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { 
   Building2, 
-  Edit, 
   Trash2, 
   Ban, 
   CheckCircle, 
@@ -17,10 +16,11 @@ import {
 } from 'lucide-react'
 import { adminAPI } from '../lib/api'
 
-const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
+const PlantManagement = ({ plant, onBack, onUpdate }) => {
   const [formData, setFormData] = useState({
-    description: supplier?.description || '',
-    is_active: supplier?.is_active !== false
+    name: plant?.name || '',
+    code: plant?.code || '',
+    is_active: plant?.is_active !== false
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -36,10 +36,10 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
     setError('')
 
     try {
-      await adminAPI.updateSupplier(supplier.id, formData)
+      await adminAPI.updatePlant(plant.id, formData)
       onUpdate()
     } catch (err) {
-      setError(err.message)
+      setError(err.response?.data?.error || err.message || 'Erro ao salvar planta')
     } finally {
       setLoading(false)
     }
@@ -50,10 +50,10 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
     setError('')
 
     try {
-      await adminAPI.deleteSupplier(supplier.id)
+      await adminAPI.deletePlant(plant.id)
       onUpdate()
     } catch (err) {
-      setError(err.message)
+      setError(err.response?.data?.error || err.message || 'Erro ao bloquear planta')
       setShowDeleteConfirm(false)
     } finally {
       setLoading(false)
@@ -66,10 +66,10 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
     setError('')
 
     try {
-      await adminAPI.updateSupplier(supplier.id, { is_active: newStatus })
+      await adminAPI.updatePlant(plant.id, { is_active: newStatus })
       setFormData(prev => ({ ...prev, is_active: newStatus }))
     } catch (err) {
-      setError(err.message)
+      setError(err.response?.data?.error || err.message || 'Erro ao alterar status')
     } finally {
       setLoading(false)
     }
@@ -82,7 +82,7 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
           <DialogHeader>
             <DialogTitle className="text-red-800 flex items-center gap-2">
               <Trash2 className="w-5 h-5" />
-              Confirmar Exclusão
+              Confirmar Bloqueio
             </DialogTitle>
             <DialogDescription>
               Esta ação não pode ser desfeita
@@ -94,10 +94,10 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
               <CardHeader>
                 <CardTitle className="text-red-800 flex items-center gap-2">
                   <Trash2 className="w-5 h-5" />
-                  Excluir Fornecedor
+                  Bloquear Planta
                 </CardTitle>
                 <CardDescription className="text-red-700">
-                  Tem certeza que deseja excluir o fornecedor "{supplier.description}"?
+                  Tem certeza que deseja bloquear a planta "{plant.name}"?
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -109,19 +109,24 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
 
                 <div className="bg-white p-4 rounded border">
                   <p className="text-sm text-gray-600 mb-2">
-                    <strong>CNPJ:</strong> {supplier.cnpj}
+                    <strong>Código:</strong> {plant.code}
                   </p>
-                  <p className="text-sm text-gray-600">
-                    <strong>Descrição:</strong> {supplier.description}
+                  <p className="text-sm text-gray-600 mb-2">
+                    <strong>Nome:</strong> {plant.name}
                   </p>
+                  {plant.email && (
+                    <p className="text-sm text-gray-600">
+                      <strong>E-mail:</strong> {plant.email}
+                    </p>
+                  )}
                 </div>
 
                 <Alert>
                   <AlertDescription>
                     <strong>Atenção:</strong> Esta ação irá:
                     <ul className="list-disc list-inside mt-2 space-y-1">
-                      <li>Desativar o fornecedor no sistema</li>
-                      <li>Bloquear o acesso dos usuários deste fornecedor</li>
+                      <li>Desativar a planta no sistema</li>
+                      <li>Bloquear o acesso dos usuários desta planta</li>
                       <li>Manter o histórico de agendamentos para auditoria</li>
                     </ul>
                   </AlertDescription>
@@ -147,12 +152,12 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Excluindo...
+                  Bloqueando...
                 </>
               ) : (
                 <>
                   <Trash2 className="w-4 h-4" />
-                  Confirmar Exclusão
+                  Confirmar Bloqueio
                 </>
               )}
             </Button>
@@ -168,27 +173,27 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Building2 className="w-5 h-5" />
-            Gerenciar Fornecedor
+            Gerenciar Planta
           </DialogTitle>
           <DialogDescription>
-            Edite, bloqueie ou exclua o fornecedor
+            Edite, bloqueie ou desative a planta
           </DialogDescription>
         </DialogHeader>
 
-      {/* Status do Fornecedor */}
+      {/* Status da Planta */}
       <Card className={`${formData.is_active ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className={`${formData.is_active ? 'text-green-800' : 'text-red-800'} flex items-center gap-2`}>
               <Building2 className="w-5 h-5" />
-              {supplier.description}
+              {plant.name}
             </CardTitle>
             <Badge className={formData.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
               {formData.is_active ? 'Ativo' : 'Bloqueado'}
             </Badge>
           </div>
           <CardDescription className={formData.is_active ? 'text-green-700' : 'text-red-700'}>
-            CNPJ: {supplier.cnpj}
+            Código: {plant.code}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -219,9 +224,9 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
       {/* Formulário de Edição */}
       <Card>
         <CardHeader>
-          <CardTitle>Dados do Fornecedor</CardTitle>
+          <CardTitle>Dados da Planta</CardTitle>
           <CardDescription>
-            Edite as informações do fornecedor
+            Edite as informações da planta
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -231,26 +236,24 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
             </Alert>
           )}
 
-          {/* CNPJ (somente leitura) */}
+          {/* Nome */}
           <div className="space-y-2">
-            <Label>CNPJ</Label>
+            <Label htmlFor="name">Nome da Planta</Label>
             <Input
-              value={supplier.cnpj}
-              disabled
-              className="bg-gray-50"
+              id="name"
+              value={formData.name}
+              onChange={(e) => handleInputChange('name', e.target.value)}
+              disabled={loading}
             />
-            <p className="text-xs text-gray-500">
-              O CNPJ não pode ser alterado após o cadastro
-            </p>
           </div>
 
-          {/* Descrição */}
+          {/* Código */}
           <div className="space-y-2">
-            <Label htmlFor="description">Nome/Descrição do Fornecedor</Label>
+            <Label htmlFor="code">Código</Label>
             <Input
-              id="description"
-              value={formData.description}
-              onChange={(e) => handleInputChange('description', e.target.value)}
+              id="code"
+              value={formData.code}
+              onChange={(e) => handleInputChange('code', e.target.value)}
               disabled={loading}
             />
           </div>
@@ -264,7 +267,7 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
               className="flex items-center gap-2"
             >
               <Trash2 className="w-4 h-4" />
-              Excluir Fornecedor
+              Bloquear Planta
             </Button>
             <Button
               variant="outline"
@@ -275,7 +278,7 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={loading || !formData.description.trim()}
+              disabled={loading || !formData.name.trim() || !formData.code.trim()}
               className="flex items-center gap-2"
             >
               {loading ? (
@@ -298,4 +301,5 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
   )
 }
 
-export default SupplierManagement
+export default PlantManagement
+

@@ -4,8 +4,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ArrowLeft, Save, Loader2 } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import TimeInput from '@/components/ui/time-input'
+import DateInput from '@/components/ui/date-input'
+import { ArrowLeft, Save, Loader2, AlertCircle } from 'lucide-react'
 import { supplierAPI } from '../lib/api'
 import { dateUtils } from '../lib/utils'
 
@@ -17,76 +20,136 @@ const AppointmentForm = ({ appointment, preSelectedDate, preSelectedTime, onSubm
     truck_plate: '',
     driver_name: ''
   })
-  const [availableSlots, setAvailableSlots] = useState([])
   const [loading, setLoading] = useState(false)
-  const [loadingSlots, setLoadingSlots] = useState(false)
   const [error, setError] = useState('')
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false)
+  const [rescheduleReason, setRescheduleReason] = useState('')
+  const [pendingSubmit, setPendingSubmit] = useState(null)
+  const [isRescheduling, setIsRescheduling] = useState(false) // Flag para indicar que é um reagendamento
+  const [originalValues, setOriginalValues] = useState({
+    date: '',
+    time: ''
+  })
 
   useEffect(() => {
     if (appointment) {
+      const normalizedDate = appointment.date || ''
+      const normalizedTime = appointment.time ? appointment.time.slice(0, 5) : ''
+      
       setFormData({
-        date: appointment.date,
-        time: appointment.time,
+        date: normalizedDate,
+        time: normalizedTime,
         purchase_order: appointment.purchase_order,
         truck_plate: appointment.truck_plate,
         driver_name: appointment.driver_name
       })
-      if (appointment.date) {
-        loadAvailableSlots(appointment.date)
-      }
-    } else if (preSelectedDate) {
-      // Se há data pré-selecionada, carregar horários disponíveis
-      loadAvailableSlots(preSelectedDate)
+      
+      // Armazenar valores originais
+      setOriginalValues({
+        date: normalizedDate,
+        time: normalizedTime
+      })
     }
   }, [appointment, preSelectedDate])
 
-  const loadAvailableSlots = async (date) => {
-    if (!date) return
-
-    try {
-      setLoadingSlots(true)
-      const data = await supplierAPI.getAvailableSlots(date)
-      setAvailableSlots(data.available_slots)
-    } catch (err) {
-      setError('Erro ao carregar horários disponíveis: ' + err.message)
-    } finally {
-      setLoadingSlots(false)
-    }
-  }
-
   const handleDateChange = (e) => {
     const newDate = e.target.value
-    setFormData(prev => ({ ...prev, date: newDate, time: '' }))
-    if (newDate) {
-      loadAvailableSlots(newDate)
-    } else {
-      setAvailableSlots([])
-    }
+    setFormData(prev => ({ ...prev, date: newDate }))
   }
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  // Verificar se houve mudança de data ou horário
+  const hasDateTimeChanged = () => {
+    if (!appointment) return false
+    
+    return formData.date !== originalValues.date ||
+           formData.time !== originalValues.time
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    // Se houve mudança de data/horário, exibir modal de motivo
+    if (appointment && hasDateTimeChanged()) {
+      setIsRescheduling(true) // Marcar que é um reagendamento
+      setPendingSubmit(() => async () => {
+        await performSubmit()
+      })
+      setShowRescheduleModal(true)
+      return
+    }
+
+    // Se não houve mudança ou é criação, salvar diretamente
+    setIsRescheduling(false)
+    await performSubmit()
+  }
+
+  const performSubmit = async () => {
     setLoading(true)
     setError('')
 
     try {
+      const submitData = { ...formData }
+      
+      // Se é reagendamento, incluir o motivo
+      if (appointment && isRescheduling && rescheduleReason.trim()) {
+        submitData.motivo_reagendamento = rescheduleReason.trim()
+      }
+
       if (appointment) {
         // Editar agendamento existente
-        await supplierAPI.updateAppointment(appointment.id, formData)
+        await supplierAPI.updateAppointment(appointment.id, submitData)
       } else {
         // Criar novo agendamento
-        await supplierAPI.createAppointment(formData)
+        await supplierAPI.createAppointment(submitData)
       }
+      
+      // Limpar estado da modal
+      setShowRescheduleModal(false)
+      setRescheduleReason('')
+      setPendingSubmit(null)
+      setIsRescheduling(false)
+      
       onSubmit()
     } catch (err) {
-      setError(err.message)
+      if (err.response?.status === 400 && err.response?.data?.requires_reschedule_reason) {
+        // Se o backend exigir motivo mas não foi fornecido, mostrar modal
+        setPendingSubmit(() => async () => {
+          await performSubmit()
+        })
+        setShowRescheduleModal(true)
+      } else {
+        setError(err.response?.data?.error || err.message || 'Erro ao salvar agendamento')
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleConfirmReschedule = async () => {
+    if (!rescheduleReason.trim()) {
+      return
+    }
+    
+    if (pendingSubmit) {
+      await pendingSubmit()
+    }
+  }
+
+  const handleCancelReschedule = () => {
+    setShowRescheduleModal(false)
+    setRescheduleReason('')
+    setPendingSubmit(null)
+    setIsRescheduling(false)
+    // Restaurar valores originais
+    setFormData(prev => ({
+      ...prev,
+      date: originalValues.date,
+      time: originalValues.time
+    }))
   }
 
   const isFormValid = () => {
@@ -253,6 +316,66 @@ const AppointmentForm = ({ appointment, preSelectedDate, preSelectedTime, onSubm
           </form>
         </CardContent>
       </Card>
+
+      {/* Modal de Motivo de Reagendamento */}
+      <Dialog open={showRescheduleModal} onOpenChange={setShowRescheduleModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-purple-600" />
+              Motivo do Reagendamento
+            </DialogTitle>
+            <DialogDescription>
+              Você alterou a data ou horário do agendamento. Por favor, informe o motivo do reagendamento.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reschedule_reason">
+                Motivo do Reagendamento <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id="reschedule_reason"
+                placeholder="Ex: Cliente solicitou alteração de horário devido a imprevisto no transporte..."
+                value={rescheduleReason}
+                onChange={(e) => setRescheduleReason(e.target.value)}
+                rows={4}
+                className="resize-none"
+              />
+              <p className="text-xs text-gray-500">
+                Este motivo será registrado junto ao agendamento e o status será alterado para "Reagendado".
+              </p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelReschedule}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmReschedule}
+              disabled={loading || !rescheduleReason.trim()}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Salvando...
+                </>
+              ) : (
+                'Confirmar Reagendamento'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

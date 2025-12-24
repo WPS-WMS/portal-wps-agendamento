@@ -4,10 +4,67 @@ from src.models.user import User, db
 from src.models.supplier import Supplier
 from src.models.appointment import Appointment
 from src.routes.auth import admin_required
-import secrets
-import string
+from src.utils.helpers import generate_temp_password
+import logging
+
+logger = logging.getLogger(__name__)
 
 admin_bp = Blueprint('admin', __name__)
+
+def get_time_slots_in_range(start_time, end_time):
+    """Gera lista de slots de 1 hora dentro de um intervalo"""
+    slots = []
+    current = datetime.combine(datetime.today().date(), start_time)
+    end = datetime.combine(datetime.today().date(), end_time)
+    
+    while current < end:
+        slots.append(current.time())
+        current += timedelta(hours=1)
+    
+    return slots
+
+def validate_time_range_capacity(date, start_time, end_time, max_capacity, exclude_appointment_id=None):
+    """
+    Valida se todos os slots de 1 hora dentro do intervalo respeitam a capacidade máxima.
+    Retorna (is_valid, conflicting_slot) onde:
+    - is_valid: True se todos os slots estão disponíveis
+    - conflicting_slot: horário que está indisponível (None se todos estão disponíveis)
+    """
+    from sqlalchemy import or_, and_
+    
+    slots = get_time_slots_in_range(start_time, end_time)
+    
+    for slot in slots:
+        # Contar agendamentos que ocupam este slot
+        # Um agendamento ocupa um slot se:
+        # 1. É um agendamento antigo (sem time_end) e time == slot
+        # 2. É um agendamento com intervalo e o slot está dentro do intervalo
+        
+        query = Appointment.query.filter(
+            Appointment.date == date
+        ).filter(
+            or_(
+                # Agendamento antigo (sem time_end) que começa neste slot
+                and_(
+                    Appointment.time == slot,
+                    Appointment.time_end.is_(None)
+                ),
+                # Agendamento com intervalo que inclui este slot
+                and_(
+                    Appointment.time <= slot,
+                    Appointment.time_end.isnot(None),
+                    Appointment.time_end > slot
+                )
+            )
+        )
+        
+        if exclude_appointment_id:
+            query = query.filter(Appointment.id != exclude_appointment_id)
+        
+        if query.count() >= max_capacity:
+            return False, slot
+    
+    return True, None
 
 @admin_bp.route('/suppliers', methods=['GET'])
 @admin_required
@@ -48,7 +105,7 @@ def create_supplier(current_user):
         db.session.flush()  # Para obter o ID do supplier
         
         # Gerar senha temporária
-        temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(8))
+        temp_password = generate_temp_password()
         
         # Criar usuário para o fornecedor
         user = User(
@@ -72,32 +129,213 @@ def create_supplier(current_user):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@admin_bp.route('/appointments', methods=['GET'])
+@admin_bp.route('/appointments', methods=['GET', 'POST'])
 @admin_required
-def get_appointments(current_user):
-    """Retorna agendamentos para uma semana específica"""
-    try:
-        week_start = request.args.get('week')
-        
-        if not week_start:
-            return jsonify({'error': 'Parâmetro week é obrigatório (formato: YYYY-MM-DD)'}), 400
-        
+def manage_appointments(current_user):
+    """Gerencia agendamentos: GET para listar, POST para criar"""
+    
+    # GET - Retorna agendamentos para uma semana específica ou dia específico
+    if request.method == 'GET':
         try:
-            start_date = datetime.strptime(week_start, '%Y-%m-%d').date()
-        except ValueError:
-            return jsonify({'error': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
-        
-        end_date = start_date + timedelta(days=6)
-        
-        appointments = Appointment.query.filter(
-            Appointment.date >= start_date,
-            Appointment.date <= end_date
-        ).order_by(Appointment.date, Appointment.time).all()
-        
-        return jsonify([appointment.to_dict() for appointment in appointments]), 200
-        
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+            week_start = request.args.get('week')
+            date_str = request.args.get('date')  # Para visualização diária
+            
+            # Se não tem week, tenta usar date (visualização diária)
+            if not week_start and date_str:
+                try:
+                    target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    logger.info(f"Buscando agendamentos para data: {target_date}")
+                    
+                    appointments = Appointment.query.filter(
+                        Appointment.date == target_date
+                    ).order_by(Appointment.date, Appointment.time).all()
+                    
+                    logger.info(f"Encontrados {len(appointments)} agendamentos")
+                    
+                    # Serializar agendamentos com tratamento de erro
+                    result = []
+                    for appointment in appointments:
+                        try:
+                            result.append(appointment.to_dict())
+                        except Exception as e:
+                            logger.error(f"Erro ao serializar agendamento {appointment.id}: {e}")
+                            # Retornar dados básicos mesmo com erro
+                            result.append({
+                                'id': appointment.id,
+                                'date': appointment.date.isoformat() if appointment.date else None,
+                                'time': appointment.time.isoformat() if appointment.time else None,
+                                'time_end': appointment.time_end.isoformat() if appointment.time_end else None,
+                                'purchase_order': appointment.purchase_order,
+                                'truck_plate': appointment.truck_plate,
+                                'driver_name': appointment.driver_name,
+                                'status': appointment.status,
+                                'supplier_id': appointment.supplier_id,
+                                'error': 'Erro ao carregar dados completos'
+                            })
+                    
+                    return jsonify(result), 200
+                except ValueError:
+                    return jsonify({'error': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
+            
+            # Visualização semanal (compatibilidade)
+            if not week_start:
+                return jsonify({'error': 'Parâmetro week ou date é obrigatório (formato: YYYY-MM-DD)'}), 400
+            
+            try:
+                start_date = datetime.strptime(week_start, '%Y-%m-%d').date()
+                logger.info(f"Buscando agendamentos para semana começando em: {start_date}")
+            except ValueError:
+                return jsonify({'error': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
+            
+            end_date = start_date + timedelta(days=6)
+            
+            appointments = Appointment.query.filter(
+                Appointment.date >= start_date,
+                Appointment.date <= end_date
+            ).order_by(Appointment.date, Appointment.time).all()
+            
+            logger.info(f"Encontrados {len(appointments)} agendamentos para a semana")
+            
+            # Serializar agendamentos com tratamento de erro
+            result = []
+            for appointment in appointments:
+                try:
+                    result.append(appointment.to_dict())
+                except Exception as e:
+                    logger.error(f"Erro ao serializar agendamento {appointment.id}: {e}")
+                    # Retornar dados básicos mesmo com erro
+                    result.append({
+                        'id': appointment.id,
+                        'date': appointment.date.isoformat() if appointment.date else None,
+                        'time': appointment.time.isoformat() if appointment.time else None,
+                        'time_end': appointment.time_end.isoformat() if appointment.time_end else None,
+                        'purchase_order': appointment.purchase_order,
+                        'truck_plate': appointment.truck_plate,
+                        'driver_name': appointment.driver_name,
+                        'status': appointment.status,
+                        'supplier_id': appointment.supplier_id,
+                        'error': 'Erro ao carregar dados completos'
+                    })
+            
+            return jsonify(result), 200
+            
+        except Exception as e:
+            logger.error(f"Erro ao buscar agendamentos: {e}", exc_info=True)
+            return jsonify({'error': str(e)}), 500
+    
+    # POST - Cria um novo agendamento
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            
+            # Validar campos obrigatórios
+            required_fields = ['date', 'time', 'time_end', 'purchase_order', 'truck_plate', 'driver_name', 'supplier_id']
+            if not data or not all(k in data for k in required_fields):
+                return jsonify({'error': 'Todos os campos são obrigatórios: date, time, time_end, purchase_order, truck_plate, driver_name, supplier_id'}), 400
+            
+            # Validar se time_end não está vazio
+            if not data.get('time_end') or not data['time_end'].strip():
+                return jsonify({'error': 'O horário final é obrigatório'}), 400
+            
+            # Validar formatos de data e hora
+            try:
+                appointment_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+                appointment_time = datetime.strptime(data['time'], '%H:%M').time()
+                appointment_time_end = datetime.strptime(data['time_end'], '%H:%M').time()
+            except ValueError:
+                return jsonify({'error': 'Formato de data/hora inválido. Use YYYY-MM-DD para data e HH:MM para hora'}), 400
+            
+            # Validar intervalo de horário
+            if appointment_time_end <= appointment_time:
+                return jsonify({'error': 'O horário final deve ser maior que o horário inicial'}), 400
+            
+            # Verificar se a data não é no passado
+            if appointment_date < datetime.now().date():
+                return jsonify({'error': 'Não é possível agendar para datas passadas'}), 400
+            
+            # Verificar se o fornecedor existe
+            supplier = Supplier.query.get(data['supplier_id'])
+            if not supplier:
+                return jsonify({'error': 'Fornecedor não encontrado'}), 404
+            
+            if not supplier.is_active:
+                return jsonify({'error': 'Fornecedor inativo'}), 400
+            
+            # Verificar capacidade máxima por horário
+            from src.models.system_config import SystemConfig
+            
+            # Buscar configuração de capacidade máxima (padrão: 1)
+            capacity_config = SystemConfig.query.filter_by(key='max_capacity_per_slot').first()
+            max_capacity = int(capacity_config.value) if capacity_config else 1
+            
+            # Validar capacidade para todos os slots do intervalo
+            if appointment_time_end:
+                # Agendamento com intervalo
+                is_valid, conflicting_slot = validate_time_range_capacity(
+                    appointment_date, 
+                    appointment_time, 
+                    appointment_time_end, 
+                    max_capacity
+                )
+                
+                if not is_valid:
+                    slot_str = conflicting_slot.strftime('%H:%M') if conflicting_slot else 'desconhecido'
+                    return jsonify({
+                        'error': f'Capacidade máxima de {max_capacity} agendamento(s) por horário foi atingida no horário {slot_str}. Por favor, escolha outro intervalo.'
+                    }), 409
+            else:
+                # Agendamento antigo (apenas horário único) - manter compatibilidade
+                from sqlalchemy import and_, or_
+                
+                # Contar todos os agendamentos que ocupam este horário específico:
+                # 1. Agendamentos antigos (sem time_end) que começam neste horário
+                # 2. Agendamentos com intervalo que incluem este horário
+                total_count = Appointment.query.filter(
+                    Appointment.date == appointment_date
+                ).filter(
+                    or_(
+                        # Agendamento antigo que começa neste horário
+                        and_(
+                            Appointment.time == appointment_time,
+                            Appointment.time_end.is_(None)
+                        ),
+                        # Agendamento com intervalo que inclui este horário
+                        and_(
+                            Appointment.time <= appointment_time,
+                            Appointment.time_end.isnot(None),
+                            Appointment.time_end > appointment_time
+                        )
+                    )
+                ).count()
+                
+                if total_count >= max_capacity:
+                    return jsonify({
+                        'error': f'Capacidade máxima de {max_capacity} agendamento(s) por horário foi atingida. Por favor, escolha outro horário.'
+                    }), 409
+            
+            # Criar agendamento
+            appointment = Appointment(
+                date=appointment_date,
+                time=appointment_time,
+                time_end=appointment_time_end,
+                purchase_order=data['purchase_order'].strip(),
+                truck_plate=data['truck_plate'].strip().upper(),
+                driver_name=data['driver_name'].strip(),
+                supplier_id=data['supplier_id'],
+                status='scheduled'
+            )
+            
+            db.session.add(appointment)
+            db.session.commit()
+            
+            return jsonify({
+                'message': 'Agendamento criado com sucesso',
+                'appointment': appointment.to_dict()
+            }), 201
+            
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/appointments/<int:appointment_id>/check-in', methods=['POST'])
 @admin_required
@@ -109,16 +347,34 @@ def check_in_appointment(current_user, appointment_id):
         if not appointment:
             return jsonify({'error': 'Agendamento não encontrado'}), 404
         
-        if appointment.status != 'scheduled':
-            return jsonify({'error': f'Agendamento já está no status: {appointment.status}'}), 400
+        logger.info(f"Check-in solicitado para appointment {appointment_id}. Status atual: {appointment.status}")
+        
+        # Permitir check-in apenas para agendamentos agendados ou reagendados
+        if appointment.status not in ['scheduled', 'rescheduled']:
+            error_msg = f'Agendamento não pode receber check-in. Status atual: {appointment.status}'
+            logger.warning(f"Check-in negado: {error_msg}")
+            return jsonify({'error': error_msg}), 400
         
         appointment.status = 'checked_in'
         appointment.check_in_time = datetime.utcnow()
         
         db.session.commit()
+        logger.info(f"Check-in realizado com sucesso para appointment {appointment_id}. Novo status: {appointment.status}")
         
-        # Gerar payload para integração ERP
-        erp_payload = appointment.generate_erp_payload()
+        # Recarregar o appointment para garantir que está sincronizado
+        db.session.refresh(appointment)
+        
+        # Gerar payload para integração ERP (com tratamento de erro)
+        try:
+            erp_payload = appointment.generate_erp_payload()
+        except Exception as erp_error:
+            logger.error(f"Erro ao gerar payload ERP: {str(erp_error)}")
+            # Se houver erro ao gerar payload, retornar payload vazio mas não falhar o check-in
+            erp_payload = {
+                'appointment_id': appointment.id,
+                'error': 'Erro ao gerar payload completo',
+                'message': str(erp_error)
+            }
         
         return jsonify({
             'message': 'Check-in realizado com sucesso',
@@ -128,6 +384,7 @@ def check_in_appointment(current_user, appointment_id):
         
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Erro ao realizar check-in: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/appointments/<int:appointment_id>/check-out', methods=['POST'])
@@ -172,10 +429,36 @@ def update_appointment(current_user, appointment_id):
         if not data:
             return jsonify({'error': 'Dados não fornecidos'}), 400
         
+        # Log completo dos dados recebidos
+        logger.info(f"=== INÍCIO ATUALIZAÇÃO APPOINTMENT {appointment_id} ===")
+        logger.info(f"Dados recebidos: {data}")
+        logger.info(f"Chaves presentes: {list(data.keys())}")
+        logger.info(f"motivo_reagendamento presente: {'motivo_reagendamento' in data}")
+        if 'motivo_reagendamento' in data:
+            logger.info(f"Valor do motivo_reagendamento: '{data.get('motivo_reagendamento')}'")
+        
+        # Armazenar valores originais para validação
+        original_date = appointment.date
+        original_time = appointment.time
+        original_time_end = appointment.time_end
+        
+        logger.info(f"Valores originais - Data: {original_date}, Time: {original_time}, Time_end: {original_time_end}")
+        
+        # Detectar se houve mudança de data ou horário
+        date_changed = False
+        time_changed = False
+        
         # Atualizar campos permitidos
         if 'date' in data:
             try:
-                appointment.date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+                new_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+                if new_date < datetime.now().date():
+                    return jsonify({'error': 'Não é possível agendar para datas passadas'}), 400
+                logger.info(f"Comparando datas - Original: {original_date} ({type(original_date)}), Nova: {new_date} ({type(new_date)})")
+                if new_date != original_date:
+                    date_changed = True
+                    logger.info(f"Data alterada detectada: {original_date} -> {new_date}")
+                appointment.date = new_date
             except ValueError:
                 return jsonify({'error': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
         
@@ -184,30 +467,164 @@ def update_appointment(current_user, appointment_id):
                 # Aceitar tanto HH:MM quanto HH:MM:SS
                 time_str = data['time']
                 if len(time_str) == 5:  # HH:MM
-                    appointment.time = datetime.strptime(time_str, '%H:%M').time()
+                    new_time = datetime.strptime(time_str, '%H:%M').time()
                 elif len(time_str) == 8:  # HH:MM:SS
-                    appointment.time = datetime.strptime(time_str, '%H:%M:%S').time()
+                    new_time = datetime.strptime(time_str, '%H:%M:%S').time()
                 else:
                     raise ValueError("Formato inválido")
+                
+                logger.info(f"Comparando horários - Original: {original_time} ({type(original_time)}), Novo: {new_time} ({type(new_time)})")
+                if new_time != original_time:
+                    time_changed = True
+                    logger.info(f"Horário alterado detectado: {original_time} -> {new_time}")
+                appointment.time = new_time
             except ValueError:
                 return jsonify({'error': 'Formato de hora inválido. Use HH:MM ou HH:MM:SS'}), 400
         
+        # Atualizar time_end (obrigatório)
+        if 'time_end' in data:
+            if not data['time_end'] or not data['time_end'].strip():
+                return jsonify({'error': 'O horário final é obrigatório'}), 400
+            
+            try:
+                time_end_str = data['time_end']
+                if len(time_end_str) == 5:  # HH:MM
+                    new_time_end = datetime.strptime(time_end_str, '%H:%M').time()
+                elif len(time_end_str) == 8:  # HH:MM:SS
+                    new_time_end = datetime.strptime(time_end_str, '%H:%M:%S').time()
+                else:
+                    raise ValueError("Formato inválido")
+                
+                # Validar que time_end > time
+                if new_time_end <= appointment.time:
+                    return jsonify({'error': 'O horário final deve ser maior que o horário inicial'}), 400
+                
+                logger.info(f"Comparando horários finais - Original: {original_time_end} ({type(original_time_end)}), Novo: {new_time_end} ({type(new_time_end)})")
+                if new_time_end != original_time_end:
+                    time_changed = True
+                    logger.info(f"Horário final alterado detectado: {original_time_end} -> {new_time_end}")
+                appointment.time_end = new_time_end
+            except ValueError:
+                return jsonify({'error': 'Formato de hora final inválido. Use HH:MM ou HH:MM:SS'}), 400
+        else:
+            # Se time_end não foi fornecido, garantir que existe
+            if not appointment.time_end:
+                return jsonify({'error': 'O horário final é obrigatório'}), 400
+        
+        # Verificar se houve reagendamento (mudança de data ou horário)
+        # Também verificar se o motivo foi enviado (indica que o frontend detectou mudança)
+        has_motivo_in_data = 'motivo_reagendamento' in data and data.get('motivo_reagendamento', '').strip()
+        is_rescheduling = date_changed or time_changed or has_motivo_in_data
+        
+        logger.info(f"Reagendamento detectado? date_changed={date_changed}, time_changed={time_changed}, has_motivo={has_motivo_in_data}, is_rescheduling={is_rescheduling}")
+        logger.info(f"Dados recebidos - motivo_reagendamento presente: {'motivo_reagendamento' in data}, valor: {data.get('motivo_reagendamento', 'NÃO ENVIADO')}")
+        
+        # Se houve reagendamento (mudança detectada OU motivo enviado), exigir motivo e aplicar status
+        if is_rescheduling:
+            motivo = data.get('motivo_reagendamento', '').strip() if 'motivo_reagendamento' in data else ''
+            logger.info(f"Motivo recebido: '{motivo}' (tipo: {type(motivo)}, vazio: {not motivo})")
+            
+            if not motivo:
+                return jsonify({
+                    'error': 'Motivo do reagendamento é obrigatório quando há alteração de data ou horário',
+                    'requires_reschedule_reason': True
+                }), 400
+            
+            # Aplicar status rescheduled e salvar motivo ANTES de qualquer outra atualização
+            logger.info(f"=== APLICANDO STATUS RESCHEDULED ===")
+            logger.info(f"Status anterior: {appointment.status}")
+            logger.info(f"Motivo a ser salvo: '{motivo}'")
+            appointment.status = 'rescheduled'
+            appointment.motivo_reagendamento = motivo
+            logger.info(f"Status após atribuição: {appointment.status}")
+            logger.info(f"Motivo após atribuição: {appointment.motivo_reagendamento}")
+            logger.info(f"Verificação direta - appointment.status == 'rescheduled': {appointment.status == 'rescheduled'}")
+        
+        # Validar capacidade máxima se data, time ou time_end foram alterados
+        if is_rescheduling:
+            from src.models.system_config import SystemConfig
+            
+            # Buscar configuração de capacidade máxima (padrão: 1)
+            capacity_config = SystemConfig.query.filter_by(key='max_capacity_per_slot').first()
+            max_capacity = int(capacity_config.value) if capacity_config else 1
+            
+            # Validar capacidade para todos os slots do intervalo
+            is_valid, conflicting_slot = validate_time_range_capacity(
+                appointment.date,
+                appointment.time,
+                appointment.time_end,
+                max_capacity,
+                exclude_appointment_id=appointment_id
+            )
+            
+            if not is_valid:
+                slot_str = conflicting_slot.strftime('%H:%M') if conflicting_slot else 'desconhecido'
+                return jsonify({
+                    'error': f'Capacidade máxima de {max_capacity} agendamento(s) por horário foi atingida no horário {slot_str}. Por favor, escolha outro intervalo.'
+                }), 409
+        
         if 'purchase_order' in data:
-            appointment.purchase_order = data['purchase_order']
+            appointment.purchase_order = data['purchase_order'].strip()
         
         if 'truck_plate' in data:
-            appointment.truck_plate = data['truck_plate']
+            appointment.truck_plate = data['truck_plate'].strip().upper()
         
         if 'driver_name' in data:
-            appointment.driver_name = data['driver_name']
+            appointment.driver_name = data['driver_name'].strip()
+        
+        # Atualizar motivo_reagendamento apenas se não foi definido acima (para reagendamentos)
+        if 'motivo_reagendamento' in data and not is_rescheduling:
+            # Se não houve reagendamento, não atualizar o motivo (mantém o anterior se existir)
+            pass
+        
+        if 'supplier_id' in data:
+            # Verificar se o fornecedor existe e está ativo
+            supplier = Supplier.query.get(data['supplier_id'])
+            if not supplier:
+                return jsonify({'error': 'Fornecedor não encontrado'}), 404
+            if not supplier.is_active:
+                return jsonify({'error': 'Fornecedor inativo'}), 400
+            appointment.supplier_id = data['supplier_id']
         
         appointment.updated_at = datetime.utcnow()
         
+        # Log final antes do commit
+        logger.info(f"=== ANTES DO COMMIT ===")
+        logger.info(f"Status: {appointment.status}, Motivo: {appointment.motivo_reagendamento}")
+        logger.info(f"is_rescheduling: {is_rescheduling}")
+        logger.info(f"motivo_reagendamento presente nos dados: {'motivo_reagendamento' in data}")
+        
+        # FORÇAR aplicação do status se é reagendamento
+        if is_rescheduling:
+            logger.info(f"FORÇANDO aplicação do status 'rescheduled'")
+            appointment.status = 'rescheduled'
+            if 'motivo_reagendamento' in data and data.get('motivo_reagendamento', '').strip():
+                appointment.motivo_reagendamento = data['motivo_reagendamento'].strip()
+            logger.info(f"Status após forçar: {appointment.status}, Motivo: {appointment.motivo_reagendamento}")
+        
         db.session.commit()
+        
+        # Recarregar o objeto do banco para garantir que temos os dados atualizados
+        db.session.refresh(appointment)
+        
+        # Log após commit para confirmar
+        logger.info(f"=== APÓS COMMIT ===")
+        logger.info(f"Status no banco: {appointment.status}, Motivo: {appointment.motivo_reagendamento}")
+        
+        # Criar dicionário de resposta FORÇANDO status e motivo corretos
+        appointment_dict = appointment.to_dict()
+        if is_rescheduling:
+            logger.info(f"FORÇANDO status e motivo na resposta")
+            appointment_dict['status'] = 'rescheduled'
+            if 'motivo_reagendamento' in data and data.get('motivo_reagendamento', '').strip():
+                appointment_dict['motivo_reagendamento'] = data['motivo_reagendamento'].strip()
+            logger.info(f"Resposta final - Status: {appointment_dict['status']}, Motivo: {appointment_dict.get('motivo_reagendamento', 'NÃO DEFINIDO')}")
+        
+        logger.info(f"=== FIM ATUALIZAÇÃO APPOINTMENT {appointment_id} ===")
         
         return jsonify({
             'message': 'Agendamento atualizado com sucesso',
-            'appointment': appointment.to_dict()
+            'appointment': appointment_dict
         }), 200
         
     except Exception as e:
@@ -541,6 +958,265 @@ def delete_default_schedule(current_user, config_id):
         db.session.commit()
         
         return jsonify({'message': 'Configuração removida com sucesso'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/system-config/max-capacity', methods=['GET'])
+@admin_required
+def get_max_capacity(current_user):
+    """Retorna a configuração de capacidade máxima por horário"""
+    try:
+        from src.models.system_config import SystemConfig
+        
+        config = SystemConfig.query.filter_by(key='max_capacity_per_slot').first()
+        
+        if config:
+            return jsonify({
+                'max_capacity': int(config.value),
+                'config': config.to_dict()
+            }), 200
+        else:
+            # Valor padrão se não existir configuração
+            return jsonify({
+                'max_capacity': 1,
+                'config': None
+            }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/system-config/max-capacity', methods=['POST'])
+@admin_required
+def set_max_capacity(current_user):
+    """Define a configuração de capacidade máxima por horário"""
+    try:
+        from src.models.system_config import SystemConfig
+        
+        logger.info(f"Tentativa de salvar max_capacity por usuário {current_user.email}")
+        
+        data = request.get_json()
+        
+        if not data:
+            logger.warning("Dados não fornecidos na requisição")
+            return jsonify({'error': 'Dados não fornecidos'}), 400
+        
+        if 'max_capacity' not in data:
+            logger.warning("Campo max_capacity não encontrado nos dados")
+            return jsonify({'error': 'Campo max_capacity é obrigatório'}), 400
+        
+        try:
+            max_capacity = int(data['max_capacity'])
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Erro ao converter max_capacity: {e}")
+            return jsonify({'error': 'max_capacity deve ser um número inteiro'}), 400
+        
+        if max_capacity < 1:
+            logger.warning(f"Valor de max_capacity inválido: {max_capacity}")
+            return jsonify({'error': 'Capacidade máxima deve ser no mínimo 1'}), 400
+        
+        # Criar ou atualizar configuração
+        config = SystemConfig.query.filter_by(key='max_capacity_per_slot').first()
+        if config:
+            logger.info(f"Atualizando configuração existente: {config.value} -> {max_capacity}")
+            config.value = str(max_capacity)
+            config.description = 'Capacidade máxima de agendamentos por horário'
+            config.updated_at = datetime.utcnow()
+        else:
+            logger.info(f"Criando nova configuração com valor: {max_capacity}")
+            config = SystemConfig(
+                key='max_capacity_per_slot',
+                value=str(max_capacity),
+                description='Capacidade máxima de agendamentos por horário'
+            )
+            db.session.add(config)
+        
+        db.session.commit()
+        logger.info(f"Configuração salva com sucesso: {max_capacity}")
+        
+        return jsonify({
+            'message': 'Configuração salva com sucesso',
+            'max_capacity': max_capacity,
+            'config': config.to_dict()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erro ao salvar max_capacity: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# ==================== ROTAS DE PLANTAS ====================
+
+@admin_bp.route('/plants', methods=['GET'])
+@admin_required
+def get_plants(current_user):
+    """Lista todas as plantas"""
+    try:
+        from src.models.plant import Plant
+        
+        plants = Plant.query.order_by(Plant.name).all()
+        return jsonify([plant.to_dict() for plant in plants]), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/plants', methods=['POST'])
+@admin_required
+def create_plant(current_user):
+    """Cria uma nova planta e seu usuário de acesso"""
+    try:
+        from src.models.plant import Plant
+        
+        data = request.get_json()
+        
+        if not data or not data.get('name'):
+            return jsonify({'error': 'Nome da planta é obrigatório'}), 400
+        
+        if not data.get('code'):
+            return jsonify({'error': 'Código da planta é obrigatório'}), 400
+        
+        if not data.get('email'):
+            return jsonify({'error': 'E-mail da planta é obrigatório'}), 400
+        
+        # Verificar se já existe planta com mesmo nome
+        existing = Plant.query.filter_by(name=data['name']).first()
+        if existing:
+            return jsonify({'error': 'Já existe uma planta com este nome'}), 400
+        
+        # Verificar se já existe planta com mesmo código
+        existing_code = Plant.query.filter_by(code=data['code']).first()
+        if existing_code:
+            return jsonify({'error': 'Já existe uma planta com este código'}), 400
+        
+        # Verificar se email já existe
+        existing_user = User.query.filter_by(email=data['email']).first()
+        if existing_user:
+            return jsonify({'error': 'Email já cadastrado'}), 400
+        
+        # Criar planta
+        plant = Plant(
+            name=data['name'],
+            code=data['code'],
+            email=data['email'],
+            phone=data.get('phone'),
+            cep=data.get('cep'),
+            street=data.get('street'),
+            number=data.get('number'),
+            neighborhood=data.get('neighborhood'),
+            reference=data.get('reference'),
+            is_active=data.get('is_active', True)  # Padrão: ativa
+        )
+        db.session.add(plant)
+        db.session.flush()  # Para obter o ID da planta
+        
+        # Gerar senha temporária
+        temp_password = generate_temp_password()
+        
+        # Criar usuário para a planta
+        user = User(
+            email=data['email'],
+            role='plant',
+            plant_id=plant.id
+        )
+        user.set_password(temp_password)
+        db.session.add(user)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Planta criada com sucesso',
+            'plant': plant.to_dict(),
+            'user': user.to_dict(),
+            'temp_password': temp_password
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/plants/<int:plant_id>', methods=['PUT'])
+@admin_required
+def update_plant(current_user, plant_id):
+    """Atualiza uma planta existente"""
+    try:
+        from src.models.plant import Plant
+        
+        plant = Plant.query.get(plant_id)
+        if not plant:
+            return jsonify({'error': 'Planta não encontrada'}), 404
+        
+        data = request.get_json()
+        
+        if 'name' in data and data['name']:
+            # Verificar se outro nome já existe
+            existing = Plant.query.filter_by(name=data['name']).filter(Plant.id != plant_id).first()
+            if existing:
+                return jsonify({'error': 'Já existe uma planta com este nome'}), 400
+            plant.name = data['name']
+        
+        if 'code' in data and data['code']:
+            # Verificar se outro código já existe
+            existing_code = Plant.query.filter_by(code=data['code']).filter(Plant.id != plant_id).first()
+            if existing_code:
+                return jsonify({'error': 'Já existe uma planta com este código'}), 400
+            plant.code = data['code']
+        
+        if 'email' in data:
+            plant.email = data['email']
+        
+        if 'phone' in data:
+            plant.phone = data['phone']
+        
+        if 'cep' in data:
+            plant.cep = data['cep']
+        
+        if 'street' in data:
+            plant.street = data['street']
+        
+        if 'number' in data:
+            plant.number = data['number']
+        
+        if 'neighborhood' in data:
+            plant.neighborhood = data['neighborhood']
+        
+        if 'reference' in data:
+            plant.reference = data['reference']
+        
+        if 'is_active' in data:
+            plant.is_active = data['is_active']
+            # Desativar usuários da planta se a planta for desativada
+            if not data['is_active']:
+                User.query.filter_by(plant_id=plant_id).update({'is_active': False})
+        
+        plant.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Planta atualizada com sucesso',
+            'plant': plant.to_dict()
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/plants/<int:plant_id>', methods=['DELETE'])
+@admin_required
+def delete_plant(current_user, plant_id):
+    """Deleta uma planta"""
+    try:
+        from src.models.plant import Plant
+        
+        plant = Plant.query.get(plant_id)
+        if not plant:
+            return jsonify({'error': 'Planta não encontrada'}), 404
+        
+        db.session.delete(plant)
+        db.session.commit()
+        
+        return jsonify({'message': 'Planta deletada com sucesso'}), 200
         
     except Exception as e:
         db.session.rollback()

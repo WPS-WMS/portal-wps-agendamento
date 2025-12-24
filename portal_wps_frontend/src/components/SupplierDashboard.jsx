@@ -266,14 +266,14 @@ const SupplierDashboard = ({ user, token }) => {
                           : 'bg-gray-100 border-gray-200 opacity-50'
                       }`}
                       onClick={() => {
-                        if (isOwnAppointment && canEdit) {
-                          // Se é agendamento próprio e pode editar
+                        if (isOwnAppointment && canEdit && appointment.status !== 'checked_in' && appointment.status !== 'checked_out') {
+                          // Se é agendamento próprio e pode editar (e não está com check-in/out)
                           handleEditAppointment(appointment)
                         } else if (canSchedule) {
                           // Se não há agendamento e pode agendar, criar novo
                           handleNewAppointment(dateISO, timeSlot)
                         }
-                        // Se é de outro fornecedor, não faz nada
+                        // Se é de outro fornecedor ou está com check-in/out, não faz nada
                       }}
                     >
                       <div className="flex items-center justify-between mb-1">
@@ -297,7 +297,7 @@ const SupplierDashboard = ({ user, token }) => {
                             {appointment.driver_name}
                           </p>
                           
-                          {canEdit && (
+                          {canEdit && appointment.status !== 'checked_in' && appointment.status !== 'checked_out' && (
                             <div className="flex gap-1 pt-1">
                               <Button
                                 size="sm"

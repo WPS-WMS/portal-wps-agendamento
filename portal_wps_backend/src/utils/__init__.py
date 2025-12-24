@@ -1,0 +1,7 @@
+"""
+Módulo de utilitários compartilhados
+"""
+from .helpers import generate_temp_password
+
+__all__ = ['generate_temp_password']
+

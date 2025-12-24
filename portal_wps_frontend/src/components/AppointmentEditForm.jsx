@@ -5,58 +5,286 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Save, Loader2 } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import TimeInput from '@/components/ui/time-input'
+import DateInput from '@/components/ui/date-input'
+import { ArrowLeft, Save, Loader2, Plus, AlertCircle } from 'lucide-react'
 import { adminAPI } from '../lib/api'
 import { dateUtils, statusUtils } from '../lib/utils'
 
-const AppointmentEditForm = ({ appointment, onSubmit, onCancel }) => {
+const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
     date: '',
     time: '',
+    time_end: '',
     purchase_order: '',
     truck_plate: '',
-    driver_name: ''
+    driver_name: '',
+    supplier_id: ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false)
+  const [rescheduleReason, setRescheduleReason] = useState('')
+  const [pendingSubmit, setPendingSubmit] = useState(null)
+  const [isRescheduling, setIsRescheduling] = useState(false) // Flag para indicar que é um reagendamento
+
+  // Determinar se é criação ou edição
+  const isCreating = !appointment?.id
+  // Não bloquear campos ao criar - permitir edição mesmo quando vem pré-preenchido
+  const isDateTimeLocked = false
+
+  // Função auxiliar para normalizar formato de horário (HH:MM:SS -> HH:MM)
+  const normalizeTime = (timeStr) => {
+    if (!timeStr) return ''
+    // Se já está no formato HH:MM, retornar como está
+    if (typeof timeStr === 'string' && timeStr.length === 5) return timeStr
+    // Se tem segundos (HH:MM:SS), remover
+    if (typeof timeStr === 'string' && timeStr.length >= 8) return timeStr.slice(0, 5)
+    // Se é objeto time do backend, converter
+    if (typeof timeStr === 'string') return timeStr.slice(0, 5)
+    return timeStr
+  }
+
+  // Armazenar valores originais para detectar mudanças
+  const [originalValues, setOriginalValues] = useState({
+    date: '',
+    time: '',
+    time_end: ''
+  })
 
   useEffect(() => {
     if (appointment) {
+      const normalizedDate = appointment.date || ''
+      const normalizedTime = normalizeTime(appointment.time)
+      const normalizedTimeEnd = normalizeTime(appointment.time_end)
+      
       setFormData({
-        date: appointment.date,
-        time: appointment.time,
-        purchase_order: appointment.purchase_order,
-        truck_plate: appointment.truck_plate,
-        driver_name: appointment.driver_name
+        date: normalizedDate,
+        time: normalizedTime,
+        time_end: normalizedTimeEnd,
+        purchase_order: appointment.purchase_order || '',
+        truck_plate: appointment.truck_plate || '',
+        driver_name: appointment.driver_name || '',
+        supplier_id: appointment.supplier_id || ''
+      })
+      
+      // Armazenar valores originais
+      setOriginalValues({
+        date: normalizedDate,
+        time: normalizedTime,
+        time_end: normalizedTimeEnd
       })
     }
   }, [appointment])
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+    // Limpar erro do campo quando o usuário começa a digitar
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: false }))
+    }
+    setError('')
+  }
+
+  const validateForm = () => {
+    const errors = {}
+    let isValid = true
+
+    if (!formData.date) {
+      errors.date = true
+      isValid = false
+    }
+    if (!formData.time) {
+      errors.time = true
+      isValid = false
+    }
+    if (!formData.time_end || !formData.time_end.trim()) {
+      errors.time_end = true
+      isValid = false
+    } else if (formData.time_end <= formData.time) {
+      errors.time_end = true
+      setError('O horário final deve ser maior que o horário inicial')
+      isValid = false
+    }
+    if (!formData.purchase_order.trim()) {
+      errors.purchase_order = true
+      isValid = false
+    }
+    if (!formData.truck_plate.trim()) {
+      errors.truck_plate = true
+      isValid = false
+    }
+    if (!formData.driver_name.trim()) {
+      errors.driver_name = true
+      isValid = false
+    }
+    if (isCreating && !formData.supplier_id) {
+      errors.supplier_id = true
+      isValid = false
+    }
+
+    setFieldErrors(errors)
+    return isValid
+  }
+
+  // Verificar se houve mudança de data ou horário
+  const hasDateTimeChanged = () => {
+    if (isCreating) return false
+    
+    return formData.date !== originalValues.date ||
+           formData.time !== originalValues.time ||
+           formData.time_end !== originalValues.time_end
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    if (!validateForm()) {
+      setError('Por favor, preencha todos os campos obrigatórios.')
+      return
+    }
+
+    // Se houve mudança de data/horário e não é criação, exibir modal de motivo
+    if (!isCreating && hasDateTimeChanged()) {
+      setIsRescheduling(true) // Marcar que é um reagendamento
+      setShowRescheduleModal(true)
+      return
+    }
+
+    // Se não houve mudança ou é criação, salvar diretamente
+    setIsRescheduling(false)
+    await performSubmit()
+  }
+
+  // Função auxiliar para submit com motivo (usada quando vem da modal)
+  const performSubmitWithReason = async (formDataToUse, reason) => {
     setLoading(true)
     setError('')
 
     try {
-      await adminAPI.updateAppointment(appointment.id, formData)
+      const submitData = { ...formDataToUse }
+      
+      // Sempre incluir o motivo se foi fornecido
+      if (reason && reason.trim()) {
+        submitData.motivo_reagendamento = reason.trim()
+      }
+
+      let response
+      if (isCreating) {
+        response = await adminAPI.createAppointment(submitData)
+      } else {
+        response = await adminAPI.updateAppointment(appointment.id, submitData)
+      }
+      
+      // Limpar estado da modal
+      setShowRescheduleModal(false)
+      setRescheduleReason('')
+      setPendingSubmit(null)
+      setIsRescheduling(false)
+      
       onSubmit()
     } catch (err) {
-      setError(err.message)
+      // Tratar erro de conflito de horário ou capacidade máxima
+      if (err.response?.status === 409) {
+        const errorMessage = err.response?.data?.error || 'Horário já ocupado. Por favor, escolha outro horário.'
+        setError(errorMessage)
+        setFieldErrors({ date: true, time: true })
+      } else if (err.response?.status === 400 && err.response?.data?.requires_reschedule_reason) {
+        // Se o backend exigir motivo mas não foi fornecido, mostrar modal
+        setPendingSubmit(() => async () => {
+          await performSubmitWithReason(formDataToUse, reason)
+        })
+        setShowRescheduleModal(true)
+      } else {
+        setError(err.response?.data?.error || err.message || 'Erro ao salvar agendamento')
+      }
     } finally {
       setLoading(false)
     }
   }
 
+  const performSubmit = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      const submitData = { ...formData }
+      
+      // Se é reagendamento, incluir o motivo
+      if (!isCreating && isRescheduling && rescheduleReason.trim()) {
+        submitData.motivo_reagendamento = rescheduleReason.trim()
+      }
+
+      let response
+      if (isCreating) {
+        response = await adminAPI.createAppointment(submitData)
+      } else {
+        response = await adminAPI.updateAppointment(appointment.id, submitData)
+      }
+      
+      // Limpar estado da modal
+      setShowRescheduleModal(false)
+      setRescheduleReason('')
+      setPendingSubmit(null)
+      setIsRescheduling(false)
+      
+      onSubmit()
+    } catch (err) {
+      // Tratar erro de conflito de horário ou capacidade máxima
+      if (err.response?.status === 409) {
+        const errorMessage = err.response?.data?.error || 'Horário já ocupado. Por favor, escolha outro horário.'
+        setError(errorMessage)
+        setFieldErrors({ date: true, time: true })
+      } else if (err.response?.status === 400 && err.response?.data?.requires_reschedule_reason) {
+        // Se o backend exigir motivo mas não foi fornecido, mostrar modal
+        setPendingSubmit(() => async () => {
+          await performSubmit()
+        })
+        setShowRescheduleModal(true)
+      } else {
+        setError(err.response?.data?.error || err.message || 'Erro ao salvar agendamento')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleConfirmReschedule = async () => {
+    if (!rescheduleReason.trim()) {
+      return
+    }
+    
+    
+    // Chamar diretamente com o motivo capturado
+    await performSubmitWithReason(formData, rescheduleReason.trim())
+  }
+
+  const handleCancelReschedule = () => {
+    setShowRescheduleModal(false)
+    setRescheduleReason('')
+    setPendingSubmit(null)
+    setIsRescheduling(false)
+    // Restaurar valores originais
+    setFormData(prev => ({
+      ...prev,
+      date: originalValues.date,
+      time: originalValues.time,
+      time_end: originalValues.time_end
+    }))
+  }
+
   const isFormValid = () => {
+    const timeEndValid = formData.time_end && formData.time_end.trim() && formData.time_end > formData.time
     return formData.date && 
            formData.time && 
+           timeEndValid &&
            formData.purchase_order.trim() && 
            formData.truck_plate.trim() && 
-           formData.driver_name.trim()
+           formData.driver_name.trim() &&
+           (!isCreating || formData.supplier_id)
   }
 
   if (!appointment) {
@@ -64,49 +292,56 @@ const AppointmentEditForm = ({ appointment, onSubmit, onCancel }) => {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Cabeçalho */}
-      <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
+      <div className="max-w-2xl mx-auto space-y-6">
+        {/* Cabeçalho */}
+        <div className="flex items-center gap-4">
         <Button variant="outline" size="sm" onClick={onCancel}>
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Editar Agendamento</h1>
-          <p className="text-gray-600">Modifique os dados do agendamento</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isCreating ? 'Novo Agendamento' : 'Editar Agendamento'}
+          </h1>
+          <p className="text-gray-600">
+            {isCreating ? 'Preencha os dados para criar um agendamento' : 'Modifique os dados do agendamento'}
+          </p>
         </div>
       </div>
 
-      {/* Informações do Status */}
-      <Card className="border-blue-200 bg-blue-50">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-blue-800">Status Atual</CardTitle>
-            <Badge className={statusUtils.getStatusColor(appointment.status)}>
-              {statusUtils.getStatusLabel(appointment.status)}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {appointment.check_in_time && (
-            <p className="text-sm text-blue-700">
-              <strong>Check-in:</strong> {dateUtils.formatDateTime(appointment.check_in_time)}
-            </p>
-          )}
-          {appointment.check_out_time && (
-            <p className="text-sm text-blue-700">
-              <strong>Check-out:</strong> {dateUtils.formatDateTime(appointment.check_out_time)}
-            </p>
-          )}
-          {appointment.status !== 'scheduled' && (
-            <Alert>
-              <AlertDescription>
-                <strong>Atenção:</strong> Este agendamento já passou pelo processo de check-in/check-out. 
-                Alterações devem ser feitas com cuidado.
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
+      {/* Informações do Status (apenas para edição) */}
+      {!isCreating && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-blue-800">Status Atual</CardTitle>
+              <Badge className={statusUtils.getStatusColor(appointment.status)}>
+                {statusUtils.getStatusLabel(appointment.status)}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {appointment.check_in_time && (
+              <p className="text-sm text-blue-700">
+                <strong>Check-in:</strong> {dateUtils.formatDateTime(appointment.check_in_time)}
+              </p>
+            )}
+            {appointment.check_out_time && (
+              <p className="text-sm text-blue-700">
+                <strong>Check-out:</strong> {dateUtils.formatDateTime(appointment.check_out_time)}
+              </p>
+            )}
+            {appointment.status !== 'scheduled' && (
+              <Alert>
+                <AlertDescription>
+                  <strong>Atenção:</strong> Este agendamento já passou pelo processo de check-in/check-out. 
+                  Alterações devem ser feitas com cuidado.
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -123,35 +358,125 @@ const AppointmentEditForm = ({ appointment, onSubmit, onCancel }) => {
               </Alert>
             )}
 
+            {/* Fornecedor (apenas para criação) */}
+            {isCreating && suppliers && (
+              <div className="space-y-2">
+                <Label htmlFor="supplier_id">
+                  Fornecedor <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="supplier_id"
+                  value={formData.supplier_id}
+                  onChange={(e) => handleInputChange('supplier_id', e.target.value)}
+                  required
+                  disabled={loading}
+                  className={`flex h-10 w-full rounded-md border ${
+                    fieldErrors.supplier_id ? 'border-red-500' : 'border-input'
+                  } bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  <option value="">Selecione um fornecedor</option>
+                  {suppliers
+                    .filter(s => s.is_active)
+                    .map(supplier => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.description} - {supplier.cnpj}
+                      </option>
+                    ))}
+                </select>
+                {fieldErrors.supplier_id && (
+                  <p className="text-xs text-red-500">Campo obrigatório</p>
+                )}
+              </div>
+            )}
+
             {/* Data */}
             <div className="space-y-2">
-              <Label htmlFor="date">Data</Label>
-              <Input
+              <Label htmlFor="date">
+                Data <span className="text-red-500">*</span>
+              </Label>
+              <DateInput
                 id="date"
-                type="date"
                 value={formData.date}
-                onChange={(e) => handleInputChange('date', e.target.value)}
+                onChange={(value) => handleInputChange('date', value)}
+                disabled={loading || isDateTimeLocked}
+                className={fieldErrors.date ? 'border-red-500' : ''}
                 required
-                disabled={loading}
               />
+              {fieldErrors.date && (
+                <p className="text-xs text-red-500">Campo obrigatório</p>
+              )}
             </div>
 
-            {/* Horário */}
+            {/* Horário Inicial */}
             <div className="space-y-2">
-              <Label htmlFor="time">Horário</Label>
-              <Input
+              <Label htmlFor="time">
+                Horário Inicial <span className="text-red-500">*</span>
+                <span className="text-gray-500 text-xs font-normal ml-2">(intervalos de 30 minutos)</span>
+              </Label>
+              <TimeInput
                 id="time"
-                type="time"
                 value={formData.time}
-                onChange={(e) => handleInputChange('time', e.target.value)}
-                required
-                disabled={loading}
+                onChange={(value) => {
+                  handleInputChange('time', value)
+                  // Se o horário final for menor ou igual ao inicial, limpar
+                  if (formData.time_end && value && value >= formData.time_end) {
+                    handleInputChange('time_end', '')
+                  }
+                }}
+                disabled={loading || isDateTimeLocked}
+                placeholder="--:--"
+                intervalMinutes={30}
+                className={fieldErrors.time ? 'border-red-500' : ''}
               />
+              {fieldErrors.time && (
+                <p className="text-xs text-red-500">Campo obrigatório</p>
+              )}
+              <p className="text-xs text-gray-500">
+                Digite o horário no formato HH:mm (ex: 09:00, 14:30). Apenas intervalos de 30 minutos são permitidos.
+              </p>
+            </div>
+
+            {/* Horário Final */}
+            <div className="space-y-2">
+              <Label htmlFor="time_end">
+                Horário Final <span className="text-red-500">*</span>
+                <span className="text-gray-500 text-xs font-normal ml-2">(intervalos de 30 minutos)</span>
+              </Label>
+              <TimeInput
+                id="time_end"
+                value={formData.time_end}
+                onChange={(value) => {
+                  if (value && formData.time && value <= formData.time) {
+                    setError('O horário final deve ser maior que o horário inicial')
+                    setFieldErrors(prev => ({ ...prev, time_end: true }))
+                  } else {
+                    setError('')
+                    setFieldErrors(prev => ({ ...prev, time_end: false }))
+                    handleInputChange('time_end', value)
+                  }
+                }}
+                disabled={loading || isDateTimeLocked || !formData.time}
+                placeholder="--:--"
+                intervalMinutes={30}
+                className={fieldErrors.time_end ? 'border-red-500' : ''}
+              />
+              {fieldErrors.time_end && (
+                <p className="text-xs text-red-500">
+                  {!formData.time_end || !formData.time_end.trim() 
+                    ? 'Campo obrigatório' 
+                    : 'O horário final deve ser maior que o horário inicial'}
+                </p>
+              )}
+              <p className="text-xs text-gray-500">
+                O horário final define o término do intervalo de agendamento. Digite no formato HH:mm (ex: 10:00, 15:30).
+              </p>
             </div>
 
             {/* Pedido de Compra */}
             <div className="space-y-2">
-              <Label htmlFor="purchase_order">Pedido de Compra</Label>
+              <Label htmlFor="purchase_order">
+                Pedido de Compra <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="purchase_order"
                 type="text"
@@ -160,12 +485,18 @@ const AppointmentEditForm = ({ appointment, onSubmit, onCancel }) => {
                 onChange={(e) => handleInputChange('purchase_order', e.target.value)}
                 required
                 disabled={loading}
+                className={fieldErrors.purchase_order ? 'border-red-500' : ''}
               />
+              {fieldErrors.purchase_order && (
+                <p className="text-xs text-red-500">Campo obrigatório</p>
+              )}
             </div>
 
             {/* Placa do Caminhão */}
             <div className="space-y-2">
-              <Label htmlFor="truck_plate">Placa do Caminhão</Label>
+              <Label htmlFor="truck_plate">
+                Placa do Caminhão <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="truck_plate"
                 type="text"
@@ -174,12 +505,19 @@ const AppointmentEditForm = ({ appointment, onSubmit, onCancel }) => {
                 onChange={(e) => handleInputChange('truck_plate', e.target.value.toUpperCase())}
                 required
                 disabled={loading}
+                className={fieldErrors.truck_plate ? 'border-red-500' : ''}
+                maxLength={8}
               />
+              {fieldErrors.truck_plate && (
+                <p className="text-xs text-red-500">Campo obrigatório</p>
+              )}
             </div>
 
             {/* Nome do Motorista */}
             <div className="space-y-2">
-              <Label htmlFor="driver_name">Nome do Motorista</Label>
+              <Label htmlFor="driver_name">
+                Nome do Motorista <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="driver_name"
                 type="text"
@@ -188,7 +526,11 @@ const AppointmentEditForm = ({ appointment, onSubmit, onCancel }) => {
                 onChange={(e) => handleInputChange('driver_name', e.target.value)}
                 required
                 disabled={loading}
+                className={fieldErrors.driver_name ? 'border-red-500' : ''}
               />
+              {fieldErrors.driver_name && (
+                <p className="text-xs text-red-500">Campo obrigatório</p>
+              )}
             </div>
 
             {/* Botões */}
@@ -202,6 +544,11 @@ const AppointmentEditForm = ({ appointment, onSubmit, onCancel }) => {
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     Salvando...
+                  </>
+                ) : isCreating ? (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Criar Agendamento
                   </>
                 ) : (
                   <>
@@ -222,6 +569,67 @@ const AppointmentEditForm = ({ appointment, onSubmit, onCancel }) => {
           </form>
         </CardContent>
       </Card>
+
+      {/* Modal de Motivo de Reagendamento */}
+      <Dialog open={showRescheduleModal} onOpenChange={setShowRescheduleModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-purple-600" />
+              Motivo do Reagendamento
+            </DialogTitle>
+            <DialogDescription>
+              Você alterou a data ou horário do agendamento. Por favor, informe o motivo do reagendamento.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="reschedule_reason">
+                Motivo do Reagendamento <span className="text-red-500">*</span>
+              </Label>
+              <Textarea
+                id="reschedule_reason"
+                placeholder="Ex: Cliente solicitou alteração de horário devido a imprevisto no transporte..."
+                value={rescheduleReason}
+                onChange={(e) => setRescheduleReason(e.target.value)}
+                rows={4}
+                className="resize-none"
+              />
+              <p className="text-xs text-gray-500">
+                Este motivo será registrado junto ao agendamento e o status será alterado para "Reagendado".
+              </p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancelReschedule}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmReschedule}
+              disabled={loading || !rescheduleReason.trim()}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Salvando...
+                </>
+              ) : (
+                'Confirmar Reagendamento'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </div>
     </div>
   )
 }
