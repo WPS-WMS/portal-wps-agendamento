@@ -1,0 +1,79 @@
+from src.models.user import db
+from datetime import datetime
+from sqlalchemy import UniqueConstraint
+
+class Permission(db.Model):
+    """Modelo para armazenar permissões granulares por role e funcionalidade"""
+    __tablename__ = 'permissions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    role = db.Column(db.String(20), nullable=False)  # 'admin', 'supplier', 'plant'
+    function_id = db.Column(db.String(100), nullable=False)  # ID da funcionalidade (ex: 'create_appointment')
+    permission_type = db.Column(db.String(20), nullable=False)  # 'editor', 'viewer', 'none'
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    __table_args__ = (
+        UniqueConstraint('role', 'function_id', name='uq_role_function'),
+    )
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'role': self.role,
+            'function_id': self.function_id,
+            'permission_type': self.permission_type,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    @staticmethod
+    def get_permission(role, function_id):
+        """Retorna a permissão de um role para uma funcionalidade"""
+        permission = Permission.query.filter_by(role=role, function_id=function_id).first()
+        if permission:
+            return permission.permission_type
+        
+        # REGRA DE NEGÓCIO: Sem acesso é o padrão quando não há permissão configurada
+        # Não deve haver padrão permissivo - se não está configurado explicitamente,
+        # o usuário não tem acesso (regra de "Sem acesso")
+        return 'none'
+    
+    @staticmethod
+    def set_permission(role, function_id, permission_type):
+        """Define ou atualiza uma permissão"""
+        permission = Permission.query.filter_by(role=role, function_id=function_id).first()
+        if permission:
+            permission.permission_type = permission_type
+            permission.updated_at = datetime.utcnow()
+        else:
+            permission = Permission(
+                role=role,
+                function_id=function_id,
+                permission_type=permission_type
+            )
+            db.session.add(permission)
+        db.session.commit()
+        return permission
+    
+    @staticmethod
+    def get_all_permissions():
+        """Retorna todas as permissões organizadas por role e function_id"""
+        permissions = Permission.query.all()
+        result = {}
+        for perm in permissions:
+            if perm.function_id not in result:
+                result[perm.function_id] = {}
+            result[perm.function_id][perm.role] = perm.permission_type
+        return result
+    
+    @staticmethod
+    def bulk_update_permissions(permissions_dict):
+        """Atualiza múltiplas permissões de uma vez
+        permissions_dict: { function_id: { role: permission_type } }
+        """
+        for function_id, roles in permissions_dict.items():
+            for role, permission_type in roles.items():
+                Permission.set_permission(role, function_id, permission_type)
+

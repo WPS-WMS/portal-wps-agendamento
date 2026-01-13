@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent } from '@/components/ui/popover'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { CalendarIcon } from 'lucide-react'
 
 const DateInput = ({ value, onChange, onBlur, disabled, className, placeholder = '__/__/____', minDate, maxDate, ...props }) => {
   const [displayValue, setDisplayValue] = useState('')
@@ -219,48 +222,86 @@ const DateInput = ({ value, onChange, onBlur, disabled, className, placeholder =
     }
   }
 
+  const handleCalendarSelect = (date) => {
+    if (date) {
+      const isoDate = date.toISOString().split('T')[0] // YYYY-MM-DD
+      const formatted = formatDateForDisplay(isoDate)
+      setDisplayValue(formatted)
+      setSelectedDate(isoDate)
+      if (hiddenInputRef.current) {
+        hiddenInputRef.current.value = isoDate
+      }
+      onChange?.(isoDate)
+      setShowPicker(false)
+    }
+  }
+
+  const calendarDate = selectedDate ? new Date(selectedDate + 'T00:00:00') : undefined
+  const minDateObj = minDate ? new Date(formatDateForInput(minDate) + 'T00:00:00') : undefined
+  const maxDateObj = maxDate ? new Date(formatDateForInput(maxDate) + 'T00:00:00') : undefined
+
   return (
     <div className="relative">
       <Popover open={showPicker && !disabled} onOpenChange={setShowPicker}>
-        <Input
-          ref={inputRef}
-          type="text"
-          value={displayValue || ''}
-          onChange={handleChange}
-          onBlur={(e) => {
-            setTimeout(() => {
-              if (!showPicker) {
-                handleBlur(e)
-              }
-            }, 150)
-          }}
-          onFocus={(e) => {
-            if (!disabled) {
-              setShowPicker(true)
-            }
-          }}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          placeholder={placeholder}
-          maxLength={10}
-          className={cn(
-            "font-mono",
-            !isValidDate(displayValue) && displayValue.length === 10 && "border-orange-500",
-            className
-          )}
-          {...props}
-        />
-        <PopoverContent className="w-auto p-3" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
-          <div className="space-y-2">
-            <input
-              ref={hiddenInputRef}
-              type="date"
-              value={selectedDate || ''}
-              onChange={handleDatePickerChange}
-              min={minDate ? formatDateForInput(minDate) : undefined}
-              max={maxDate ? formatDateForInput(maxDate) : undefined}
-              className="w-full h-10 px-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+        <PopoverTrigger asChild>
+          <div className="relative">
+            <Input
+              ref={inputRef}
+              type="text"
+              value={displayValue || ''}
+              onChange={handleChange}
+              onBlur={(e) => {
+                setTimeout(() => {
+                  if (!showPicker) {
+                    handleBlur(e)
+                  }
+                }, 150)
+              }}
+              onFocus={(e) => {
+                if (!disabled) {
+                  setShowPicker(true)
+                }
+              }}
+              onKeyDown={handleKeyDown}
+              disabled={disabled}
+              placeholder={placeholder}
+              maxLength={10}
+              className={cn(
+                "font-mono pr-10",
+                !isValidDate(displayValue) && displayValue.length === 10 && "border-orange-500",
+                className
+              )}
+              {...props}
             />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+              onClick={(e) => {
+                e.preventDefault()
+                if (!disabled) {
+                  setShowPicker(!showPicker)
+                }
+              }}
+            >
+              <CalendarIcon className="h-4 w-4 text-gray-400" />
+            </Button>
+          </div>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <Calendar
+            mode="single"
+            selected={calendarDate}
+            onSelect={handleCalendarSelect}
+            disabled={(date) => {
+              if (minDateObj && date < minDateObj) return true
+              if (maxDateObj && date > maxDateObj) return true
+              return false
+            }}
+            initialFocus
+          />
+          <div className="p-3 border-t">
             <p className="text-xs text-gray-500 text-center">
               Ou digite no formato DD/MM/AAAA
             </p>

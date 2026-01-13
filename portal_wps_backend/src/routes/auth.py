@@ -26,20 +26,20 @@ def login():
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
         email = data.get('email')
-        logger.info(f"Tentativa de login para email: {email}")
-        
         user = User.query.filter_by(email=email).first()
         
         if not user:
-            logger.warning(f"Usuário não encontrado: {email}")
+            # Não expor informações sobre usuários existentes (segurança)
+            logger.warning("Tentativa de login com credenciais inválidas")
             return jsonify({'error': 'Credenciais inválidas'}), 401
         
         if not user.check_password(data['password']):
-            logger.warning(f"Senha incorreta para usuário: {email}")
+            # Não expor se a senha está incorreta (segurança)
+            logger.warning("Tentativa de login com credenciais inválidas")
             return jsonify({'error': 'Credenciais inválidas'}), 401
         
         if not user.is_active:
-            logger.warning(f"Usuário inativo tentou fazer login: {email}")
+            logger.warning("Tentativa de login com usuário inativo")
             return jsonify({'error': 'Usuário inativo. Entre em contato com o administrador'}), 403
         
         # Gerar JWT token
@@ -48,11 +48,12 @@ def login():
             'email': user.email,
             'role': user.role,
             'supplier_id': user.supplier_id,
+            'plant_id': user.plant_id,
             'exp': datetime.utcnow() + timedelta(hours=24)
         }
         
         token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
-        logger.info(f"Login bem-sucedido para usuário: {email}")
+        logger.info(f"Login bem-sucedido - role: {user.role}")
         
         return jsonify({
             'token': token,
@@ -153,6 +154,37 @@ def admin_required(f):
     decorated.__name__ = f.__name__
     return decorated
 
+def plant_required(f):
+    """Decorator para proteger rotas que requerem privilégios de planta"""
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+        
+        if not token:
+            return jsonify({'error': 'Token não fornecido'}), 401
+        
+        try:
+            if token.startswith('Bearer '):
+                token = token[7:]
+            
+            payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+            current_user = User.query.get(payload['user_id'])
+            
+            if not current_user:
+                return jsonify({'error': 'Usuário não encontrado'}), 401
+            
+            if current_user.role != 'plant':
+                return jsonify({'error': 'Acesso negado. Privilégios de planta necessários'}), 403
+                
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'Token expirado'}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Token inválido'}), 401
+        
+        return f(current_user, *args, **kwargs)
+    
+    decorated.__name__ = f.__name__
+    return decorated
+
 @auth_bp.route('/forgot-password', methods=['POST'])
 def forgot_password():
     """Endpoint para solicitar recuperação de senha (RN03)"""
@@ -179,8 +211,8 @@ def forgot_password():
             # 2. Salvar token no banco de dados
             # 3. Enviar email com link de recuperação
             # 
-            # Por enquanto, apenas log (não implementado envio de email)
-            logger.info(f"Solicitação de recuperação de senha para: {email}")
+            # Por enquanto, apenas log genérico (não implementado envio de email)
+            logger.info("Solicitação de recuperação de senha recebida")
         
         # RN03 - Sempre mesma mensagem, não informar se email existe
         return jsonify({

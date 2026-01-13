@@ -1,7 +1,7 @@
 # Portal WPS - Sistema de Agendamento de Carga
 
 **Desenvolvido por:** Manus AI  
-**Data:** 29 de Setembro de 2025  
+**Data:** Janeiro de 2026  
 **Versão:** 1.0.0
 
 ## Visão Geral
@@ -14,10 +14,11 @@ O **Portal WPS** é um sistema completo de agendamento logístico desenvolvido p
 
 | Componente | Tecnologia | Versão |
 |------------|------------|---------|
-| **Backend** | Flask (Python) | 3.11.0 |
+| **Backend** | Flask (Python) | 3.1.1 |
+| **Python** | Python | 3.11+ |
 | **Frontend** | React + Vite | 18.x |
 | **Banco de Dados** | SQLite | 3.x |
-| **Autenticação** | JWT (JSON Web Tokens) | - |
+| **Autenticação** | JWT (JSON Web Tokens) | PyJWT 2.10.1 |
 | **UI Framework** | Tailwind CSS + shadcn/ui | - |
 | **Ícones** | Lucide React | - |
 
@@ -103,6 +104,14 @@ O sistema utiliza **JWT (JSON Web Tokens)** para autenticação segura, diferenc
 - **Sistema de check-in/check-out**: Controle de entrada e saída de veículos
 - **Reagendamento**: Sistema de reagendamento com motivo obrigatório
 - **Validação de capacidade**: Verificação de capacidade máxima por horário
+- **Filtro por planta**: Visualização de agendamentos por planta específica
+
+#### Configuração de Horários
+- **Horários Padrão**: Configuração de horários padrão de funcionamento
+- **Bloqueio Semanal**: Bloqueio de horários específicos por dia da semana
+- **Bloqueio por Data**: Bloqueio de horários em datas específicas
+- **Horários por Planta**: Configuração de horários específicos por planta
+- **Validação Automática**: Sistema valida horários ao criar/editar agendamentos
 
 #### Integração ERP
 Quando um check-in é realizado, o sistema gera automaticamente um **payload JSON** para integração com sistemas ERP externos:
@@ -130,17 +139,57 @@ Quando um check-in é realizado, o sistema gera automaticamente um **payload JSO
 - **Visualização diária**: Calendário com agendamentos do fornecedor (visão diária)
 - **Criação de agendamentos**: Formulário completo para novos agendamentos
 - **Edição de agendamentos**: Modificação de agendamentos existentes
+- **Exclusão de agendamentos**: Cancelamento de agendamentos próprios (apenas status 'scheduled' ou 'rescheduled')
 - **Validação de disponibilidade**: Verificação automática de horários disponíveis
+- **Validação de capacidade**: Verificação de capacidade máxima por horário
 - **Reagendamento**: Sistema de reagendamento com motivo obrigatório ao alterar data/horário
+- **Seleção de planta**: Escolha da planta de destino ao criar agendamento
 
 #### Campos do Agendamento
 - **Data**: Seleção de data (formato DD/MM/AAAA com máscara)
+- **Planta**: Seleção da planta de destino (obrigatório)
 - **Horário Inicial**: Seleção de horário (formato HH:mm, intervalos de 30 minutos)
 - **Horário Final**: Seleção de horário final (formato HH:mm, intervalos de 30 minutos)
 - **Pedido de Compra**: Número do PO (obrigatório)
 - **Placa do Caminhão**: Identificação do veículo (obrigatório)
 - **Nome do Motorista**: Responsável pela entrega (obrigatório)
 - **Motivo do Reagendamento**: Campo obrigatório quando data/horário são alterados
+
+### 4. Visão Planta
+
+#### Gestão de Agendamentos Recebidos
+- **Visualização diária**: Calendário com agendamentos recebidos pela planta (visão diária)
+- **Check-in/Check-out**: Controle de entrada e saída de veículos
+- **Visualização de detalhes**: Informações completas do fornecedor e agendamento
+- **Filtros**: Visualização por status (scheduled, checked_in, checked_out, rescheduled)
+
+#### Funcionalidades Específicas
+- **Check-in**: Marcação de chegada do veículo (gera payload para ERP)
+- **Check-out**: Marcação de saída após descarga completa
+- **Visualização de fornecedores**: Lista de fornecedores que agendam na planta
+- **Configuração de capacidade**: Visualização e configuração da capacidade máxima por horário
+- **Horários de funcionamento**: Visualização dos horários configurados para a planta
+
+### 5. Sistema de Permissões Granulares
+
+O sistema implementa um controle de acesso granular por funcionalidade através do módulo de **Perfis de Acesso**:
+
+#### Tipos de Permissão
+- **Editor**: Mesmos privilégios do Administrador na funcionalidade específica
+- **Visualizador**: Apenas visualização (sem criar, editar ou excluir)
+- **Sem acesso**: Bloqueio completo da funcionalidade
+
+#### Funcionalidades Configuráveis
+- **Agendamentos**: Criar, visualizar, editar, excluir, check-in, check-out, reagendar
+- **Fornecedores**: Criar, visualizar, editar, inativar, excluir
+- **Plantas**: Criar, visualizar, editar, inativar, excluir, configurar horários
+- **Configurações de Horários**: Horário padrão, bloqueio semanal, bloqueio por data
+
+#### Regras de Negócio
+- Permissões são configuradas por perfil (Fornecedor ou Planta)
+- Alterações não salvas são perdidas ao sair da tela
+- Apenas Administradores podem configurar permissões
+- Permissões são aplicadas tanto no frontend quanto no backend
 
 ## API Endpoints
 
@@ -169,6 +218,15 @@ Quando um check-in é realizado, o sistema gera automaticamente um **payload JSO
 | POST | `/api/admin/appointments/{id}/check-out` | Realizar check-out |
 | GET | `/api/admin/system-config/max-capacity` | Obter capacidade máxima por horário |
 | POST | `/api/admin/system-config/max-capacity` | Atualizar capacidade máxima por horário |
+| GET | `/api/admin/users` | Listar usuários |
+| POST | `/api/admin/users` | Criar usuário |
+| PUT | `/api/admin/users/{id}` | Atualizar usuário |
+| DELETE | `/api/admin/users/{id}` | Excluir usuário |
+| POST | `/api/admin/users/{id}/reset-password` | Redefinir senha de usuário |
+| GET | `/api/admin/permissions` | Obter permissões configuradas |
+| POST | `/api/admin/permissions` | Salvar configurações de permissões |
+| GET | `/api/admin/operating-hours` | Obter horários de funcionamento |
+| POST | `/api/admin/operating-hours` | Configurar horários de funcionamento |
 
 ### Fornecedor
 | Método | Endpoint | Descrição |
@@ -177,6 +235,33 @@ Quando um check-in é realizado, o sistema gera automaticamente um **payload JSO
 | POST | `/api/supplier/appointments` | Criar agendamento |
 | PUT | `/api/supplier/appointments/{id}` | Editar agendamento próprio |
 | DELETE | `/api/supplier/appointments/{id}` | Cancelar agendamento |
+| GET | `/api/supplier/available-slots` | Listar horários disponíveis |
+| GET | `/api/supplier/plants` | Listar plantas disponíveis |
+| GET | `/api/supplier/plants/{id}/capacity` | Obter capacidade de uma planta |
+| POST | `/api/supplier/appointments/{id}/check-in` | Realizar check-in (se permitido) |
+| POST | `/api/supplier/appointments/{id}/check-out` | Realizar check-out (se permitido) |
+
+### Planta
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/plant/appointments` | Listar agendamentos recebidos pela planta |
+| POST | `/api/plant/appointments` | Criar agendamento (se permitido) |
+| PUT | `/api/plant/appointments/{id}` | Editar agendamento (se permitido) |
+| DELETE | `/api/plant/appointments/{id}` | Excluir agendamento (se permitido) |
+| POST | `/api/plant/appointments/{id}/check-in` | Realizar check-in |
+| POST | `/api/plant/appointments/{id}/check-out` | Realizar check-out |
+| GET | `/api/plant/profile` | Obter perfil da planta |
+| GET | `/api/plant/operating-hours` | Obter horários de funcionamento |
+| GET | `/api/plant/suppliers` | Listar fornecedores que agendam na planta |
+| GET | `/api/plant/plants` | Listar plantas (própria) |
+| GET | `/api/plant/system-config/max-capacity` | Obter capacidade máxima |
+| POST | `/api/plant/system-config/max-capacity` | Configurar capacidade máxima |
+
+### Usuário
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/profile` | Obter perfil do usuário autenticado |
+| PUT | `/api/profile` | Atualizar perfil (incluindo senha) |
 
 ## Modelo de Dados
 
@@ -212,11 +297,13 @@ Quando um check-in é realizado, o sistema gera automaticamente um **payload JSO
 ```python
 {
   "id": Integer,
-  "name": String,  # Nome da planta
-  "code": String,  # Código ou identificador
-  "email": String,  # E-mail
+  "name": String,  # Nome da planta (obrigatório)
+  "code": String,  # Código ou identificador (opcional)
+  "cnpj": String,  # CNPJ (obrigatório)
+  "email": String,  # E-mail (opcional)
   "phone": String,  # Telefone (opcional)
   "is_active": Boolean,  # Status ativo/inativo
+  "max_capacity": Integer,  # Capacidade máxima de recebimentos por horário (padrão: 1)
   "cep": String,  # CEP (opcional)
   "street": String,  # Rua (opcional)
   "number": String,  # Número (opcional)
@@ -231,17 +318,18 @@ Quando um check-in é realizado, o sistema gera automaticamente um **payload JSO
 ```python
 {
   "id": Integer,
-  "supplier_id": Integer,
-  "date": Date,
+  "supplier_id": Integer,  # Fornecedor (obrigatório)
+  "plant_id": Integer,  # Planta de destino (obrigatório)
+  "date": Date,  # Data do agendamento
   "time": Time,  # Horário inicial
-  "time_end": Time,  # Horário final (nullable, para intervalos)
-  "purchase_order": String,
-  "truck_plate": String,
-  "driver_name": String,
+  "time_end": Time,  # Horário final (obrigatório)
+  "purchase_order": String,  # Número do PO (obrigatório)
+  "truck_plate": String,  # Placa do caminhão (obrigatório)
+  "driver_name": String,  # Nome do motorista (obrigatório)
   "status": String,  # "scheduled", "checked_in", "checked_out", "rescheduled", "cancelled"
-  "motivo_reagendamento": String,  # Motivo do reagendamento (nullable)
-  "check_in_time": DateTime,  # Timestamp do check-in
-  "check_out_time": DateTime,  # Timestamp do check-out
+  "motivo_reagendamento": String,  # Motivo do reagendamento (nullable, obrigatório ao reagendar)
+  "check_in_time": DateTime,  # Timestamp do check-in (nullable)
+  "check_out_time": DateTime,  # Timestamp do check-out (nullable)
   "created_at": DateTime,
   "updated_at": DateTime
 }
@@ -268,9 +356,11 @@ Quando um check-in é realizado, o sistema gera automaticamente um **payload JSO
 1. Fornecedor faz login no sistema
 2. Visualiza calendário diário
 3. Clica em "Novo Agendamento"
-4. Preenche dados do agendamento (data, horário inicial, horário final, PO, placa, motorista)
-5. Sistema valida disponibilidade e capacidade máxima
-6. Sistema salva agendamento
+4. Seleciona a planta de destino
+5. Preenche dados do agendamento (data, horário inicial, horário final, PO, placa, motorista)
+6. Sistema valida disponibilidade e capacidade máxima da planta selecionada
+7. Sistema valida horários de funcionamento da planta
+8. Sistema salva agendamento com status "scheduled"
 
 ### 4. Reagendamento (Fornecedor/Administrador)
 1. Usuário edita agendamento existente
@@ -280,15 +370,17 @@ Quando um check-in é realizado, o sistema gera automaticamente um **payload JSO
 5. Usuário preenche motivo do reagendamento
 6. Sistema salva com status "rescheduled" e motivo anexado
 
-### 5. Processo de Check-in/Check-out (Administrador)
-1. Administrador visualiza agendamentos do dia
+### 5. Processo de Check-in/Check-out (Administrador/Planta)
+1. Administrador ou usuário da Planta visualiza agendamentos do dia
 2. Quando veículo chega, clica em "Check-in"
 3. Sistema valida status (deve ser "scheduled" ou "rescheduled")
-4. Sistema gera payload para ERP
+4. Sistema gera payload JSON para integração com ERP
 5. Status muda para "checked_in"
-6. Após descarga, clica em "Check-out"
-7. Status muda para "checked_out"
-8. Agendamento é marcado como finalizado
+6. Timestamp de check-in é registrado
+7. Após descarga completa, clica em "Check-out"
+8. Status muda para "checked_out"
+9. Timestamp de check-out é registrado
+10. Agendamento é marcado como finalizado (não pode mais ser editado ou excluído)
 
 ## Segurança
 
@@ -387,23 +479,28 @@ pnpm run dev
 - **Filtros interativos**: Cards de estatísticas funcionam como filtros
 - **Inputs customizados**: TimeInput e DateInput com máscaras e validações
 - **Modais**: Formulários convertidos para modais (melhor UX)
+- **Sistema de Permissões**: Interface completa para configuração de permissões por perfil
+- **Validações em Tempo Real**: Feedback imediato ao usuário em formulários
 
 ## Melhorias Futuras
 
 ### Funcionalidades Planejadas
 - **Notificações**: Sistema de alertas por email/SMS
-- **Relatórios**: Dashboards analíticos e exportação
+- **Relatórios**: Dashboards analíticos e exportação (PDF, Excel, CSV)
 - **Mobile App**: Aplicativo nativo para fornecedores
 - **Integração**: APIs para sistemas de terceiros
-- **Auditoria**: Log completo de ações do sistema
-- **Configuração de Horários por Planta**: Horários de funcionamento específicos por planta
+- **Auditoria**: Log completo de ações do sistema (quem, quando, o quê)
+- **Configuração de Horários por Planta**: ✅ Implementado - Horários de funcionamento específicos por planta
+- **Sistema de Permissões Granulares**: ✅ Implementado - Perfis de Acesso com controle por funcionalidade
 
 ### Otimizações Técnicas
-- **Cache**: Redis para performance
-- **Banco**: PostgreSQL para produção
-- **Deploy**: Containerização com Docker
-- **Monitoramento**: Logs estruturados e métricas
-- **Backup**: Estratégia de backup automatizado
+- **Cache**: Redis para performance (planejado)
+- **Banco**: PostgreSQL para produção (recomendado)
+- **Deploy**: Containerização com Docker (planejado)
+- **Monitoramento**: Logs estruturados e métricas (parcialmente implementado)
+- **Backup**: Estratégia de backup automatizado (planejado)
+- **Rate Limiting**: Proteção contra abuso de API (planejado)
+- **HTTPS**: Certificado SSL para produção (obrigatório)
 
 ## Suporte e Manutenção
 

@@ -10,10 +10,10 @@ import { Textarea } from '@/components/ui/textarea'
 import TimeInput from '@/components/ui/time-input'
 import DateInput from '@/components/ui/date-input'
 import { ArrowLeft, Save, Loader2, Plus, AlertCircle } from 'lucide-react'
-import { adminAPI } from '../lib/api'
+import { adminAPI, plantAPI, supplierAPI } from '../lib/api'
 import { dateUtils, statusUtils } from '../lib/utils'
 
-const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }) => {
+const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmit, onCancel, user = null }) => {
   const [formData, setFormData] = useState({
     date: '',
     time: '',
@@ -21,7 +21,8 @@ const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }
     purchase_order: '',
     truck_plate: '',
     driver_name: '',
-    supplier_id: ''
+    supplier_id: '',
+    plant_id: ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -68,7 +69,8 @@ const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }
         purchase_order: appointment.purchase_order || '',
         truck_plate: appointment.truck_plate || '',
         driver_name: appointment.driver_name || '',
-        supplier_id: appointment.supplier_id || ''
+        supplier_id: appointment.supplier_id || '',
+        plant_id: appointment.plant_id || ''
       })
       
       // Armazenar valores originais
@@ -77,8 +79,23 @@ const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }
         time: normalizedTime,
         time_end: normalizedTimeEnd
       })
+    } else if (isCreating) {
+      // Preencher automaticamente baseado no perfil do usuário
+      if (user?.role === 'supplier' && user?.supplier_id) {
+        // Fornecedor: preencher supplier_id automaticamente
+        setFormData(prev => ({
+          ...prev,
+          supplier_id: user.supplier_id.toString()
+        }))
+      } else if (user?.role === 'plant' && user?.plant_id) {
+        // Planta: preencher plant_id automaticamente
+        setFormData(prev => ({
+          ...prev,
+          plant_id: user.plant_id.toString()
+        }))
+      }
     }
-  }, [appointment])
+  }, [appointment, isCreating, user])
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -121,9 +138,30 @@ const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }
       errors.driver_name = true
       isValid = false
     }
-    if (isCreating && !formData.supplier_id) {
-      errors.supplier_id = true
-      isValid = false
+    
+    // Validação condicional baseada no perfil
+    if (isCreating) {
+      // Fornecedor precisa de plant_id
+      if (user?.role === 'supplier' && !formData.plant_id) {
+        errors.plant_id = true
+        isValid = false
+      }
+      // Planta precisa de supplier_id
+      if (user?.role === 'plant' && !formData.supplier_id) {
+        errors.supplier_id = true
+        isValid = false
+      }
+      // Admin precisa de ambos
+      if (user?.role === 'admin') {
+        if (!formData.supplier_id) {
+          errors.supplier_id = true
+          isValid = false
+        }
+        if (!formData.plant_id) {
+          errors.plant_id = true
+          isValid = false
+        }
+      }
     }
 
     setFieldErrors(errors)
@@ -167,16 +205,29 @@ const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }
     try {
       const submitData = { ...formDataToUse }
       
+      // Garantir que supplier_id seja inteiro
+      if (submitData.supplier_id) {
+        submitData.supplier_id = parseInt(submitData.supplier_id, 10)
+      }
+      
+      // Garantir que plant_id seja inteiro
+      if (submitData.plant_id) {
+        submitData.plant_id = parseInt(submitData.plant_id, 10)
+      }
+      
       // Sempre incluir o motivo se foi fornecido
       if (reason && reason.trim()) {
         submitData.motivo_reagendamento = reason.trim()
       }
 
+      // Determinar qual API usar baseado no role do usuário
+      const api = user?.role === 'plant' ? plantAPI : (user?.role === 'supplier' ? supplierAPI : adminAPI)
+      
       let response
       if (isCreating) {
-        response = await adminAPI.createAppointment(submitData)
+        response = await api.createAppointment(submitData)
       } else {
-        response = await adminAPI.updateAppointment(appointment.id, submitData)
+        response = await api.updateAppointment(appointment.id, submitData)
       }
       
       // Limpar estado da modal
@@ -187,19 +238,29 @@ const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }
       
       onSubmit()
     } catch (err) {
+      // Fechar modal de reagendamento em caso de erro
+      setShowRescheduleModal(false)
+      setPendingSubmit(null)
+      
       // Tratar erro de conflito de horário ou capacidade máxima
       if (err.response?.status === 409) {
         const errorMessage = err.response?.data?.error || 'Horário já ocupado. Por favor, escolha outro horário.'
         setError(errorMessage)
         setFieldErrors({ date: true, time: true })
       } else if (err.response?.status === 400 && err.response?.data?.requires_reschedule_reason) {
-        // Se o backend exigir motivo mas não foi fornecido, mostrar modal
+        // Se o backend exigir motivo mas não foi fornecido, mostrar modal novamente
         setPendingSubmit(() => async () => {
           await performSubmitWithReason(formDataToUse, reason)
         })
         setShowRescheduleModal(true)
       } else {
-        setError(err.response?.data?.error || err.message || 'Erro ao salvar agendamento')
+        // Exibir erro de validação (ex: horário de funcionamento)
+        const errorMessage = err.response?.data?.error || err.message || 'Erro ao salvar agendamento'
+        setError(errorMessage)
+        // Se for erro de validação de horário, destacar campos de data/hora
+        if (err.response?.status === 400 && errorMessage.includes('horário')) {
+          setFieldErrors({ date: true, time: true })
+        }
       }
     } finally {
       setLoading(false)
@@ -213,16 +274,29 @@ const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }
     try {
       const submitData = { ...formData }
       
+      // Garantir que supplier_id seja inteiro
+      if (submitData.supplier_id) {
+        submitData.supplier_id = parseInt(submitData.supplier_id, 10)
+      }
+      
+      // Garantir que plant_id seja inteiro
+      if (submitData.plant_id) {
+        submitData.plant_id = parseInt(submitData.plant_id, 10)
+      }
+      
       // Se é reagendamento, incluir o motivo
       if (!isCreating && isRescheduling && rescheduleReason.trim()) {
         submitData.motivo_reagendamento = rescheduleReason.trim()
       }
 
+      // Determinar qual API usar baseado no role do usuário
+      const api = user?.role === 'plant' ? plantAPI : (user?.role === 'supplier' ? supplierAPI : adminAPI)
+      
       let response
       if (isCreating) {
-        response = await adminAPI.createAppointment(submitData)
+        response = await api.createAppointment(submitData)
       } else {
-        response = await adminAPI.updateAppointment(appointment.id, submitData)
+        response = await api.updateAppointment(appointment.id, submitData)
       }
       
       // Limpar estado da modal
@@ -278,13 +352,25 @@ const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }
 
   const isFormValid = () => {
     const timeEndValid = formData.time_end && formData.time_end.trim() && formData.time_end > formData.time
-    return formData.date && 
+    const baseValid = formData.date && 
            formData.time && 
            timeEndValid &&
            formData.purchase_order.trim() && 
            formData.truck_plate.trim() && 
-           formData.driver_name.trim() &&
-           (!isCreating || formData.supplier_id)
+           formData.driver_name.trim()
+    
+    if (!isCreating) return baseValid
+    
+    // Validação condicional baseada no perfil
+    if (user?.role === 'supplier') {
+      return baseValid && formData.plant_id
+    } else if (user?.role === 'plant') {
+      return baseValid && formData.supplier_id
+    } else if (user?.role === 'admin') {
+      return baseValid && formData.supplier_id && formData.plant_id
+    }
+    
+    return baseValid
   }
 
   if (!appointment) {
@@ -358,8 +444,8 @@ const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }
               </Alert>
             )}
 
-            {/* Fornecedor (apenas para criação) */}
-            {isCreating && suppliers && (
+            {/* Fornecedor: mostrar para admin e planta */}
+            {isCreating && suppliers && (user?.role === 'admin' || user?.role === 'plant') && (
               <div className="space-y-2">
                 <Label htmlFor="supplier_id">
                   Fornecedor <span className="text-red-500">*</span>
@@ -384,6 +470,37 @@ const AppointmentEditForm = ({ appointment, suppliers = [], onSubmit, onCancel }
                     ))}
                 </select>
                 {fieldErrors.supplier_id && (
+                  <p className="text-xs text-red-500">Campo obrigatório</p>
+                )}
+              </div>
+            )}
+
+            {/* Planta: mostrar para admin e fornecedor */}
+            {isCreating && plants && plants.length > 0 && (user?.role === 'admin' || user?.role === 'supplier') && (
+              <div className="space-y-2">
+                <Label htmlFor="plant_id">
+                  Planta de Entrega <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="plant_id"
+                  value={formData.plant_id}
+                  onChange={(e) => handleInputChange('plant_id', e.target.value)}
+                  required
+                  disabled={loading}
+                  className={`flex h-10 w-full rounded-md border ${
+                    fieldErrors.plant_id ? 'border-red-500' : 'border-input'
+                  } bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  <option value="">Selecione uma planta</option>
+                  {plants
+                    .filter(p => p.is_active)
+                    .map(plant => (
+                      <option key={plant.id} value={plant.id}>
+                        {plant.name} - {plant.cnpj}
+                      </option>
+                    ))}
+                </select>
+                {fieldErrors.plant_id && (
                   <p className="text-xs text-red-500">Campo obrigatório</p>
                 )}
               </div>

@@ -135,3 +135,22 @@ $RECYCLE.BIN/
 # Flask static files (will be generated from React build)
 portal_wps_backend/src/static/*
 !portal_wps_backend/src/static/.gitkeep
+
+# Scripts de teste e migração (não devem ser commitados)
+portal_wps_backend/test_*.py
+portal_wps_backend/check_*.py
+portal_wps_backend/create_*.py
+portal_wps_backend/fix_*.py
+portal_wps_backend/delete_*.py
+portal_wps_backend/add_*.py
+portal_wps_backend/migrate_*.py
+portal_wps_backend/init_data.py
+
+# Scripts PowerShell de desenvolvimento
+start-servers.ps1
+
+# Banco de dados (não commitar)
+portal_wps_backend/database.db
+portal_wps_backend/src/database/*.db
+portal_wps_backend/src/database/*.sqlite
+portal_wps_backend/src/database/*.sqlite3

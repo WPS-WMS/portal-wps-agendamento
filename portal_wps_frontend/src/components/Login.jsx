@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -21,20 +21,49 @@ const Login = ({ onLogin }) => {
   const [resetMessage, setResetMessage] = useState('')
   const [resetError, setResetError] = useState('')
 
-  // RN02 - Validação de campos vazios
+  // Memoizar o ícone de senha para evitar renderizações duplicadas
+  const passwordIcon = useMemo(() => {
+    return showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />
+  }, [showPassword])
+
+  // Validação de formato de email
+  const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
+  // RN02 - Validação de campos vazios e formato
   const validateFields = () => {
     const errors = {
-      email: email.trim() === '',
-      password: password.trim() === ''
+      email: false,
+      password: false
     }
     
-    setFieldErrors(errors)
-    
-    if (errors.email || errors.password) {
+    // Validar se campos estão vazios
+    if (email.trim() === '') {
+      errors.email = true
+      setFieldErrors(errors)
       setError('O campo deve ser preenchido')
       return false
     }
     
+    if (password.trim() === '') {
+      errors.password = true
+      setFieldErrors(errors)
+      setError('O campo deve ser preenchido')
+      return false
+    }
+    
+    // Validar formato de email
+    if (!isValidEmail(email.trim())) {
+      errors.email = true
+      errors.password = true // Marcar ambos para não expor qual campo está incorreto
+      setFieldErrors(errors)
+      setError('Dados inválidos')
+      return false
+    }
+    
+    setFieldErrors({ email: false, password: false })
     return true
   }
 
@@ -57,25 +86,35 @@ const Login = ({ onLogin }) => {
       localStorage.setItem('user', JSON.stringify(data.user))
       onLogin(data.user, data.token)
     } catch (err) {
+      console.error('Erro no login:', err)
+      console.error('Response:', err.response)
+      console.error('Request:', err.request)
       
       // RN01 - Mensagem genérica, não expor qual campo está incorreto
       if (err.response) {
-        if (err.response.status === 401 || err.response.status === 403) {
+        const status = err.response.status
+        const errorMessage = err.response.data?.error || 'Erro desconhecido'
+        
+        console.error(`Status: ${status}, Mensagem: ${errorMessage}`)
+        
+        if (status === 401 || status === 403) {
           setError('Dados inválidos')
           setFieldErrors({ email: true, password: true })
-        } else if (err.response.status === 500) {
+        } else if (status === 500) {
           setError('Erro no servidor. Tente novamente mais tarde.')
           setFieldErrors({ email: false, password: false })
         } else {
-          setError('Erro de conexão. Tente novamente.')
+          setError(`Erro: ${errorMessage}`)
           setFieldErrors({ email: false, password: false })
         }
       } else if (err.request) {
         // Requisição foi feita mas não houve resposta
-        setError('Servidor não está respondendo. Verifique se o backend está rodando.')
+        console.error('Backend não está respondendo')
+        setError('Servidor não está respondendo. Verifique se o backend está rodando na porta 5000.')
         setFieldErrors({ email: false, password: false })
       } else {
         // Erro ao configurar a requisição
+        console.error('Erro ao configurar requisição:', err.message)
         setError('Erro de conexão. Tente novamente.')
         setFieldErrors({ email: false, password: false })
       }
@@ -128,13 +167,13 @@ const Login = ({ onLogin }) => {
           <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
             <Truck className="w-8 h-8 text-white" />
           </div>
-          <CardTitle className="text-2xl font-bold text-gray-900">Portal WPS</CardTitle>
+          <CardTitle className="text-2xl font-bold text-gray-900">Cargo Flow</CardTitle>
           <CardDescription className="text-gray-600">
             Sistema de Agendamento de Carga
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
@@ -145,13 +184,16 @@ const Login = ({ onLogin }) => {
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
-                type="email"
+                type="text"
                 placeholder="seu@email.com"
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value)
                   setFieldErrors(prev => ({ ...prev, email: false }))
                   setError('')
+                }}
+                onInvalid={(e) => {
+                  e.preventDefault()
                 }}
                 disabled={loading}
                 className={fieldErrors.email ? 'border-red-500 focus-visible:ring-red-500' : ''}
@@ -176,16 +218,17 @@ const Login = ({ onLogin }) => {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setShowPassword(!showPassword)
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none z-10"
                   disabled={loading}
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  tabIndex={-1}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {passwordIcon}
                 </button>
               </div>
             </div>

@@ -18,6 +18,9 @@ class Appointment(db.Model):
     # Chave estrangeira para Supplier
     supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.id'), nullable=False)
     
+    # Chave estrangeira para Plant (opcional - pode ser NULL para compatibilidade com agendamentos antigos)
+    plant_id = db.Column(db.Integer, db.ForeignKey('plants.id'), nullable=True)
+    
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -39,6 +42,7 @@ class Appointment(db.Model):
             'check_in_time': self.check_in_time.isoformat() if self.check_in_time else None,
             'check_out_time': self.check_out_time.isoformat() if self.check_out_time else None,
             'supplier_id': self.supplier_id,
+            'plant_id': self.plant_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

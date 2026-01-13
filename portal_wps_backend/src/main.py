@@ -15,10 +15,13 @@ from src.models.schedule_config import ScheduleConfig
 from src.models.default_schedule import DefaultSchedule
 from src.models.system_config import SystemConfig
 from src.models.plant import Plant
+from src.models.operating_hours import OperatingHours
+from src.models.permission import Permission
 from src.routes.user import user_bp
 from src.routes.auth import auth_bp
 from src.routes.admin import admin_bp
 from src.routes.supplier import supplier_bp
+from src.routes.plant import plant_bp
 
 # Configurar logging
 logging.basicConfig(
@@ -61,6 +64,7 @@ app.register_blueprint(user_bp, url_prefix='/api')
 app.register_blueprint(auth_bp, url_prefix='/api')
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
 app.register_blueprint(supplier_bp, url_prefix='/api/supplier')
+app.register_blueprint(plant_bp, url_prefix='/api/plant')
 logger.info("Blueprints registrados com sucesso")
 
 @app.route('/api/health', methods=['GET'])
@@ -75,7 +79,7 @@ def health_check():
             'status': 'healthy',
             'timestamp': datetime.utcnow().isoformat(),
             'database': 'connected',
-            'service': 'Portal WPS Backend'
+            'service': 'Cargo Flow Backend'
         }), 200
     except Exception as e:
         logger.error(f"Health check falhou: {e}")
@@ -89,14 +93,15 @@ def health_check():
 def api_root():
     """Endpoint raiz da API"""
     return jsonify({
-        'message': 'Portal WPS API está funcionando!',
+        'message': 'Cargo Flow API está funcionando!',
         'version': '1.0.0',
         'timestamp': datetime.utcnow().isoformat(),
-        'endpoints': {
+            'endpoints': {
             'health': '/api/health',
             'auth': '/api/login',
             'admin': '/api/admin/*',
-            'supplier': '/api/supplier/*'
+            'supplier': '/api/supplier/*',
+            'plant': '/api/plant/*'
         }
     }), 200
 
@@ -104,6 +109,18 @@ def api_root():
 @app.route('/<path:path>')
 def serve(path):
     """Serve arquivos estáticos do frontend (se existirem)"""
+    # Não capturar rotas da API - elas devem ser tratadas pelos blueprints
+    if path.startswith('api/'):
+        logger.warning(f"⚠️ Rota catch-all capturou requisição da API: /{path}")
+        logger.warning("Isso não deveria acontecer! Verifique se a rota está registrada corretamente.")
+        return jsonify({
+            'error': 'Rota da API não encontrada',
+            'path': f'/{path}',
+            'message': 'Verifique se a rota está registrada corretamente no backend.',
+            'api_root': '/api',
+            'timestamp': datetime.utcnow().isoformat()
+        }), 404
+    
     static_folder_path = app.static_folder
     
     if static_folder_path is None:
@@ -139,7 +156,14 @@ def internal_error(error):
 
 if __name__ == '__main__':
     try:
-        logger.info("Iniciando servidor Portal WPS Backend...")
+        import warnings
+        # Suprimir aviso do Werkzeug sobre servidor de desenvolvimento
+        warnings.filterwarnings('ignore', message='.*development server.*')
+        
+        # Configurar logging do Werkzeug para não mostrar avisos
+        logging.getLogger('werkzeug').setLevel(logging.ERROR)
+        
+        logger.info("Iniciando servidor Cargo Flow Backend...")
         logger.info("Servidor rodará em http://0.0.0.0:5000")
         logger.info("API disponível em http://localhost:5000/api")
         app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)

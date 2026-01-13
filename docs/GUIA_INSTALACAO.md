@@ -52,6 +52,10 @@ Abra o navegador em: **http://localhost:5173**
 - **Fornecedor 1**: fornecedor1@abc.com / fornecedor123
 - **Fornecedor 2**: fornecedor2@xyz.com / fornecedor123
 
+### Plantas
+- **Planta 1**: portaria1@wps.com / portaria123
+- **Planta 2**: portaria2@wps.com / portaria123
+
 ## Funcionalidades Principais
 
 ### Como Administrador:
@@ -64,8 +68,17 @@ Abra o navegador em: **http://localhost:5173**
 
 ### Como Fornecedor:
 1. **Ver Agendamentos**: Calendário diário com navegação
-2. **Criar Agendamento**: Botão "Novo Agendamento"
+2. **Criar Agendamento**: Botão "Novo Agendamento" (selecionar planta obrigatório)
 3. **Editar Agendamento**: Botão de edição nos próprios agendamentos
+4. **Excluir Agendamento**: Botão de exclusão (apenas status 'scheduled' ou 'rescheduled')
+5. **Reagendar**: Ao alterar data/horário, sistema exige motivo obrigatório
+
+### Como Planta:
+1. **Ver Agendamentos Recebidos**: Calendário diário com agendamentos da planta
+2. **Check-in**: Marcar chegada do veículo
+3. **Check-out**: Marcar saída após descarga
+4. **Visualizar Fornecedores**: Lista de fornecedores que agendam na planta
+5. **Configurar Capacidade**: Definir capacidade máxima por horário
 
 ## Estrutura de Arquivos
 
@@ -112,6 +125,12 @@ portal-wps-agendamento/
 - Executar: `python init_data.py` no diretório `portal_wps_backend`
 - Verificar se arquivo `src/database/app.db` foi criado
 - Se o banco já existir, o script irá limpar e recriar os dados
+- **Atenção**: O script `init_data.py` apaga todos os dados existentes e recria dados de teste
+
+### Erro de permissões
+- Verificar se o usuário tem permissão para criar/editar/excluir conforme configurado em "Perfis de Acesso"
+- Apenas Administradores podem acessar a tela de "Perfis de Acesso"
+- Verificar logs do backend para mensagens de erro específicas
 
 ## Suporte
 

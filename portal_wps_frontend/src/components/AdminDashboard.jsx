@@ -24,7 +24,8 @@ import {
   Settings,
   Trash2,
   Ban,
-  ArrowLeft
+  ArrowLeft,
+  Shield
 } from 'lucide-react'
 import { adminAPI } from '../lib/api'
 import { dateUtils, statusUtils } from '../lib/utils'
@@ -32,10 +33,12 @@ import { UI_CONFIG } from '../lib/constants'
 import SupplierForm from './SupplierForm'
 import SupplierManagement from './SupplierManagement'
 import PlantManagement from './PlantManagement'
-import ScheduleConfig from './ScheduleConfig'
-import DefaultScheduleConfig from './DefaultScheduleConfig'
+import UnifiedScheduleConfig from './UnifiedScheduleConfig'
 import AppointmentEditForm from './AppointmentEditForm'
 import PlantForm from './PlantForm'
+import AccessProfilesScreen from './AccessProfilesScreen'
+import UsersScreen from './UsersScreen'
+import PlantSelector from './PlantSelector'
 
 // Constante para altura proporcional por hora
 const HOUR_HEIGHT = UI_CONFIG.HOUR_HEIGHT
@@ -49,8 +52,8 @@ const AdminDashboard = ({ user, token }) => {
   const [showSupplierForm, setShowSupplierForm] = useState(false)
   const [showSupplierManagement, setShowSupplierManagement] = useState(false)
   const [managingSupplier, setManagingSupplier] = useState(null)
-  const [showScheduleConfig, setShowScheduleConfig] = useState(false)
-  const [showDefaultScheduleConfig, setShowDefaultScheduleConfig] = useState(false)
+  const [showUnifiedScheduleConfig, setShowUnifiedScheduleConfig] = useState(false)
+  const [selectedPlantForSchedule, setSelectedPlantForSchedule] = useState(null)
   const [showSuppliersScreen, setShowSuppliersScreen] = useState(false)
   const [showPlantsScreen, setShowPlantsScreen] = useState(false)
   const [showPlantForm, setShowPlantForm] = useState(false)
@@ -61,12 +64,16 @@ const AdminDashboard = ({ user, token }) => {
   const [editingAppointment, setEditingAppointment] = useState(null)
   const [activeTab, setActiveTab] = useState('appointments')
   const [activeFilter, setActiveFilter] = useState('all') // 'all', 'scheduled', 'checked_in', 'checked_out'
+  // Planta selecionada para visualização de agendamentos
+  const [selectedPlantId, setSelectedPlantId] = useState(null)
+  // Capacidade máxima calculada dinamicamente baseada nas plantas dos agendamentos
   const [maxCapacity, setMaxCapacity] = useState(1)
-  const [maxCapacityLoading, setMaxCapacityLoading] = useState(false)
-  const [maxCapacityError, setMaxCapacityError] = useState('')
-  const [maxCapacitySuccess, setMaxCapacitySuccess] = useState('')
+  // Mapa de capacidades por planta: { plantId: capacity }
+  const [plantCapacities, setPlantCapacities] = useState(new Map())
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState(null)
+  const [showAccessProfiles, setShowAccessProfiles] = useState(false)
+  const [showUsersScreen, setShowUsersScreen] = useState(false)
 
   const loadSuppliers = async () => {
     try {
@@ -82,6 +89,17 @@ const AdminDashboard = ({ user, token }) => {
       const data = await adminAPI.getPlants()
       // Garantir que sempre seja um array
       if (Array.isArray(data)) {
+        console.log('Plantas carregadas:', data.length, 'plantas')
+        console.log('Plantas bloqueadas:', data.filter(p => !p.is_active).length)
+        // Log para verificar CNPJ de cada planta
+        data.forEach((plant, index) => {
+          console.log(`Planta ${index + 1} (ID: ${plant.id}):`, {
+            name: plant.name,
+            cnpj: plant.cnpj,
+            hasCnpj: !!plant.cnpj,
+            cnpjType: typeof plant.cnpj
+          })
+        })
         setPlants(data)
       } else {
         setPlants([])
@@ -92,61 +110,58 @@ const AdminDashboard = ({ user, token }) => {
     }
   }
 
-  const loadAppointments = async (date) => {
+  const loadAppointments = async (date, plantId = null) => {
     try {
       setLoading(true)
-      // Passar o objeto Date diretamente, a API vai converter
-      const data = await adminAPI.getAppointments(date)
+      // Converter para string ISO (YYYY-MM-DD) antes de passar para a API
+      // Isso garante que a API receba o formato correto
+      const dateISO = dateUtils.toISODate(date)
+      console.log(`[AdminDashboard] Carregando agendamentos para data: ${dateISO}, planta: ${plantId}`)
+      const data = await adminAPI.getAppointments(dateISO, plantId)
+      console.log(`[AdminDashboard] Agendamentos recebidos da API:`, data.length)
+      
+      // Log detalhado de todos os agendamentos finalizados recebidos
+      const checkedOutFromAPI = data.filter(a => a.status === 'checked_out')
+      if (checkedOutFromAPI.length > 0) {
+        console.log(`[AdminDashboard] Agendamentos finalizados recebidos da API:`, checkedOutFromAPI.map(a => ({
+          id: a.id,
+          date: a.date,
+          dateType: typeof a.date,
+          status: a.status,
+          checkOutTime: a.check_out_time,
+          plant_id: a.plant_id
+        })))
+      }
+      
+      if (data.length > 0) {
+        console.log(`[AdminDashboard] Primeiros agendamentos:`, data.slice(0, 3).map(a => ({ id: a.id, date: a.date, status: a.status, plant_id: a.plant_id })))
+      }
       setAppointments(data)
       setError('')
     } catch (err) {
+      console.error(`[AdminDashboard] Erro ao carregar agendamentos:`, err)
       setError('Erro ao carregar agendamentos: ' + (err.response?.data?.error || err.message))
     } finally {
       setLoading(false)
     }
   }
 
-  const loadMaxCapacity = async () => {
-    try {
-      const data = await adminAPI.getMaxCapacity()
-      setMaxCapacity(data.max_capacity || 1)
-    } catch (err) {
-    }
-  }
-
-  const handleSaveMaxCapacity = async () => {
-    if (maxCapacity < 1) {
-      setMaxCapacityError('A capacidade mínima é 1')
-      return
-    }
-
-    setMaxCapacityLoading(true)
-    setMaxCapacityError('')
-    setMaxCapacitySuccess('')
-
-    try {
-      await adminAPI.setMaxCapacity(maxCapacity)
-      // Recarregar o valor do servidor para garantir sincronização
-      await loadMaxCapacity()
-      setMaxCapacitySuccess('Configuração salva com sucesso!')
-      setTimeout(() => setMaxCapacitySuccess(''), 3000)
-    } catch (err) {
-      setMaxCapacityError('Erro ao salvar configuração: ' + (err.response?.data?.error || err.message))
-    } finally {
-      setMaxCapacityLoading(false)
-    }
-  }
-
-  // Carregar capacidade máxima sempre que o componente monta
-  useEffect(() => {
-    loadMaxCapacity()
-  }, [])
 
   useEffect(() => {
     loadSuppliers()
     loadPlants()
-    loadAppointments(currentDate)
-  }, [currentDate, activeTab])
+    // Carregar agendamentos sempre, mesmo sem planta selecionada
+    // O filtro por planta será aplicado no frontend
+    console.log(`[AdminDashboard] useEffect disparado - selectedPlantId: ${selectedPlantId} (tipo: ${typeof selectedPlantId}), currentDate: ${currentDate}`)
+    loadAppointments(currentDate, selectedPlantId || null)
+  }, [currentDate, activeTab, selectedPlantId])
+  
+  // Handler para mudança de planta
+  const handlePlantChange = (plantId) => {
+    console.log(`[AdminDashboard] handlePlantChange chamado com plantId: ${plantId} (tipo: ${typeof plantId})`)
+    setSelectedPlantId(plantId)
+    // Manter a data atual, apenas recarregar agendamentos
+  }
 
   // Carregar plantas quando a tela de Plantas é aberta
   useEffect(() => {
@@ -154,6 +169,13 @@ const AdminDashboard = ({ user, token }) => {
       loadPlants()
     }
   }, [showPlantsScreen])
+  
+  // Recarregar plantas quando voltar para a tela de plantas
+  useEffect(() => {
+    if (showPlantsScreen && !showPlantManagement && !showPlantForm) {
+      loadPlants()
+    }
+  }, [showPlantsScreen, showPlantManagement, showPlantForm])
 
   const handlePreviousDay = () => {
     const newDate = new Date(currentDate)
@@ -180,7 +202,7 @@ const AdminDashboard = ({ user, token }) => {
       
       // Recarregar agendamentos para atualizar a UI
       const dateToLoad = currentDate instanceof Date ? currentDate : new Date(currentDate)
-      await loadAppointments(dateToLoad)
+      await loadAppointments(dateToLoad, selectedPlantId)
       
       // Mostrar payload do ERP
       alert(`Check-in realizado com sucesso!\n\nPayload ERP:\n${JSON.stringify(result.erp_payload, null, 2)}`)
@@ -203,7 +225,7 @@ const AdminDashboard = ({ user, token }) => {
       ))
       
       // Recarregar agendamentos para garantir sincronização
-      await loadAppointments(currentDate)
+      await loadAppointments(currentDate, selectedPlantId)
     } catch (err) {
       setError('Erro ao realizar check-out: ' + (err.response?.data?.error || err.message))
     }
@@ -234,17 +256,51 @@ const AdminDashboard = ({ user, token }) => {
   const handlePlantFormSubmit = async () => {
     setShowPlantForm(false)
     await loadPlants()
+    // Log para verificar se as plantas foram carregadas com CNPJ
+    console.log('handlePlantFormSubmit - Plantas após reload:', plants.map(p => ({ id: p.id, name: p.name, cnpj: p.cnpj })))
   }
 
   const handleManagePlant = (plant) => {
-    setManagingPlant(plant)
+    console.log('handleManagePlant - Planta selecionada:', plant)
+    console.log('handleManagePlant - CNPJ:', plant.cnpj)
+    console.log('handleManagePlant - Todas as chaves do objeto:', Object.keys(plant))
+    console.log('handleManagePlant - Objeto completo:', JSON.stringify(plant, null, 2))
+    
+    // Buscar a planta atualizada da lista para garantir que temos todos os dados
+    const updatedPlant = plants.find(p => p.id === plant.id)
+    if (updatedPlant) {
+      console.log('handleManagePlant - Planta atualizada encontrada:', updatedPlant)
+      console.log('handleManagePlant - CNPJ da planta atualizada:', updatedPlant.cnpj)
+      setManagingPlant(updatedPlant)
+    } else {
+      setManagingPlant(plant)
+    }
     setShowPlantManagement(true)
   }
 
   const handlePlantManagementUpdate = async () => {
-    setShowPlantManagement(false)
-    setManagingPlant(null)
-    await loadPlants()
+    // Não fechar o modal automaticamente, apenas recarregar plantas
+    try {
+      const data = await adminAPI.getPlants()
+      // Garantir que sempre seja um array
+      if (Array.isArray(data)) {
+        console.log('Plantas atualizadas após bloqueio:', data.length, 'plantas')
+        console.log('Plantas bloqueadas:', data.filter(p => !p.is_active).map(p => p.name))
+        setPlants(data)
+        // Atualizar o objeto managingPlant se ainda estiver aberto
+        if (managingPlant) {
+          const updatedPlant = data.find(p => p.id === managingPlant.id)
+          if (updatedPlant) {
+            console.log('Planta atualizada no modal:', updatedPlant.name, 'is_active:', updatedPlant.is_active)
+            setManagingPlant(updatedPlant)
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao atualizar plantas:', err)
+      // Recarregar mesmo em caso de erro
+      await loadPlants()
+    }
   }
 
   const handleDeleteAppointment = async (appointmentId) => {
@@ -261,19 +317,187 @@ const AdminDashboard = ({ user, token }) => {
   const handleAppointmentFormSubmit = async () => {
     setShowAppointmentForm(false)
     setEditingAppointment(null)
-    await loadAppointments(currentDate)
+    await loadAppointments(currentDate, selectedPlantId)
   }
 
   // Data atual em formato ISO para filtros
-  const currentDateISO = dateUtils.toISODate(currentDate)
+  // Usar uma função que não sofre com problemas de timezone
+  const getDateString = (date) => {
+    if (!date) return null
+    
+    // Se já é uma string no formato YYYY-MM-DD, retornar diretamente
+    if (typeof date === 'string') {
+      // Remover qualquer parte de timezone ou hora
+      const dateOnly = date.split('T')[0]
+      // Validar formato YYYY-MM-DD
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+        return dateOnly
+      }
+      // Se não está no formato correto, tentar converter
+      console.warn(`[AdminDashboard] Data em formato inesperado: ${date}`)
+      return dateOnly
+    }
+    
+    // Se é um objeto Date, converter para YYYY-MM-DD sem problemas de timezone
+    // IMPORTANTE: Usar métodos locais para evitar conversão de timezone
+    if (date instanceof Date) {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    
+    // Se é um objeto com propriedades de data (ex: {year, month, day})
+    if (typeof date === 'object' && date.year && date.month && date.day) {
+      const year = String(date.year).padStart(4, '0')
+      const month = String(date.month).padStart(2, '0')
+      const day = String(date.day).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+    
+    console.warn(`[AdminDashboard] Tipo de data não reconhecido:`, typeof date, date)
+    return null
+  }
   
-  // Filtrar agendamentos do dia selecionado primeiro
-  const dayAppointments = appointments.filter(apt => apt.date === currentDateISO)
+  const currentDateISO = getDateString(currentDate)
   
-  // Filtrar agendamentos baseado no filtro ativo (após filtrar por data)
-  const filteredAppointments = activeFilter === 'all' 
+  // Filtrar agendamentos do dia selecionado
+  // IMPORTANTE: Todos os agendamentos aparecem na data original do agendamento (date),
+  // independente do status (scheduled, checked_in, checked_out, rescheduled)
+  let dayAppointments = appointments.filter(apt => {
+    if (!apt.date) {
+      console.warn(`[AdminDashboard] Agendamento sem data:`, apt.id, apt)
+      return false
+    }
+    
+    // Normalizar ambas as datas para comparação
+    const aptDate = getDateString(apt.date)
+    const matches = aptDate === currentDateISO
+    
+    // VALIDAÇÃO RIGOROSA: Se não corresponder, não incluir
+    if (!matches) {
+      // Log detalhado para agendamentos finalizados que não correspondem
+      if (apt.status === 'checked_out') {
+        console.warn(`[AdminDashboard] ⚠️ Agendamento finalizado EXCLUÍDO (data diferente):`, {
+          id: apt.id,
+          status: apt.status,
+          originalDate: apt.date,
+          normalizedDate: aptDate,
+          selectedDate: currentDateISO,
+          checkOutTime: apt.check_out_time,
+          checkOutDate: apt.check_out_time ? getDateString(apt.check_out_time) : null
+        })
+      }
+      return false
+    }
+    
+    return true
+  })
+  
+  console.log(`[AdminDashboard] Data selecionada: ${currentDateISO}`)
+  console.log(`[AdminDashboard] Total de agendamentos carregados: ${appointments.length}`)
+  console.log(`[AdminDashboard] Agendamentos do dia ${currentDateISO}: ${dayAppointments.length}`)
+  
+  // Log detalhado de todos os agendamentos finalizados
+  const checkedOutAppointments = appointments.filter(a => a.status === 'checked_out')
+  if (checkedOutAppointments.length > 0) {
+    console.log(`[AdminDashboard] Todos os agendamentos finalizados carregados:`, checkedOutAppointments.map(a => ({
+      id: a.id,
+      date: a.date,
+      normalizedDate: getDateString(a.date),
+      checkOutTime: a.check_out_time,
+      checkOutDate: a.check_out_time ? getDateString(a.check_out_time) : null
+    })))
+  }
+  
+  if (dayAppointments.length > 0) {
+    console.log(`[AdminDashboard] Status dos agendamentos do dia:`, dayAppointments.map(a => ({ id: a.id, status: a.status, date: a.date, plant_id: a.plant_id })))
+  }
+  
+  // Filtrar pela planta selecionada (se houver)
+  // IMPORTANTE: Não mostrar agendamentos se nenhuma planta estiver selecionada
+  if (selectedPlantId) {
+    const beforePlantFilter = dayAppointments.length
+    // Incluir agendamentos da planta selecionada OU agendamentos sem plant_id (null)
+    // Isso permite que agendamentos antigos sejam exibidos mesmo quando uma planta está selecionada
+    dayAppointments = dayAppointments.filter(apt => 
+      apt.plant_id === selectedPlantId || apt.plant_id === null || apt.plant_id === undefined
+    )
+    console.log(`[AdminDashboard] Agendamentos após filtrar por planta ${selectedPlantId}: ${dayAppointments.length} (antes: ${beforePlantFilter})`)
+    console.log(`[AdminDashboard] Agendamentos incluídos:`, dayAppointments.map(a => ({ id: a.id, plant_id: a.plant_id })))
+  } else {
+    // Se nenhuma planta estiver selecionada, não mostrar agendamentos
+    dayAppointments = []
+    console.log(`[AdminDashboard] Nenhuma planta selecionada - não exibindo agendamentos`)
+  }
+  
+  // Filtrar agendamentos baseado no filtro ativo (após filtrar por data e planta)
+  // IMPORTANTE: Quando activeFilter é 'all', mostrar TODOS os agendamentos do dia
+  // VALIDAÇÃO ADICIONAL: Garantir que todos os agendamentos filtrados são realmente do dia selecionado
+  const filteredAppointments = (activeFilter === 'all' 
     ? dayAppointments 
-    : dayAppointments.filter(appointment => appointment.status === activeFilter)
+    : dayAppointments.filter(appointment => {
+        // Para filtros específicos, verificar o status exato
+        if (activeFilter === 'scheduled') {
+          return appointment.status === 'scheduled' || appointment.status === 'rescheduled'
+        }
+        return appointment.status === activeFilter
+      })
+  ).filter(appointment => {
+    // VALIDAÇÃO FINAL: Garantir que a data do agendamento corresponde à data selecionada
+    if (!appointment.date) return false
+    const aptDate = getDateString(appointment.date)
+    if (aptDate !== currentDateISO) {
+      console.error(`[AdminDashboard] ❌ ERRO: Agendamento ${appointment.id} passou pelo filtro mas tem data incorreta:`, {
+        id: appointment.id,
+        status: appointment.status,
+        date: appointment.date,
+        normalizedDate: aptDate,
+        selectedDate: currentDateISO
+      })
+      return false
+    }
+    return true
+      })
+  
+  console.log(`[AdminDashboard] Filtro ativo: ${activeFilter}`)
+  console.log(`[AdminDashboard] Agendamentos após filtro: ${filteredAppointments.length}`)
+  if (filteredAppointments.length > 0) {
+    console.log(`[AdminDashboard] Agendamentos filtrados:`, filteredAppointments.map(a => ({ id: a.id, status: a.status, time: a.time })))
+  }
+
+  // Carregar capacidade da planta selecionada imediatamente quando selecionada
+  useEffect(() => {
+    if (!selectedPlantId) {
+      setMaxCapacity(1)
+      setPlantCapacities(new Map())
+      return
+    }
+    
+    // Carregar capacidade da planta selecionada diretamente
+    const loadPlantCapacity = async () => {
+      try {
+        const data = await adminAPI.getPlantMaxCapacity(selectedPlantId)
+        const capacity = data.max_capacity || 1
+        const plantName = data.plant_name || `ID ${selectedPlantId}`
+        
+        console.log(`[AdminDashboard] Planta selecionada ${plantName} (ID: ${selectedPlantId}): capacidade = ${capacity}`)
+        
+        // Criar mapa com a capacidade da planta selecionada
+        const capacitiesMap = new Map()
+        capacitiesMap.set(selectedPlantId, capacity)
+        
+        setPlantCapacities(capacitiesMap)
+        setMaxCapacity(capacity)
+      } catch (err) {
+        console.error(`[AdminDashboard] Erro ao buscar capacidade da planta ${selectedPlantId}:`, err)
+        setMaxCapacity(1)
+        setPlantCapacities(new Map())
+      }
+    }
+    
+    loadPlantCapacity()
+  }, [selectedPlantId])
 
   // Agrupar agendamentos por horário inicial exato (incluindo minutos)
   // Ex: 09:20, 09:30, 10:00, etc.
@@ -309,9 +533,10 @@ const AdminDashboard = ({ user, token }) => {
     uniqueTimes.add(dateUtils.formatTime(apt.time))
   })
   
-  // Adicionar horários padrão (8h às 17h) para manter estrutura visual
-  for (let hour = 8; hour <= 17; hour++) {
+  // Adicionar horários padrão (00:00 às 23:30 em intervalos de 30 minutos) para manter estrutura visual
+  for (let hour = 0; hour < 24; hour++) {
     uniqueTimes.add(`${hour.toString().padStart(2, '0')}:00`)
+    uniqueTimes.add(`${hour.toString().padStart(2, '0')}:30`)
   }
   
   // Converter para array e ordenar
@@ -326,12 +551,12 @@ const AdminDashboard = ({ user, token }) => {
     const startTime = dateUtils.formatTime(appointment.time)
     const endTime = appointment.time_end ? dateUtils.formatTime(appointment.time_end) : startTime
     
-    // Converter para horas desde 08:00
+    // Converter para minutos desde 00:00
     const [startHour, startMin] = startTime.split(':').map(Number)
     const [endHour, endMin] = endTime.split(':').map(Number)
     
-    const startMinutes = (startHour - 8) * 60 + startMin
-    const endMinutes = (endHour - 8) * 60 + endMin
+    const startMinutes = startHour * 60 + startMin
+    const endMinutes = endHour * 60 + endMin
     
     // Altura proporcional: HOUR_HEIGHT pixels por hora
     const durationHours = Math.max((endMinutes - startMinutes) / 60, 0.25) // Mínimo 15 minutos (0.25h)
@@ -344,9 +569,9 @@ const AdminDashboard = ({ user, token }) => {
   // Função para calcular posição vertical do card (proporcional)
   const calculateCardTop = (timeString) => {
     const [hour, min] = timeString.split(':').map(Number)
-    const minutesFrom8 = (hour - 8) * 60 + min
-    const hoursFrom8 = minutesFrom8 / 60
-    return hoursFrom8 * HOUR_HEIGHT // Posição proporcional baseada em HOUR_HEIGHT
+    const totalMinutes = hour * 60 + min
+    const hoursFromStart = totalMinutes / 60
+    return hoursFromStart * HOUR_HEIGHT // Posição proporcional baseada em HOUR_HEIGHT desde 00:00
   }
 
   // Função para obter cor da borda baseada no status
@@ -406,62 +631,81 @@ const AdminDashboard = ({ user, token }) => {
     return start1Min < end2Min && start2Min < end1Min
   }
 
-  // Distribuir agendamentos nas colunas verticais (lado a lado para agendamentos que se sobrepõem)
+  // Distribuir agendamentos nas colunas verticais respeitando a capacidade de cada planta
   const appointmentsByColumn = useMemo(() => {
     // Garantir que maxCapacity seja pelo menos 1
-    const capacity = Math.max(1, maxCapacity)
+    const totalColumns = Math.max(1, maxCapacity)
     
     // Criar array de colunas (cada coluna é um array de agendamentos)
-    const columns = Array.from({ length: capacity }, () => [])
+    const columns = Array.from({ length: totalColumns }, () => [])
     
-    // Ordenar agendamentos por horário de início
-    const sortedAppointments = [...filteredAppointments].sort((a, b) => {
-      const timeA = dateUtils.formatTime(a.time)
-      const timeB = dateUtils.formatTime(b.time)
-      const [h1, m1] = timeA.split(':').map(Number)
-      const [h2, m2] = timeB.split(':').map(Number)
-      return (h1 * 60 + m1) - (h2 * 60 + m2)
+    // Agrupar agendamentos por planta primeiro
+    const appointmentsByPlant = new Map()
+    filteredAppointments.forEach(apt => {
+      const plantId = apt.plant_id || null
+      if (!appointmentsByPlant.has(plantId)) {
+        appointmentsByPlant.set(plantId, [])
+      }
+      appointmentsByPlant.get(plantId).push(apt)
     })
     
-    // Mapa para rastrear em qual coluna cada agendamento foi colocado
-    const appointmentColumnMap = new Map()
-    
-    // Processar agendamentos em ordem cronológica
-    sortedAppointments.forEach(appointment => {
-      // Se já foi atribuído, pular
-      if (appointmentColumnMap.has(appointment.id)) {
-        return
-      }
+    // Processar cada planta separadamente
+    appointmentsByPlant.forEach((plantAppointments, plantId) => {
+      // Obter capacidade específica desta planta (padrão: 1 se não encontrada)
+      const plantCapacity = plantCapacities.get(plantId) || 1
       
-      // Encontrar todos os agendamentos que se sobrepõem com este (mesmo range)
-      const overlappingAppointments = sortedAppointments.filter(apt => 
-        apt.id !== appointment.id && 
-        !appointmentColumnMap.has(apt.id) &&
-        appointmentsOverlap(appointment, apt)
-      )
+      console.log(`[AdminDashboard] Processando planta ID ${plantId} com capacidade ${plantCapacity}, ${plantAppointments.length} agendamentos`)
       
-      // Criar grupo de agendamentos sobrepostos (incluindo o atual)
-      const overlappingGroup = [appointment, ...overlappingAppointments]
+      // Ordenar agendamentos desta planta por horário de início
+      const sortedAppointments = [...plantAppointments].sort((a, b) => {
+        const timeA = dateUtils.formatTime(a.time)
+        const timeB = dateUtils.formatTime(b.time)
+        const [h1, m1] = timeA.split(':').map(Number)
+        const [h2, m2] = timeB.split(':').map(Number)
+        return (h1 * 60 + m1) - (h2 * 60 + m2)
+      })
       
-      // Ordenar o grupo por ID para distribuição consistente
-      overlappingGroup.sort((a, b) => a.id - b.id)
+      // Mapa para rastrear em qual coluna cada agendamento desta planta foi colocado
+      const appointmentColumnMap = new Map()
       
-      // Distribuir o grupo lado a lado nas colunas disponíveis
-      // Limitar ao número de colunas disponíveis (capacidade máxima)
-      overlappingGroup.forEach((apt, index) => {
-        // Usar módulo para distribuir circularmente nas colunas (lado a lado)
-        // Isso garante que agendamentos sobrepostos fiquem lado a lado
-        const colIndex = index % capacity
-        columns[colIndex].push(apt)
-        appointmentColumnMap.set(apt.id, colIndex)
+      // Processar agendamentos desta planta em ordem cronológica
+      sortedAppointments.forEach(appointment => {
+        // Se já foi atribuído, pular
+        if (appointmentColumnMap.has(appointment.id)) {
+          return
+        }
+        
+        // Encontrar todos os agendamentos desta mesma planta que se sobrepõem com este
+        const overlappingAppointments = sortedAppointments.filter(apt => 
+          apt.id !== appointment.id && 
+          !appointmentColumnMap.has(apt.id) &&
+          appointmentsOverlap(appointment, apt)
+        )
+        
+        // Criar grupo de agendamentos sobrepostos (incluindo o atual)
+        const overlappingGroup = [appointment, ...overlappingAppointments]
+        
+        // Ordenar o grupo por ID para distribuição consistente
+        overlappingGroup.sort((a, b) => a.id - b.id)
+        
+        // Distribuir o grupo lado a lado nas colunas disponíveis
+        // IMPORTANTE: Limitar ao número de colunas da capacidade desta planta específica
+        overlappingGroup.forEach((apt, index) => {
+          // Usar módulo para distribuir circularmente nas colunas (lado a lado)
+          // Mas respeitando a capacidade específica desta planta
+          const colIndex = index % plantCapacity
+          columns[colIndex].push(apt)
+          appointmentColumnMap.set(apt.id, colIndex)
+        })
       })
     })
     
     return columns
-  }, [filteredAppointments, maxCapacity])
+  }, [filteredAppointments, maxCapacity, plantCapacities])
 
   // Calcular altura da timeline baseada no último agendamento (proporcional)
-  let timelineHeight = 10 * HOUR_HEIGHT // Altura padrão (10 horas)
+  // Altura padrão para 24 horas (00:00 até 23:30)
+  let timelineHeight = 24 * HOUR_HEIGHT
   if (filteredAppointments.length > 0) {
     const lastAppointment = filteredAppointments.reduce((latest, apt) => {
       const aptTime = dateUtils.formatTime(apt.time_end || apt.time)
@@ -470,12 +714,24 @@ const AdminDashboard = ({ user, token }) => {
     }, filteredAppointments[0])
     
     const lastTime = dateUtils.formatTime(lastAppointment.time_end || lastAppointment.time)
-    timelineHeight = Math.max(calculateCardTop(lastTime) + calculateCardHeight(lastAppointment) + 100, 10 * HOUR_HEIGHT)
+    timelineHeight = Math.max(calculateCardTop(lastTime) + calculateCardHeight(lastAppointment) + 100, 24 * HOUR_HEIGHT)
   }
 
   // Estatísticas do dia selecionado
   const stats = useMemo(() => {
-    const dayApps = dayAppointments
+    // Filtrar agendamentos pela planta selecionada
+    let dayApps = dayAppointments
+    if (selectedPlantId) {
+      dayApps = dayApps.filter(a => a.plant_id === selectedPlantId)
+    } else {
+      // Se nenhuma planta estiver selecionada, retornar zeros
+      return {
+        total: 0,
+        scheduled: 0,
+        checkedIn: 0,
+        checkedOut: 0
+      }
+    }
     
     return {
       total: dayApps.length,
@@ -490,15 +746,12 @@ const AdminDashboard = ({ user, token }) => {
         return checkInDate === currentDateISO
       }).length,
       checkedOut: dayApps.filter(a => {
-        // Finalizados do Dia: finalizados na data selecionada
-        // Considera apenas agendamentos que foram finalizados hoje (check_out_time na data atual)
-        if (a.status !== 'checked_out') return false
-        if (!a.check_out_time) return false
-        const checkOutDate = new Date(a.check_out_time).toISOString().split('T')[0]
-        return checkOutDate === currentDateISO
+        // Finalizados do Dia: agendamentos que foram agendados para aquele dia E foram finalizados
+        // Considera apenas agendamentos do dia (date) que têm status checked_out
+        return a.status === 'checked_out'
       }).length
     }
-  }, [dayAppointments, currentDateISO])
+  }, [dayAppointments, currentDateISO, selectedPlantId])
 
   // Handlers para clique nos cards de filtro
   const handleFilterClick = (filter) => {
@@ -508,6 +761,48 @@ const AdminDashboard = ({ user, token }) => {
     } else {
       setActiveFilter(filter)
     }
+  }
+
+  // Tela de Usuários (deve ter prioridade sobre outras telas)
+  if (showUsersScreen) {
+    return (
+      <UsersScreen
+        onBack={() => {
+          setShowUsersScreen(false)
+        }}
+        onNavigateToAccessProfiles={() => {
+          setShowUsersScreen(false)
+          setShowAccessProfiles(true)
+        }}
+      />
+    )
+  }
+
+  // Tela de Perfis de Acesso (deve ter prioridade sobre outras telas)
+  // VALIDAÇÃO: Apenas administradores podem acessar
+  if (showAccessProfiles) {
+    return (
+      <AccessProfilesScreen
+        user={user}
+        onBack={() => {
+          setShowAccessProfiles(false)
+        }}
+      />
+    )
+  }
+
+  // Tela de Configurar Horários (deve ter prioridade sobre outras telas)
+  if (showUnifiedScheduleConfig) {
+    return (
+      <UnifiedScheduleConfig
+        plantId={selectedPlantForSchedule?.id}
+        plantName={selectedPlantForSchedule?.name}
+        onBack={() => {
+          setShowUnifiedScheduleConfig(false)
+          setSelectedPlantForSchedule(null)
+        }}
+      />
+    )
   }
 
   // Tela de Plantas
@@ -561,11 +856,12 @@ const AdminDashboard = ({ user, token }) => {
                       {plant.name}
                     </div>
                     <Badge className={plant.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-                      {plant.is_active ? 'Ativo' : 'Bloqueado'}
+                      {plant.is_active ? 'Ativo' : 'Inativo'}
                     </Badge>
                   </CardTitle>
                   <CardDescription className="text-xs">
                     {plant.code && `Código: ${plant.code}`}
+                    {plant.cnpj && ` • CNPJ: ${plant.cnpj}`}
                     {plant.email && ` • ${plant.email}`}
                   </CardDescription>
                 </CardHeader>
@@ -594,6 +890,18 @@ const AdminDashboard = ({ user, token }) => {
                         <Edit className="w-3 h-3" />
                         Gerenciar
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedPlantForSchedule(plant)
+                          setShowUnifiedScheduleConfig(true)
+                        }}
+                        className="flex items-center gap-1 text-xs"
+                      >
+                        <Clock className="w-3 h-3" />
+                        Configurar Horários
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
@@ -614,7 +922,12 @@ const AdminDashboard = ({ user, token }) => {
         {showPlantManagement && (
           <PlantManagement
             plant={managingPlant}
-            onBack={() => setShowPlantManagement(false)}
+            onBack={() => {
+              setShowPlantManagement(false)
+              setManagingPlant(null)
+              // Recarregar plantas ao fechar o modal
+              loadPlants()
+            }}
             onUpdate={handlePlantManagementUpdate}
           />
         )}
@@ -675,7 +988,7 @@ const AdminDashboard = ({ user, token }) => {
                       {supplier.description}
                     </div>
                     <Badge className={supplier.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-                      {supplier.is_active ? 'Ativo' : 'Bloqueado'}
+                      {supplier.is_active ? 'Ativo' : 'Inativo'}
                     </Badge>
                   </CardTitle>
                   <CardDescription className="text-xs">
@@ -685,7 +998,7 @@ const AdminDashboard = ({ user, token }) => {
                 <CardContent>
                   <div className="space-y-3">
                     <p className="text-xs text-gray-600">
-                      Agendamentos hoje: {appointments.filter(a => a.supplier_id === supplier.id && a.date === currentDateISO).length}
+                      Agendamentos hoje: {appointments.filter(a => a.supplier_id === supplier.id && getDateString(a.date) === currentDateISO).length}
                     </p>
                     
                     <div className="flex gap-2">
@@ -715,11 +1028,11 @@ const AdminDashboard = ({ user, token }) => {
         )}
 
         {showSupplierManagement && (
-          <SupplierManagement
-            supplier={managingSupplier}
-            onBack={() => setShowSupplierManagement(false)}
-            onUpdate={handleSupplierManagementUpdate}
-          />
+      <SupplierManagement
+        supplier={managingSupplier}
+        onBack={() => setShowSupplierManagement(false)}
+        onUpdate={handleSupplierManagementUpdate}
+      />
         )}
       </div>
     )
@@ -736,32 +1049,18 @@ const AdminDashboard = ({ user, token }) => {
   }
 
 
-  if (showScheduleConfig) {
-    return (
-      <ScheduleConfig
-        onBack={() => setShowScheduleConfig(false)}
-      />
-    )
-  }
-
-  if (showDefaultScheduleConfig) {
-    return (
-      <DefaultScheduleConfig
-        onBack={() => setShowDefaultScheduleConfig(false)}
-      />
-    )
-  }
-
   if (showAppointmentForm && editingAppointment) {
     return (
       <AppointmentEditForm
         appointment={editingAppointment}
         suppliers={suppliers}
+        plants={plants}
         onSubmit={handleAppointmentFormSubmit}
         onCancel={() => {
           setShowAppointmentForm(false)
           setEditingAppointment(null)
         }}
+        user={user}
       />
     )
   }
@@ -904,6 +1203,21 @@ const AdminDashboard = ({ user, token }) => {
         <TabsContent value="appointments" className="space-y-4">
           {/* Cabeçalho com Navegação e Botão Agendar */}
           <div className="space-y-4">
+            {/* Seletor de Planta - Destaque */}
+            <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 shadow-md">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-semibold text-gray-800 mb-2">
+                  Seleção de Planta
+                </CardTitle>
+                <PlantSelector
+                  plants={plants.filter(p => p.is_active)}
+                  selectedPlantId={selectedPlantId}
+                  onPlantChange={handlePlantChange}
+                  placeholder="Selecione uma planta para visualizar agendamentos"
+                />
+              </CardHeader>
+            </Card>
+
             {/* Navegação do Dia */}
             <Card>
               <CardHeader>
@@ -941,7 +1255,8 @@ const AdminDashboard = ({ user, token }) => {
               <Button
                 onClick={() => {
                   setEditingAppointment({
-                    date: currentDateISO
+                    date: currentDateISO,
+                    plant_id: selectedPlantId
                   })
                   setShowAppointmentForm(true)
                 }}
@@ -954,16 +1269,32 @@ const AdminDashboard = ({ user, token }) => {
             </div>
           </div>
 
+          {/* Estado vazio quando nenhuma planta está selecionada */}
+          {!selectedPlantId && (
+            <Card className="py-12">
+              <CardContent className="flex flex-col items-center justify-center text-center">
+                <Building2 className="w-16 h-16 text-gray-300 mb-4" />
+                <CardTitle className="text-xl text-gray-600 mb-2">
+                  Selecione uma planta
+                </CardTitle>
+                <p className="text-gray-500">
+                  Escolha uma planta acima para visualizar os agendamentos
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          
           {/* Visualização Tipo Agenda Diária - Layout Estilo Agenda Visual */}
+          {selectedPlantId && (
           <Card className="overflow-hidden">
             <div className="h-[calc(100vh-400px)] min-h-[600px] overflow-y-auto">
               {/* Container Principal - Desktop: Layout com Colunas Verticais */}
               <div className="hidden md:flex relative" style={{ minHeight: `${timelineHeight}px` }}>
                 {/* Coluna de Horários - Fixa à Esquerda */}
                 <div className="w-24 flex-shrink-0 bg-gray-50 border-r border-gray-200 relative" style={{ minHeight: `${timelineHeight}px` }}>
-                  {/* Linhas de horário guia (8h às 17h) - Proporcionais */}
-                  {Array.from({ length: 10 }, (_, i) => {
-                    const hour = 8 + i
+                  {/* Linhas de horário guia (00:00 às 23:00) - Proporcionais */}
+                  {Array.from({ length: 24 }, (_, i) => {
+                    const hour = i
                     const top = i * HOUR_HEIGHT
                     return (
                       <div
@@ -978,11 +1309,11 @@ const AdminDashboard = ({ user, token }) => {
                     )
                   })}
                   
-                  {/* Linhas guia de meia hora - Proporcionais */}
-                  {Array.from({ length: 18 }, (_, i) => {
-                    const hour = 8 + Math.floor(i / 2)
+                  {/* Linhas guia de meia hora - Proporcionais (00:00 às 23:30) */}
+                  {Array.from({ length: 48 }, (_, i) => {
+                    const hour = Math.floor(i / 2)
                     const isHalfHour = i % 2 === 1
-                    const top = (hour - 8) * HOUR_HEIGHT + (isHalfHour ? HOUR_HEIGHT / 2 : 0)
+                    const top = hour * HOUR_HEIGHT + (isHalfHour ? HOUR_HEIGHT / 2 : 0)
                     if (isHalfHour) {
                       return (
                         <div
@@ -1021,9 +1352,9 @@ const AdminDashboard = ({ user, token }) => {
                       {/* Fundo sutil para indicar lane disponível */}
                       <div className="absolute inset-0 bg-gray-50/30" />
                       
-                      {/* Linhas guia de horário dentro de cada coluna - Proporcionais */}
-                      {Array.from({ length: 10 }, (_, i) => {
-                        const hour = 8 + i
+                      {/* Linhas guia de horário dentro de cada coluna - Proporcionais (00:00 às 23:00) */}
+                      {Array.from({ length: 24 }, (_, i) => {
+                        const hour = i
                         const top = i * HOUR_HEIGHT
                         return (
                           <div
@@ -1034,11 +1365,11 @@ const AdminDashboard = ({ user, token }) => {
                         )
                       })}
                       
-                      {/* Linhas guia de meia hora - Proporcionais */}
-                      {Array.from({ length: 18 }, (_, i) => {
-                        const hour = 8 + Math.floor(i / 2)
+                      {/* Linhas guia de meia hora - Proporcionais (00:00 às 23:30) */}
+                      {Array.from({ length: 48 }, (_, i) => {
+                        const hour = Math.floor(i / 2)
                         const isHalfHour = i % 2 === 1
-                        const top = (hour - 8) * HOUR_HEIGHT + (isHalfHour ? HOUR_HEIGHT / 2 : 0)
+                        const top = hour * HOUR_HEIGHT + (isHalfHour ? HOUR_HEIGHT / 2 : 0)
                         return (
                           <div
                             key={`guide-half-col-${colIndex}-${i}`}
@@ -1164,23 +1495,23 @@ const AdminDashboard = ({ user, token }) => {
 
                           <TooltipProvider>
                             {(appointment.status !== 'checked_in' && appointment.status !== 'checked_out') && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 w-7 p-0 hover:bg-gray-200/70 hover:scale-110 transition-all bg-white/80 backdrop-blur-sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleEditAppointment(appointment)
-                                    }}
-                                    aria-label="Editar"
-                                  >
-                                    <Edit className="w-3.5 h-3.5 text-gray-700" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Editar agendamento</TooltipContent>
-                              </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0 hover:bg-gray-200/70 hover:scale-110 transition-all bg-white/80 backdrop-blur-sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleEditAppointment(appointment)
+                                  }}
+                                  aria-label="Editar"
+                                >
+                                  <Edit className="w-3.5 h-3.5 text-gray-700" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Editar agendamento</TooltipContent>
+                            </Tooltip>
                             )}
                             
                             {(appointment.status !== 'checked_in' && appointment.status !== 'checked_out') && (
@@ -1324,25 +1655,25 @@ const AdminDashboard = ({ user, token }) => {
                               <div className="flex items-center justify-end gap-1 pt-2 border-t border-gray-100">
                                 {(appointment.status !== 'checked_in' && appointment.status !== 'checked_out') && (
                                   <>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 w-7 p-0"
-                                      onClick={() => handleEditAppointment(appointment)}
-                                      title="Editar"
-                                    >
-                                      <Edit className="w-4 h-4 text-gray-600" />
-                                    </Button>
-                                    
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 w-7 p-0"
-                                      onClick={() => handleDeleteAppointment(appointment.id)}
-                                      title="Excluir"
-                                    >
-                                      <Trash2 className="w-4 h-4 text-red-600" />
-                                    </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0"
+                                  onClick={() => handleEditAppointment(appointment)}
+                                  title="Editar"
+                                >
+                                  <Edit className="w-4 h-4 text-gray-600" />
+                                </Button>
+                                
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => handleDeleteAppointment(appointment.id)}
+                                    title="Excluir"
+                                  >
+                                    <Trash2 className="w-4 h-4 text-red-600" />
+                                  </Button>
                                   </>
                                 )}
                                 
@@ -1379,42 +1710,25 @@ const AdminDashboard = ({ user, token }) => {
               </div>
             </div>
           </Card>
+          )}
         </TabsContent>
 
         {/* Tab de Configurações */}
         <TabsContent value="suppliers" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">Configurações</h2>
-            <div className="flex gap-2">
-              <Button 
-                onClick={() => setShowDefaultScheduleConfig(true)} 
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <Clock className="w-4 h-4" />
-                Horários Padrão
-              </Button>
-              <Button 
-                onClick={() => setShowScheduleConfig(true)} 
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <Settings className="w-4 h-4" />
-                Configurar Horários
-              </Button>
-            </div>
           </div>
 
           {/* Botões de Acesso Rápido */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button
-              variant="outline"
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Button 
+                variant="outline"
               className="h-24 flex flex-col items-center justify-center gap-2"
               onClick={() => setShowSuppliersScreen(true)}
-            >
+              >
               <Users className="w-6 h-6" />
               <span className="font-medium">Fornecedores</span>
-            </Button>
+              </Button>
             <Button
               variant="outline"
               className="h-24 flex flex-col items-center justify-center gap-2"
@@ -1422,74 +1736,25 @@ const AdminDashboard = ({ user, token }) => {
             >
               <Building2 className="w-6 h-6" />
               <span className="font-medium">Plantas</span>
+              </Button>
+            <Button
+              variant="outline"
+              className="h-24 flex flex-col items-center justify-center gap-2"
+              onClick={() => setShowUsersScreen(true)}
+            >
+              <Users className="w-6 h-6" />
+              <span className="font-medium">Usuários</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-24 flex flex-col items-center justify-center gap-2"
+              onClick={() => setShowAccessProfiles(true)}
+            >
+              <Shield className="w-6 h-6" />
+              <span className="font-medium">Perfis de Acesso</span>
             </Button>
           </div>
 
-          {/* Card de Configuração de Capacidade Máxima */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="w-5 h-5" />
-                Capacidade Máxima de Recebimentos por Horário
-              </CardTitle>
-              <CardDescription>
-                Defina quantos fornecedores/entregas podem ser agendados no mesmo horário
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="maxCapacity">Capacidade máxima de recebimentos por horário</Label>
-                  <Input
-                    id="maxCapacity"
-                    type="number"
-                    min="1"
-                    value={maxCapacity}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value) || 1
-                      setMaxCapacity(value)
-                      setMaxCapacityError('')
-                      setMaxCapacitySuccess('')
-                    }}
-                    className="max-w-xs"
-                  />
-                  <p className="text-sm text-gray-500">
-                    Valor mínimo: 1. Quando o número de agendamentos atingir este limite, novos agendamentos para o mesmo horário serão bloqueados.
-                  </p>
-                </div>
-
-                {maxCapacityError && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{maxCapacityError}</AlertDescription>
-                  </Alert>
-                )}
-
-                {maxCapacitySuccess && (
-                  <Alert className="bg-green-50 border-green-200">
-                    <AlertDescription className="text-green-800">{maxCapacitySuccess}</AlertDescription>
-                  </Alert>
-                )}
-
-                <Button
-                  onClick={handleSaveMaxCapacity}
-                  disabled={maxCapacityLoading || maxCapacity < 1}
-                  className="flex items-center gap-2"
-                >
-                  {maxCapacityLoading ? (
-                    <>
-                      <Clock className="w-4 h-4 animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <Settings className="w-4 h-4" />
-                      Salvar Configuração
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
 
@@ -1580,17 +1845,17 @@ const AdminDashboard = ({ user, token }) => {
                   Fechar
                 </Button>
                 {(selectedAppointment.status !== 'checked_in' && selectedAppointment.status !== 'checked_out') && (
-                  <Button
-                    variant="default"
-                    onClick={() => {
-                      setDrawerOpen(false)
-                      handleEditAppointment(selectedAppointment)
-                    }}
-                    className="flex-1"
-                  >
-                    <Edit className="w-4 h-4 mr-2" />
-                    Editar
-                  </Button>
+                <Button
+                  variant="default"
+                  onClick={() => {
+                    setDrawerOpen(false)
+                    handleEditAppointment(selectedAppointment)
+                  }}
+                  className="flex-1"
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Editar
+                </Button>
                 )}
                 {(selectedAppointment.status === 'scheduled' || selectedAppointment.status === 'rescheduled') && (
                   <Button

@@ -4,6 +4,7 @@ import Header from './components/Header'
 import Loading from './components/Loading'
 import SupplierDashboard from './components/SupplierDashboard'
 import AdminDashboard from './components/AdminDashboard'
+import PlantDashboard from './components/PlantDashboard'
 import useAuth from './hooks/useAuth'
 import './App.css'
 
@@ -24,6 +25,8 @@ function App() {
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {user.role === 'admin' ? (
           <AdminDashboard user={user} token={token} />
+        ) : user.role === 'plant' ? (
+          <PlantDashboard user={user} token={token} />
         ) : (
           <SupplierDashboard user={user} token={token} />
         )}

@@ -8,12 +8,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Save, Loader2, Building2, Copy, Check } from 'lucide-react'
 import { adminAPI } from '../lib/api'
 import { validation } from '../lib/utils'
-import { formatPhone, formatCEP } from '../lib/formatters'
+import { formatPhone, formatCEP, formatCNPJ } from '../lib/formatters'
 
 const PlantForm = ({ onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
     name: '',
     code: '',
+    cnpj: '',
     email: '',
     phone: '',
     street: '',
@@ -42,6 +43,11 @@ const PlantForm = ({ onSubmit, onCancel }) => {
     handleInputChange('phone', value)
   }
 
+  const handleCNPJChange = (e) => {
+    const value = formatCNPJ(e.target.value)
+    handleInputChange('cnpj', value)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -61,6 +67,18 @@ const PlantForm = ({ onSubmit, onCancel }) => {
       return
     }
 
+    if (!formData.cnpj.trim()) {
+      setError('CNPJ é obrigatório')
+      setLoading(false)
+      return
+    }
+
+    if (!validation.isValidCNPJ(formData.cnpj)) {
+      setError('CNPJ inválido')
+      setLoading(false)
+      return
+    }
+
     if (!formData.email.trim()) {
       setError('E-mail é obrigatório')
       setLoading(false)
@@ -74,10 +92,29 @@ const PlantForm = ({ onSubmit, onCancel }) => {
     }
 
     try {
+      console.log('Dados sendo enviados:', formData)
       const result = await adminAPI.createPlant(formData)
       setSuccess(result)
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Erro ao salvar planta')
+      console.error('Erro ao criar planta:', err)
+      const errorData = err.response?.data || {}
+      const errorMessage = errorData.message || errorData.error || err.message || 'Erro ao salvar planta'
+      const errorField = errorData.field
+      
+      // Mensagem específica baseada no campo com erro
+      let displayMessage = errorMessage
+      if (errorField === 'name') {
+        displayMessage = errorMessage || 'Já existe uma planta cadastrada com este nome. Por favor, escolha um nome diferente.'
+      } else if (errorField === 'code') {
+        displayMessage = errorMessage || 'Já existe uma planta cadastrada com este código. Por favor, escolha um código diferente.'
+      } else if (errorField === 'email') {
+        displayMessage = errorMessage || 'Este e-mail já está cadastrado no sistema. Por favor, escolha um e-mail diferente.'
+      } else if (errorField === 'cnpj') {
+        displayMessage = errorMessage || 'Este CNPJ já está cadastrado no sistema. Por favor, verifique o CNPJ informado.'
+      }
+      
+      console.error('Mensagem de erro:', displayMessage)
+      setError(displayMessage)
     } finally {
       setLoading(false)
     }
@@ -102,6 +139,8 @@ const PlantForm = ({ onSubmit, onCancel }) => {
   const isFormValid = () => {
     return formData.name.trim() && 
            formData.code.trim() && 
+           formData.cnpj.trim() &&
+           validation.isValidCNPJ(formData.cnpj) &&
            formData.email.trim() &&
            validation.isValidEmail(formData.email)
   }
@@ -229,6 +268,21 @@ const PlantForm = ({ onSubmit, onCancel }) => {
               placeholder="Ex: SP-001"
               value={formData.code}
               onChange={(e) => handleInputChange('code', e.target.value)}
+              required
+              disabled={loading}
+            />
+          </div>
+
+          {/* CNPJ (Obrigatório) */}
+          <div className="space-y-2">
+            <Label htmlFor="cnpj">CNPJ *</Label>
+            <Input
+              id="cnpj"
+              type="text"
+              placeholder="00.000.000/0000-00"
+              value={formData.cnpj}
+              onChange={handleCNPJChange}
+              maxLength={18}
               required
               disabled={loading}
             />

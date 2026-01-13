@@ -2,12 +2,13 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-function Card({
+const Card = React.forwardRef(({
   className,
   ...props
-}) {
+}, ref) => {
   return (
     <div
+      ref={ref}
       data-slot="card"
       className={cn(
         "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
@@ -15,7 +16,9 @@ function Card({
       )}
       {...props} />
   );
-}
+});
+
+Card.displayName = "Card"
 
 function CardHeader({
   className,

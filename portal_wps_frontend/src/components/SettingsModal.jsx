@@ -37,7 +37,7 @@ const SettingsModal = ({ isOpen, onClose, user }) => {
             Configurações
           </DialogTitle>
           <DialogDescription>
-            Personalize sua experiência no Portal WPS
+            Personalize sua experiência no Cargo Flow
           </DialogDescription>
         </DialogHeader>
 

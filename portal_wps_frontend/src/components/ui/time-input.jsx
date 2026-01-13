@@ -4,16 +4,17 @@ import { Popover, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-const TimeInput = ({ value, onChange, onBlur, disabled, className, placeholder = '--:--', intervalMinutes = 30, ...props }) => {
+const TimeInput = ({ value, onChange, onBlur, disabled, className, placeholder = '--:--', intervalMinutes = 30, minHour = 8, maxHour = 18, ...props }) => {
   const [displayValue, setDisplayValue] = useState('')
   const [isFocused, setIsFocused] = useState(false)
   const [showPicker, setShowPicker] = useState(false)
   const inputRef = useRef(null)
 
-  // Gerar opções de horários em intervalos de 30 minutos (apenas horários úteis: 08:00 a 18:00)
+  // Gerar opções de horários em intervalos de 30 minutos
+  // Por padrão: 08:00 a 18:00, mas pode ser configurado via props minHour e maxHour
   const generateTimeOptions = () => {
     const options = []
-    for (let hour = 8; hour <= 18; hour++) {
+    for (let hour = minHour; hour <= maxHour; hour++) {
       for (let minute = 0; minute < 60; minute += intervalMinutes) {
         const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`
         options.push(timeStr)
@@ -58,10 +59,14 @@ const TimeInput = ({ value, onChange, onBlur, disabled, className, placeholder =
       finalMinutes = 0
     }
     
-    // Validar horas
+    // Validar horas (permitir até 23:59)
     if (finalHours >= 24) {
       finalHours = 23
       finalMinutes = 59
+    }
+    if (finalHours < 0) {
+      finalHours = 0
+      finalMinutes = 0
     }
     
     return `${finalHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`

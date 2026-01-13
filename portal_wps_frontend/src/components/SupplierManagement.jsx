@@ -121,7 +121,7 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
                     <strong>Atenção:</strong> Esta ação irá:
                     <ul className="list-disc list-inside mt-2 space-y-1">
                       <li>Desativar o fornecedor no sistema</li>
-                      <li>Bloquear o acesso dos usuários deste fornecedor</li>
+                      <li>Inativar o acesso dos usuários deste fornecedor</li>
                       <li>Manter o histórico de agendamentos para auditoria</li>
                     </ul>
                   </AlertDescription>
@@ -171,7 +171,7 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
             Gerenciar Fornecedor
           </DialogTitle>
           <DialogDescription>
-            Edite, bloqueie ou exclua o fornecedor
+            Edite, inative ou exclua o fornecedor
           </DialogDescription>
         </DialogHeader>
 
@@ -184,7 +184,7 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
               {supplier.description}
             </CardTitle>
             <Badge className={formData.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
-              {formData.is_active ? 'Ativo' : 'Bloqueado'}
+              {formData.is_active ? 'Ativo' : 'Inativo'}
             </Badge>
           </div>
           <CardDescription className={formData.is_active ? 'text-green-700' : 'text-red-700'}>
@@ -203,7 +203,7 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
               {formData.is_active ? (
                 <>
                   <Ban className="w-3 h-3" />
-                  Bloquear
+                  Inativar
                 </>
               ) : (
                 <>

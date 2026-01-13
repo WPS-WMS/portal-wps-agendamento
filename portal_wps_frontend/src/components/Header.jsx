@@ -77,7 +77,7 @@ const Header = ({ user, onLogout }) => {
               <Truck className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Portal WPS</h1>
+              <h1 className="text-xl font-bold text-gray-900">Cargo Flow</h1>
               <p className="text-sm text-gray-500">Agendamento de Carga</p>
             </div>
           </div>
