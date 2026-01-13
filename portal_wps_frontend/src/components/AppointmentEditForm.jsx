@@ -373,7 +373,9 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
     return baseValid
   }
 
-  if (!appointment) {
+  // Permitir renderização mesmo quando appointment é um objeto vazio (criação de novo agendamento)
+  // O componente já trata isso com isCreating = !appointment?.id
+  if (appointment === null || appointment === undefined) {
     return null
   }
 

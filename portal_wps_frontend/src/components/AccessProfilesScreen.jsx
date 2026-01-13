@@ -116,17 +116,24 @@ const initializePermissions = () => {
 }
 
 // Dependências de permissões (funcionalidade requer outra)
+// RN-05: Permissões de edição, exclusão, inativação ou configuração dependem da permissão de visualização
 const PERMISSION_DEPENDENCIES = {
+  // Agendamentos
   edit_appointment: ['view_appointments'],
   delete_appointment: ['view_appointments'],
-  check_out: ['check_in'],
+  check_in: ['view_appointments'], // Para fazer check-in, precisa visualizar agendamentos
+  check_out: ['check_in'], // Check-out depende de check-in
+  reschedule: ['view_appointments'], // Para reagendar, precisa visualizar agendamentos
+  // Fornecedores
   edit_supplier: ['view_suppliers'],
   inactivate_supplier: ['view_suppliers'],
   delete_supplier: ['view_suppliers'],
+  // Plantas
   edit_plant: ['view_plants'],
   inactivate_plant: ['view_plants'],
   delete_plant: ['view_plants'],
   configure_plant_hours: ['view_plants'],
+  // Configurações de Horários
   configure_weekly_block: ['view_available_hours'],
   configure_date_block: ['view_available_hours'],
   configure_default_hours: ['view_available_hours']
@@ -160,6 +167,7 @@ const AccessProfilesScreen = ({ onBack, user }) => {
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
+  const [showBackConfirm, setShowBackConfirm] = useState(false)
 
   // Calcular alterações
   const changesSummary = useMemo(() => {
@@ -385,6 +393,21 @@ const AccessProfilesScreen = ({ onBack, user }) => {
     setError('')
   }
 
+  // RN-08: Botão Voltar deve descartar alterações não salvas
+  const handleBack = () => {
+    if (hasChanges) {
+      setShowBackConfirm(true)
+    } else {
+      onBack()
+    }
+  }
+
+  // Confirmar descarte de alterações e voltar
+  const handleConfirmBack = () => {
+    setShowBackConfirm(false)
+    onBack()
+  }
+
   // Carregar permissões salvas
   useEffect(() => {
     const loadPermissions = async () => {
@@ -509,7 +532,8 @@ const AccessProfilesScreen = ({ onBack, user }) => {
           <h1 className="text-2xl font-bold text-gray-900">Perfis de Acesso</h1>
           <p className="text-gray-600">Gerencie as permissões de acesso para cada perfil do sistema</p>
         </div>
-        <Button onClick={onBack} variant="outline">
+        {/* RN-08: Botão Voltar descarta alterações não salvas */}
+        <Button onClick={handleBack} variant="outline">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Voltar
         </Button>
@@ -627,7 +651,30 @@ const AccessProfilesScreen = ({ onBack, user }) => {
         </div>
       </div>
 
-      {/* Modal de Confirmação */}
+      {/* Modal de Confirmação - Voltar (RN-08) */}
+      <Dialog open={showBackConfirm} onOpenChange={setShowBackConfirm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-600" />
+              Descartar Alterações?
+            </DialogTitle>
+            <DialogDescription>
+              Você tem {changesSummary.total} alteração(ões) não salva(s). Deseja descartá-las e voltar para a tela de Configurações?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBackConfirm(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmBack}>
+              Descartar e Voltar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmação - Salvar */}
       <Dialog open={showSaveConfirm} onOpenChange={setShowSaveConfirm}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>

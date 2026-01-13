@@ -84,85 +84,58 @@ const SupplierDashboard = ({ user, token }) => {
   }
 
   const loadSuppliers = async () => {
+    console.log('[SupplierDashboard] loadSuppliers chamado')
+    console.log('[SupplierDashboard] hasPermission view_suppliers:', hasPermission('view_suppliers', 'viewer'))
+    
     if (!hasPermission('view_suppliers', 'viewer')) {
+      console.warn('[SupplierDashboard] Sem permissão para visualizar fornecedores')
       setSuppliers([])
       return
     }
     try {
+      console.log('[SupplierDashboard] Chamando supplierAPI.getSuppliers()')
       const data = await supplierAPI.getSuppliers()
-      setSuppliers(data)
-    } catch (err) {
-      setError('Erro ao carregar fornecedores: ' + err.message)
-    }
-  }
-
-  const loadPlants = async () => {
-    console.log('[SupplierDashboard] loadPlants chamado')
-    console.log('[SupplierDashboard] permissionsLoading:', permissionsLoading)
-    console.log('[SupplierDashboard] hasPermission view_plants:', hasPermission('view_plants', 'viewer'))
-    console.log('[SupplierDashboard] permissions object:', permissions)
-    
-    // Se ainda está carregando permissões, aguardar um pouco e tentar novamente
-    if (permissionsLoading) {
-      console.log('[SupplierDashboard] Permissões ainda carregando, aguardando...')
-      // Aguardar 200ms e tentar novamente
-      setTimeout(() => {
-        loadPlants()
-      }, 200)
-      return
-    }
-    
-    // Verificar permissão: Admin sempre tem acesso, outros precisam de permissão
-    // IMPORTANTE: Fornecedores precisam ver plantas para criar agendamentos, então tentar carregar mesmo se permissão não estiver clara
-    const userRole = user?.role
-    const hasViewPlantsPermission = userRole === 'admin' || 
-      hasPermission('view_plants', 'viewer') ||
-      (permissions['view_plants'] && permissions['view_plants'][userRole] && permissions['view_plants'][userRole] !== 'none')
-    
-    console.log('[SupplierDashboard] Verificação de permissão:', {
-      userRole,
-      hasPermissionResult: hasPermission('view_plants', 'viewer'),
-      permissionsViewPlants: permissions['view_plants'],
-      permissionsForRole: permissions['view_plants']?.[userRole],
-      hasViewPlantsPermission
-    })
-    
-    // Para fornecedores, tentar carregar mesmo se permissão não estiver clara (backend vai validar)
-    // Isso garante que as plantas apareçam no seletor e no formulário de novo agendamento
-    if (!hasViewPlantsPermission && userRole !== 'supplier') {
-      console.warn('[SupplierDashboard] Usuário não tem permissão view_plants e não é fornecedor')
-      setPlants([])
-      return
-    }
-    
-    // Se é fornecedor mas permissão não está clara, tentar carregar mesmo assim (backend valida)
-    if (!hasViewPlantsPermission && userRole === 'supplier') {
-      console.log('[SupplierDashboard] Fornecedor - tentando carregar plantas mesmo sem permissão clara (backend vai validar)')
-    }
-    
-    try {
-      console.log('[SupplierDashboard] Chamando supplierAPI.getPlants()')
-      const data = await supplierAPI.getPlants()
       console.log('[SupplierDashboard] Resposta recebida:', data)
       console.log('[SupplierDashboard] Tipo da resposta:', typeof data)
       console.log('[SupplierDashboard] É array?', Array.isArray(data))
       
       if (Array.isArray(data)) {
-        console.log(`[SupplierDashboard] ${data.length} plantas carregadas`)
-        console.log('[SupplierDashboard] Plantas:', data.map(p => ({ id: p.id, name: p.name, is_active: p.is_active })))
-        setPlants(data)
+        console.log(`[SupplierDashboard] ${data.length} fornecedores carregados`)
+        setSuppliers(data)
       } else {
         console.error('[SupplierDashboard] Resposta não é um array:', data)
-        setPlants([])
+        setSuppliers([])
       }
     } catch (err) {
-      console.error('[SupplierDashboard] Erro ao carregar plantas:', err)
+      console.error('[SupplierDashboard] Erro ao carregar fornecedores:', err)
       console.error('[SupplierDashboard] Erro completo:', {
         message: err.message,
         response: err.response,
         status: err.response?.status,
         data: err.response?.data
       })
+      setSuppliers([])
+      setError('Erro ao carregar fornecedores: ' + (err.response?.data?.error || err.message || 'Erro desconhecido'))
+    }
+  }
+
+  const loadPlants = async () => {
+    // IMPORTANTE: Fornecedores sempre precisam visualizar plantas para criar agendamentos
+    // O backend permite acesso mesmo sem permissão configurada, então sempre tentar carregar
+    if (!user || user.role !== 'supplier') {
+      setPlants([])
+      return
+    }
+    
+    try {
+      const data = await supplierAPI.getPlants()
+      
+      if (Array.isArray(data)) {
+        setPlants(data)
+      } else {
+        setPlants([])
+      }
+    } catch (err) {
       setPlants([])
       setError('Erro ao carregar plantas: ' + (err.response?.data?.error || err.message || 'Erro desconhecido'))
     }
@@ -174,16 +147,10 @@ const SupplierDashboard = ({ user, token }) => {
       // A API do fornecedor espera o início da semana (week)
       const weekStart = dateUtils.getWeekStart(date)
       const weekStartISO = dateUtils.toISODate(weekStart)
-      console.log(`[SupplierDashboard] Carregando agendamentos para semana ${weekStartISO}, planta: ${plantId}`)
       const data = await supplierAPI.getAppointments(weekStartISO, plantId)
-      console.log(`[SupplierDashboard] Agendamentos recebidos da API:`, data.length)
-      if (data.length > 0) {
-        console.log(`[SupplierDashboard] Primeiros agendamentos:`, data.slice(0, 3).map(a => ({ id: a.id, date: a.date, status: a.status, plant_id: a.plant_id })))
-      }
       setAppointments(data)
       setError('')
     } catch (err) {
-      console.error(`[SupplierDashboard] Erro ao carregar agendamentos:`, err)
       setError('Erro ao carregar agendamentos: ' + (err.response?.data?.error || err.message))
     } finally {
       setLoading(false)
@@ -191,79 +158,89 @@ const SupplierDashboard = ({ user, token }) => {
   }
 
 
-  // Carregar plantas e fornecedores quando as permissões estiverem prontas
+  // Carregar plantas e fornecedores quando o componente montar ou o usuário mudar
   useEffect(() => {
-    // Aguardar que as permissões sejam carregadas antes de tentar carregar plantas/fornecedores
-    if (permissionsLoading) {
-      console.log('[SupplierDashboard] Aguardando carregamento de permissões...')
+    if (!user || user.role !== 'supplier') {
       return
     }
     
-    // Se não há usuário, não fazer nada
-    if (!user) {
-      console.log('[SupplierDashboard] Nenhum usuário - não carregando plantas/fornecedores')
-      return
-    }
+    // Carregar plantas imediatamente (não depende de permissões)
+    loadPlants()
     
-    console.log('[SupplierDashboard] Permissões carregadas - carregando plantas e fornecedores')
-    console.log('[SupplierDashboard] hasPermission view_plants:', hasPermission('view_plants', 'viewer'))
-    console.log('[SupplierDashboard] hasPermission view_suppliers:', hasPermission('view_suppliers', 'viewer'))
-    console.log('[SupplierDashboard] Permissões carregadas:', Object.keys(permissions).length, 'permissões')
-    
-    // Chamar as funções que já fazem a validação de permissão internamente
-    // Usar um pequeno delay para garantir que hasPermission esteja atualizado
-    const timer = setTimeout(() => {
+    // Carregar fornecedores apenas se tiver permissão (ou aguardar permissões carregarem)
+    if (!permissionsLoading) {
       loadSuppliers()
-      loadPlants()
-    }, 100) // Pequeno delay para garantir que hasPermission esteja sincronizado
-    
-    return () => clearTimeout(timer)
+    } else {
+      // Aguardar permissões carregarem antes de tentar carregar fornecedores
+      const timer = setTimeout(() => {
+        loadSuppliers()
+      }, 500)
+      return () => clearTimeout(timer)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [permissionsLoading, user?.id, permissions]) // Executar quando permissões terminarem de carregar, usuário mudar ou permissões mudarem
+  }, [user?.id]) // Executar quando usuário mudar
 
   // Carregar agendamentos quando a data, aba ou planta selecionada mudar
   useEffect(() => {
     // Carregar agendamentos sempre, mesmo sem planta selecionada
     // O filtro por planta será aplicado no frontend
-    console.log(`[SupplierDashboard] useEffect disparado - selectedPlantId: ${selectedPlantId} (tipo: ${typeof selectedPlantId}), currentDate: ${currentDate}`)
     loadAppointments(currentDate, selectedPlantId || null)
   }, [currentDate, activeTab, selectedPlantId])
   
   // Handler para mudança de planta
   const handlePlantChange = (plantId) => {
-    console.log(`[SupplierDashboard] handlePlantChange chamado com plantId: ${plantId} (tipo: ${typeof plantId})`)
     setSelectedPlantId(plantId)
     // Manter a data atual, apenas recarregar agendamentos
   }
 
-  // Fallback: Tentar carregar plantas após um delay maior se ainda não foram carregadas
+  // Fallback: Tentar carregar plantas após um delay se ainda não foram carregadas
   useEffect(() => {
-    if (!user || permissionsLoading) return
+    if (!user || user.role !== 'supplier') return
     
     // Se já temos plantas carregadas, não fazer nada
     if (plants.length > 0) return
     
-    // Aguardar 1 segundo após a montagem para tentar carregar novamente
+    // Aguardar 2 segundos após a montagem para tentar carregar novamente
     const timer = setTimeout(() => {
-      console.log('[SupplierDashboard] Fallback: Tentando carregar plantas novamente após delay')
       loadPlants()
-    }, 1000)
+    }, 2000)
     
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, permissionsLoading]) // Executar quando usuário ou loading mudar
+  }, [user?.id, plants.length]) // Executar quando usuário mudar ou plantas ainda estiverem vazias
 
   useEffect(() => {
-    if (showPlantsScreen && hasPermission('view_plants', 'viewer')) {
+    if (!user || user.role !== 'supplier') return
+    
+    if (showPlantsScreen) {
       loadPlants()
     }
-  }, [showPlantsScreen])
+  }, [showPlantsScreen, user?.id])
   
   useEffect(() => {
-    if (showPlantsScreen && !showPlantManagement && !showPlantForm && hasPermission('view_plants', 'viewer')) {
+    if (!user || user.role !== 'supplier') return
+    
+    if (showPlantsScreen && !showPlantManagement && !showPlantForm) {
       loadPlants()
     }
-  }, [showPlantsScreen, showPlantManagement, showPlantForm])
+  }, [showPlantsScreen, showPlantManagement, showPlantForm, user?.id])
+
+  // Carregar fornecedores quando a tela de fornecedores é aberta
+  useEffect(() => {
+    if (showSuppliersScreen && hasPermission('view_suppliers', 'viewer')) {
+      loadSuppliers()
+    }
+  }, [showSuppliersScreen])
+
+  // Carregar plantas quando o formulário de agendamento é aberto (para criar novo agendamento)
+  useEffect(() => {
+    if (!user || user.role !== 'supplier') return
+    
+    if (showAppointmentForm && (!editingAppointment || !editingAppointment.id)) {
+      // É um novo agendamento - sempre carregar plantas para garantir que estejam disponíveis
+      loadPlants()
+    }
+  }, [showAppointmentForm, editingAppointment, user?.id])
 
   const handlePreviousDay = () => {
     const newDate = new Date(currentDate)
@@ -420,11 +397,7 @@ const SupplierDashboard = ({ user, token }) => {
       // Status 200-299 são considerados sucesso pelo axios
       
       // Remover o agendamento da lista após confirmação do backend
-      setAppointments(prev => {
-        const filtered = prev.filter(apt => apt.id !== appointmentId)
-        console.log(`[SupplierDashboard] Agendamento ${appointmentId} removido da lista. Total antes: ${prev.length}, depois: ${filtered.length}`)
-        return filtered
-      })
+      setAppointments(prev => prev.filter(apt => apt.id !== appointmentId))
       
       // Fechar drawer se estiver aberto com o agendamento excluído
       if (selectedAppointment && selectedAppointment.id === appointmentId) {
@@ -433,23 +406,9 @@ const SupplierDashboard = ({ user, token }) => {
       }
       
       // Recarregar agendamentos para garantir sincronização com o backend
-      console.log('[SupplierDashboard] Recarregando agendamentos após exclusão...')
       await loadAppointments(currentDate, selectedPlantId)
-      
-      console.log('[SupplierDashboard] Exclusão concluída com sucesso')
     } catch (err) {
-      console.error('[SupplierDashboard] Erro ao excluir agendamento:', err)
-      console.error('[SupplierDashboard] Detalhes do erro:', {
-        message: err.message,
-        response: err.response,
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data,
-        headers: err.response?.headers
-      })
-      
       // Se houver erro, recarregar a lista para restaurar o estado correto
-      console.error('[SupplierDashboard] Erro na exclusão, recarregando lista...')
       await loadAppointments(currentDate, selectedPlantId)
       
       const errorMessage = err.response?.data?.error || err.response?.data?.message || err.message || 'Erro desconhecido ao excluir agendamento'
@@ -490,52 +449,23 @@ const SupplierDashboard = ({ user, token }) => {
   // independente do status (scheduled, checked_in, checked_out, rescheduled)
   let dayAppointments = appointments.filter(apt => {
     if (!apt.date) {
-      console.warn(`[SupplierDashboard] Agendamento sem data:`, apt.id, apt)
       return false
     }
     
     // Normalizar ambas as datas para comparação
     const aptDate = getDateString(apt.date)
-    const matches = aptDate === currentDateISO
-    
-    // VALIDAÇÃO RIGOROSA: Se não corresponder, não incluir
-    if (!matches) {
-      if (apt.status === 'checked_out') {
-        console.warn(`[SupplierDashboard] ⚠️ Agendamento finalizado EXCLUÍDO (data diferente):`, {
-          id: apt.id,
-          status: apt.status,
-          originalDate: apt.date,
-          normalizedDate: aptDate,
-          selectedDate: currentDateISO
-        })
-      }
-      return false
-    }
-    
-    return true
+    return aptDate === currentDateISO
   })
   
-  console.log(`[SupplierDashboard] Data selecionada: ${currentDateISO}`)
-  console.log(`[SupplierDashboard] Total de agendamentos carregados: ${appointments.length}`)
-  console.log(`[SupplierDashboard] Agendamentos do dia ${currentDateISO}: ${dayAppointments.length}`)
-  if (dayAppointments.length > 0) {
-    console.log(`[SupplierDashboard] Status dos agendamentos do dia:`, dayAppointments.map(a => ({ id: a.id, status: a.status, date: a.date, plant_id: a.plant_id })))
-  }
-  
   // Filtrar pela planta selecionada (se houver)
-  // IMPORTANTE: Incluir agendamentos sem plant_id (null) para compatibilidade com agendamentos antigos
+  // REGRA DE NEGÓCIO: Nenhum dado deve ser exibido sem que uma planta esteja selecionada
   if (selectedPlantId) {
-    const beforePlantFilter = dayAppointments.length
-    // Incluir agendamentos da planta selecionada OU agendamentos sem plant_id (null)
-    // Isso permite que agendamentos antigos sejam exibidos mesmo quando uma planta está selecionada
-    dayAppointments = dayAppointments.filter(apt => 
-      apt.plant_id === selectedPlantId || apt.plant_id === null || apt.plant_id === undefined
-    )
-    console.log(`[SupplierDashboard] Agendamentos após filtrar por planta ${selectedPlantId}: ${dayAppointments.length} (antes: ${beforePlantFilter})`)
-    console.log(`[SupplierDashboard] Agendamentos incluídos:`, dayAppointments.map(a => ({ id: a.id, plant_id: a.plant_id })))
+    // Filtrar APENAS agendamentos da planta selecionada
+    // Não incluir agendamentos sem plant_id para evitar mistura de dados entre plantas
+    dayAppointments = dayAppointments.filter(apt => apt.plant_id === selectedPlantId)
   } else {
-    // Se nenhuma planta estiver selecionada, mostrar TODOS os agendamentos do dia
-    console.log(`[SupplierDashboard] Nenhuma planta selecionada - mostrando todos os agendamentos do dia: ${dayAppointments.length}`)
+    // Se nenhuma planta estiver selecionada, não mostrar agendamentos
+    dayAppointments = []
   }
   
   // Filtrar agendamentos baseado no filtro ativo (após filtrar por data e planta)
@@ -554,18 +484,8 @@ const SupplierDashboard = ({ user, token }) => {
     // VALIDAÇÃO FINAL: Garantir que a data do agendamento corresponde à data selecionada
     if (!appointment.date) return false
     const aptDate = getDateString(appointment.date)
-    if (aptDate !== currentDateISO) {
-      console.error(`[SupplierDashboard] ❌ ERRO: Agendamento ${appointment.id} passou pelo filtro mas tem data incorreta`)
-      return false
-    }
-    return true
+    return aptDate === currentDateISO
   })
-  
-  console.log(`[SupplierDashboard] Filtro ativo: ${activeFilter}`)
-  console.log(`[SupplierDashboard] Agendamentos após filtro: ${filteredAppointments.length}`)
-  if (filteredAppointments.length > 0) {
-    console.log(`[SupplierDashboard] Agendamentos filtrados:`, filteredAppointments.map(a => ({ id: a.id, status: a.status, time: a.time })))
-  }
 
   // Carregar capacidade da planta selecionada imediatamente quando selecionada
   useEffect(() => {
@@ -578,16 +498,10 @@ const SupplierDashboard = ({ user, token }) => {
     // Carregar capacidade da planta selecionada diretamente
     const loadPlantCapacity = async () => {
       try {
-        console.log(`[SupplierDashboard] Iniciando carregamento de capacidade para planta ${selectedPlantId}`)
         // Usar supplierAPI para buscar capacidade da planta
         const data = await supplierAPI.getPlantMaxCapacity(selectedPlantId)
-        console.log(`[SupplierDashboard] Resposta da API:`, data)
         
         const capacity = data.max_capacity || 1
-        const plantName = data.plant_name || `ID ${selectedPlantId}`
-        
-        console.log(`[SupplierDashboard] Planta selecionada ${plantName} (ID: ${selectedPlantId}): capacidade = ${capacity}`)
-        console.log(`[SupplierDashboard] Atualizando maxCapacity de ${maxCapacity} para ${capacity}`)
         
         // Criar mapa com a capacidade da planta selecionada
         const capacitiesMap = new Map()
@@ -595,11 +509,7 @@ const SupplierDashboard = ({ user, token }) => {
         
         setPlantCapacities(capacitiesMap)
         setMaxCapacity(capacity)
-        
-        console.log(`[SupplierDashboard] Estado atualizado: maxCapacity=${capacity}, plantCapacities tem ${capacitiesMap.size} entrada(s)`)
       } catch (err) {
-        console.error(`[SupplierDashboard] Erro ao buscar capacidade da planta ${selectedPlantId}:`, err)
-        console.error(`[SupplierDashboard] Detalhes do erro:`, err.response?.data || err.message)
         setMaxCapacity(1)
         setPlantCapacities(new Map())
       }
@@ -722,20 +632,10 @@ const SupplierDashboard = ({ user, token }) => {
     // VALIDAÇÃO INICIAL: Garantir que todos os agendamentos são realmente do dia selecionado
     const validatedAppointments = filteredAppointments.filter(apt => {
       if (!apt.date) {
-        console.warn(`[SupplierDashboard] Agendamento sem data no useMemo:`, apt.id)
         return false
       }
       const aptDate = getDateString(apt.date)
-      if (aptDate !== currentDateISO) {
-        console.error(`[SupplierDashboard] ❌ ERRO CRÍTICO: Agendamento ${apt.id} chegou ao useMemo com data incorreta:`, {
-          id: apt.id,
-          date: apt.date,
-          normalizedDate: aptDate,
-          selectedDate: currentDateISO
-        })
-        return false
-      }
-      return true
+      return aptDate === currentDateISO
     })
     
     // Garantir que maxCapacity seja pelo menos 1
@@ -761,14 +661,11 @@ const SupplierDashboard = ({ user, token }) => {
       let plantCapacity = 1
       if (plantId === null && selectedPlantId) {
         plantCapacity = plantCapacities.get(selectedPlantId) || maxCapacity || 1
-        console.log(`[SupplierDashboard] Agendamentos sem plant_id usando capacidade da planta selecionada ${selectedPlantId}: ${plantCapacity}`)
       } else if (plantId !== null) {
         plantCapacity = plantCapacities.get(plantId) || maxCapacity || 1
       } else {
         plantCapacity = maxCapacity || 1
       }
-      
-      console.log(`[SupplierDashboard] Processando planta ID ${plantId} com capacidade ${plantCapacity} (maxCapacity global: ${maxCapacity}), ${plantAppointments.length} agendamentos`)
       
       // Ordenar agendamentos desta planta por horário de início
       const sortedAppointments = [...plantAppointments].sort((a, b) => {
@@ -830,7 +727,20 @@ const SupplierDashboard = ({ user, token }) => {
   }
 
   const stats = useMemo(() => {
-    const dayApps = dayAppointments
+    // Filtrar agendamentos pela planta selecionada
+    let dayApps = dayAppointments
+    if (selectedPlantId) {
+      // Filtrar apenas agendamentos da planta selecionada
+      dayApps = dayApps.filter(a => a.plant_id === selectedPlantId)
+    } else {
+      // Se nenhuma planta estiver selecionada, retornar zeros
+      return {
+        total: 0,
+        scheduled: 0,
+        checkedIn: 0,
+        checkedOut: 0
+      }
+    }
     
     return {
       total: dayApps.length,
@@ -847,7 +757,7 @@ const SupplierDashboard = ({ user, token }) => {
         return a.status === 'checked_out'
       }).length
     }
-  }, [dayAppointments, currentDateISO])
+  }, [dayAppointments, currentDateISO, selectedPlantId])
 
   const handleFilterClick = (filter) => {
     if (activeFilter === filter) {

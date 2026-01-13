@@ -415,14 +415,12 @@ const AdminDashboard = ({ user, token }) => {
   }
   
   // Filtrar pela planta selecionada (se houver)
-  // IMPORTANTE: Não mostrar agendamentos se nenhuma planta estiver selecionada
+  // REGRA DE NEGÓCIO: Nenhum dado deve ser exibido sem que uma planta esteja selecionada
   if (selectedPlantId) {
     const beforePlantFilter = dayAppointments.length
-    // Incluir agendamentos da planta selecionada OU agendamentos sem plant_id (null)
-    // Isso permite que agendamentos antigos sejam exibidos mesmo quando uma planta está selecionada
-    dayAppointments = dayAppointments.filter(apt => 
-      apt.plant_id === selectedPlantId || apt.plant_id === null || apt.plant_id === undefined
-    )
+    // Filtrar APENAS agendamentos da planta selecionada
+    // Não incluir agendamentos sem plant_id para evitar mistura de dados entre plantas
+    dayAppointments = dayAppointments.filter(apt => apt.plant_id === selectedPlantId)
     console.log(`[AdminDashboard] Agendamentos após filtrar por planta ${selectedPlantId}: ${dayAppointments.length} (antes: ${beforePlantFilter})`)
     console.log(`[AdminDashboard] Agendamentos incluídos:`, dayAppointments.map(a => ({ id: a.id, plant_id: a.plant_id })))
   } else {

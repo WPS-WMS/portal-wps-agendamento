@@ -72,33 +72,74 @@ const PlantDashboard = ({ user, token }) => {
   const [plantInfo, setPlantInfo] = useState(null)
 
   const loadSuppliers = async () => {
+    console.log('[PlantDashboard] loadSuppliers chamado')
+    console.log('[PlantDashboard] hasPermission view_suppliers:', hasPermission('view_suppliers', 'viewer'))
+    
     if (!hasPermission('view_suppliers', 'viewer')) {
+      console.warn('[PlantDashboard] Sem permissão para visualizar fornecedores')
       setSuppliers([])
       return
     }
     try {
+      console.log('[PlantDashboard] Chamando plantAPI.getSuppliers()')
       const data = await plantAPI.getSuppliers()
-      setSuppliers(data)
+      console.log('[PlantDashboard] Resposta recebida:', data)
+      console.log('[PlantDashboard] Tipo da resposta:', typeof data)
+      console.log('[PlantDashboard] É array?', Array.isArray(data))
+      
+      if (Array.isArray(data)) {
+        console.log(`[PlantDashboard] ${data.length} fornecedores carregados`)
+        setSuppliers(data)
+      } else {
+        console.error('[PlantDashboard] Resposta não é um array:', data)
+        setSuppliers([])
+      }
     } catch (err) {
-      setError('Erro ao carregar fornecedores: ' + err.message)
+      console.error('[PlantDashboard] Erro ao carregar fornecedores:', err)
+      console.error('[PlantDashboard] Erro completo:', {
+        message: err.message,
+        response: err.response,
+        status: err.response?.status,
+        data: err.response?.data
+      })
+      setSuppliers([])
+      setError('Erro ao carregar fornecedores: ' + (err.response?.data?.error || err.message || 'Erro desconhecido'))
     }
   }
 
   const loadPlants = async () => {
+    console.log('[PlantDashboard] loadPlants chamado')
+    console.log('[PlantDashboard] hasPermission view_plants:', hasPermission('view_plants', 'viewer'))
+    
     if (!hasPermission('view_plants', 'viewer')) {
+      console.warn('[PlantDashboard] Sem permissão para visualizar plantas')
       setPlants([])
       return
     }
     try {
+      console.log('[PlantDashboard] Chamando plantAPI.getPlants()')
       const data = await plantAPI.getPlants()
+      console.log('[PlantDashboard] Resposta recebida:', data)
+      console.log('[PlantDashboard] Tipo da resposta:', typeof data)
+      console.log('[PlantDashboard] É array?', Array.isArray(data))
+      
       if (Array.isArray(data)) {
+        console.log(`[PlantDashboard] ${data.length} plantas carregadas`)
         setPlants(data)
       } else {
+        console.error('[PlantDashboard] Resposta não é um array:', data)
         setPlants([])
       }
     } catch (err) {
+      console.error('[PlantDashboard] Erro ao carregar plantas:', err)
+      console.error('[PlantDashboard] Erro completo:', {
+        message: err.message,
+        response: err.response,
+        status: err.response?.status,
+        data: err.response?.data
+      })
       setPlants([])
-      setError('Erro ao carregar plantas: ' + (err.message || 'Erro desconhecido'))
+      setError('Erro ao carregar plantas: ' + (err.response?.data?.error || err.message || 'Erro desconhecido'))
     }
   }
 
@@ -164,6 +205,24 @@ const PlantDashboard = ({ user, token }) => {
       loadPlants()
     }
   }, [showPlantsScreen, showPlantManagement, showPlantForm])
+
+  // Carregar fornecedores quando a tela de fornecedores é aberta
+  useEffect(() => {
+    if (showSuppliersScreen && hasPermission('view_suppliers', 'viewer')) {
+      loadSuppliers()
+    }
+  }, [showSuppliersScreen])
+
+  // Carregar fornecedores quando o formulário de agendamento é aberto (para criar novo agendamento)
+  useEffect(() => {
+    if (showAppointmentForm && editingAppointment && !editingAppointment.id) {
+      // É um novo agendamento - carregar fornecedores se ainda não foram carregados
+      if (suppliers.length === 0 && hasPermission('view_suppliers', 'viewer')) {
+        console.log('[PlantDashboard] Carregando fornecedores para novo agendamento')
+        loadSuppliers()
+      }
+    }
+  }, [showAppointmentForm, editingAppointment])
 
   const handlePreviousDay = () => {
     const newDate = new Date(currentDate)
