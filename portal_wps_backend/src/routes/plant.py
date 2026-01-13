@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 plant_bp = Blueprint('plant', __name__)
 
 @plant_bp.route('/appointments', methods=['GET'])
-@token_required
 @permission_required('view_appointments', 'viewer')
 def get_plant_appointments(current_user):
     """Retorna agendamentos da planta para uma data específica"""
@@ -40,8 +39,6 @@ def get_plant_appointments(current_user):
             Appointment.plant_id == current_user.plant_id
         ).order_by(Appointment.time).all()
         
-        logger.info(f"Buscando agendamentos da planta {current_user.plant_id} para data {target_date}")
-        logger.info(f"Encontrados {len(appointments)} agendamentos para a planta {current_user.plant_id}")
         
         result = []
         for apt in appointments:
@@ -512,38 +509,69 @@ def get_plant_operating_hours(current_user):
 
 @plant_bp.route('/suppliers', methods=['GET'])
 @token_required
-@permission_required('view_suppliers', 'viewer')
 def get_suppliers(current_user):
-    """Lista todos os fornecedores ativos - usuários de planta podem visualizar todos"""
+    """Lista todos os fornecedores ativos - usuários de planta podem visualizar todos
+    
+    IMPORTANTE: Plantas sempre precisam visualizar fornecedores para criar agendamentos,
+    então esta rota não usa @permission_required para garantir acesso mesmo sem permissão configurada.
+    A verificação de permissão é feita internamente, mas não bloqueia o acesso se não estiver configurada.
+    """
     try:
+        logger.info(f"[get_suppliers] Chamado por usuário {current_user.id} (role: {current_user.role}, plant_id: {current_user.plant_id})")
+        
         if current_user.role != 'plant':
+            logger.warning(f"[get_suppliers] Acesso negado - role incorreto: {current_user.role}")
             return jsonify({'error': 'Acesso negado. Apenas plantas podem acessar'}), 403
+        
+        # Verificar permissão, mas não bloquear se não estiver configurada
+        # Plantas sempre precisam visualizar fornecedores para criar agendamentos
+        from src.utils.permissions import has_permission
+        from src.models.permission import Permission
+        
+        permission_type = Permission.get_permission(current_user.role, 'view_suppliers')
+        has_view_permission = has_permission('view_suppliers', 'viewer', current_user)
+        
+        logger.info(f"[get_suppliers] Permissão view_suppliers para plant: {permission_type}, has_permission: {has_view_permission}")
+        
+        # Se a permissão estiver configurada como 'none', ainda permitir acesso
+        # pois plantas precisam visualizar fornecedores para criar agendamentos
+        # Esta é uma regra de negócio especial para esta funcionalidade
+        if permission_type == 'none':
+            logger.info(f"[get_suppliers] Permissão não configurada (none), mas permitindo acesso para plantas (regra de negócio)")
         
         from src.models.supplier import Supplier
         
         # Usuários de planta podem visualizar todos os fornecedores cadastrados
         suppliers = Supplier.query.filter_by(is_deleted=False).all()
-        return jsonify([supplier.to_dict() for supplier in suppliers]), 200
+        logger.info(f"[get_suppliers] Encontrados {len(suppliers)} fornecedores")
+        
+        result = [supplier.to_dict() for supplier in suppliers]
+        logger.info(f"[get_suppliers] Retornando {len(result)} fornecedores")
+        return jsonify(result), 200
         
     except Exception as e:
-        logger.error(f"Erro ao buscar fornecedores: {str(e)}", exc_info=True)
+        logger.error(f"[get_suppliers] Erro: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @plant_bp.route('/plants', methods=['GET'])
-@token_required
 @permission_required('view_plants', 'viewer')
 def get_plants(current_user):
     """Lista plantas - para usuários de planta, retorna apenas a própria planta"""
     try:
+        logger.info(f"[get_plants] Chamado por usuário {current_user.id} (role: {current_user.role}, plant_id: {current_user.plant_id})")
+        
         if current_user.role != 'plant':
+            logger.warning(f"[get_plants] Acesso negado - role incorreto: {current_user.role}")
             return jsonify({'error': 'Acesso negado. Apenas plantas podem acessar'}), 403
         
         if not current_user.plant_id:
+            logger.error(f"[get_plants] Usuário {current_user.id} não possui plant_id")
             return jsonify({'error': 'Usuário não está vinculado a uma planta'}), 400
         
         # Para usuários de planta, retornar apenas a própria planta
         plant = Plant.query.get(current_user.plant_id)
         if not plant:
+            logger.error(f"[get_plants] Planta {current_user.plant_id} não encontrada")
             return jsonify({'error': 'Planta não encontrada'}), 404
         
         plant_dict = plant.to_dict()
@@ -551,14 +579,14 @@ def get_plants(current_user):
         if 'cnpj' not in plant_dict or plant_dict['cnpj'] is None:
             plant_dict['cnpj'] = getattr(plant, 'cnpj', '') or ''
         
+        logger.info(f"[get_plants] Retornando planta {plant.id} ({plant.name})")
         return jsonify([plant_dict]), 200
         
     except Exception as e:
-        logger.error(f"Erro ao buscar plantas: {str(e)}", exc_info=True)
+        logger.error(f"[get_plants] Erro: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @plant_bp.route('/system-config/max-capacity', methods=['GET'])
-@token_required
 @permission_required('view_system_config', 'viewer')
 def get_max_capacity(current_user):
     """Retorna a configuração de capacidade máxima por horário"""
@@ -587,7 +615,6 @@ def get_max_capacity(current_user):
         return jsonify({'error': str(e)}), 500
 
 @plant_bp.route('/system-config/max-capacity', methods=['POST'])
-@token_required
 @permission_required('configure_max_capacity', 'editor')
 def set_max_capacity(current_user):
     """Define a configuração de capacidade máxima por horário"""

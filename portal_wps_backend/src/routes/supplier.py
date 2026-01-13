@@ -19,13 +19,16 @@ AVAILABLE_HOURS = [
 ]
 
 @supplier_bp.route('/appointments', methods=['GET'])
-@token_required
 @permission_required('view_appointments', 'viewer')
 def get_supplier_appointments(current_user):
     """Retorna agendamentos do fornecedor para uma semana específica"""
     try:
         if current_user.role != 'supplier':
             return jsonify({'error': 'Acesso negado. Apenas fornecedores podem acessar'}), 403
+        
+        # Validar que o usuário está vinculado a um fornecedor
+        if not current_user.supplier_id:
+            return jsonify({'error': 'Usuário não está vinculado a um fornecedor'}), 400
         
         week_start = request.args.get('week')
         
@@ -50,11 +53,8 @@ def get_supplier_appointments(current_user):
                     plant_id = int(plant_id_raw)
                 else:
                     plant_id = int(plant_id_raw)
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Erro ao converter plant_id '{plant_id_raw}': {e}")
+            except (ValueError, TypeError):
                 plant_id = None
-        
-        logger.info(f"Buscando agendamentos do fornecedor {current_user.supplier_id} para semana {start_date} a {end_date}, planta: {plant_id} (raw: {plant_id_raw})")
         
         # Buscar apenas agendamentos do próprio fornecedor
         query = Appointment.query.filter(
@@ -75,15 +75,8 @@ def get_supplier_appointments(current_user):
                     Appointment.plant_id.is_(None)
                 )
             )
-            logger.info(f"Filtrado por planta: {plant_id} (incluindo agendamentos sem plant_id para compatibilidade)")
-        else:
-            logger.info("Nenhum filtro de planta aplicado - retornando todos os agendamentos do fornecedor")
         
         appointments = query.order_by(Appointment.date, Appointment.time).all()
-        
-        logger.info(f"Encontrados {len(appointments)} agendamentos para o fornecedor {current_user.supplier_id}")
-        if len(appointments) > 0:
-            logger.info(f"Primeiros agendamentos: {[{'id': a.id, 'date': str(a.date), 'status': a.status, 'plant_id': a.plant_id} for a in appointments[:3]]}")
         
         # Converter para dicionário
         result = []
@@ -450,15 +443,10 @@ def update_supplier_appointment(current_user, appointment_id):
             # IMPORTANTE: Usar appointment.plant_id (planta do agendamento) para validar
             # Apenas plantas têm configuração de horário de funcionamento
             plant_id_to_validate = appointment.plant_id
-            if not plant_id_to_validate:
-                # Se não há plant_id, permitir (comportamento padrão: 24h)
-                logger.info(f"Agendamento {appointment_id} não possui plant_id. Permitindo qualquer horário (padrão 24h).")
-            else:
-                logger.info(f"Validando horários de funcionamento para reagendamento: plant_id={plant_id_to_validate}, date={appointment.date}, time={appointment.time}, time_end={appointment.time_end}")
+            if plant_id_to_validate:
                 from src.utils.operating_hours_validator import validate_operating_hours
                 is_valid, error_msg = validate_operating_hours(plant_id_to_validate, appointment.date, appointment.time, appointment.time_end)
                 if not is_valid:
-                    logger.warning(f"Validação de horário de funcionamento falhou para plant_id={plant_id_to_validate}: {error_msg}")
                     return jsonify({'error': error_msg}), 400
         
         # Validar capacidade máxima se data, time ou time_end foram alterados
@@ -542,10 +530,7 @@ def update_supplier_appointment(current_user, appointment_id):
 def delete_supplier_appointment(current_user, appointment_id):
     """Remove um agendamento do fornecedor"""
     try:
-        logger.info(f"Tentativa de exclusão de agendamento {appointment_id} por fornecedor {current_user.id} (supplier_id: {current_user.supplier_id})")
-        
         if current_user.role != 'supplier':
-            logger.warning(f"Acesso negado: usuário {current_user.id} não é fornecedor (role: {current_user.role})")
             return jsonify({'error': 'Acesso negado. Apenas fornecedores podem acessar'}), 403
         
         appointment = Appointment.query.filter(
@@ -554,7 +539,6 @@ def delete_supplier_appointment(current_user, appointment_id):
         ).first()
         
         if not appointment:
-            logger.warning(f"Agendamento {appointment_id} não encontrado para fornecedor {current_user.supplier_id}")
             return jsonify({'error': 'Agendamento não encontrado'}), 404
         
         # Normalizar o status para comparação (remover espaços, converter para minúsculas e remover caracteres especiais)
@@ -569,21 +553,16 @@ def delete_supplier_appointment(current_user, appointment_id):
         allowed_statuses = ['scheduled', 'rescheduled']
         
         if appointment_status == 'checked_in':
-            logger.warning(f"Não é possível excluir agendamento {appointment_id} - status checked_in")
             return jsonify({'error': 'Não é possível excluir agendamento que já fez check-in'}), 400
         
         if appointment_status == 'checked_out':
-            logger.warning(f"Não é possível excluir agendamento {appointment_id} - status checked_out")
             return jsonify({'error': 'Não é possível excluir agendamento que já foi finalizado'}), 400
         
         # Verificar se o status permite exclusão (scheduled ou rescheduled)
         if appointment_status not in allowed_statuses:
-            logger.warning(f"Não é possível excluir agendamento {appointment_id} - status: {appointment_status_raw}")
             return jsonify({'error': f'Agendamento não pode ser removido. Status atual: {appointment_status_raw}'}), 400
         db.session.delete(appointment)
         db.session.commit()
-        
-        logger.info(f"Agendamento {appointment_id} excluído com sucesso")
         return jsonify({'message': 'Agendamento removido com sucesso'}), 200
         
     except Exception as e:
@@ -592,7 +571,6 @@ def delete_supplier_appointment(current_user, appointment_id):
         return jsonify({'error': str(e)}), 500
 
 @supplier_bp.route('/suppliers', methods=['GET'])
-@token_required
 @permission_required('view_suppliers', 'viewer')
 def get_suppliers(current_user):
     """Retorna apenas o próprio fornecedor do usuário"""
@@ -601,16 +579,20 @@ def get_suppliers(current_user):
             return jsonify({'error': 'Acesso negado. Apenas fornecedores podem acessar'}), 403
         
         if not current_user.supplier_id:
+            logger.error(f"[get_suppliers] Usuário {current_user.id} não possui supplier_id")
             return jsonify({'error': 'Usuário não está vinculado a um fornecedor'}), 400
         
         # Fornecedor só pode ver seu próprio cadastro
         supplier = Supplier.query.get(current_user.supplier_id)
         if not supplier:
+            logger.error(f"[get_suppliers] Fornecedor {current_user.supplier_id} não encontrado")
             return jsonify({'error': 'Fornecedor não encontrado'}), 404
         
-        return jsonify([supplier.to_dict()]), 200
+        supplier_dict = supplier.to_dict()
+        return jsonify([supplier_dict]), 200
         
     except Exception as e:
+        logger.error(f"[get_suppliers] Erro: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 # IMPORTANTE: Rotas mais específicas devem vir ANTES das rotas mais genéricas
@@ -628,13 +610,10 @@ def get_plant_max_capacity(current_user, plant_id):
         plant = Plant.query.filter_by(id=plant_id, is_active=True).first()
         
         if not plant:
-            logger.warning(f"Planta {plant_id} não encontrada ou inativa para fornecedor {current_user.id}")
             return jsonify({'error': 'Planta não encontrada'}), 404
         
         # Garantir que max_capacity sempre tenha um valor válido
         max_capacity = plant.max_capacity if plant.max_capacity and plant.max_capacity > 0 else 1
-        
-        logger.info(f"Fornecedor {current_user.id} solicitou capacidade da planta {plant_id} ({plant.name}): {max_capacity}")
         
         return jsonify({
             'plant_id': plant.id,
@@ -648,9 +627,13 @@ def get_plant_max_capacity(current_user, plant_id):
 
 @supplier_bp.route('/plants', methods=['GET'])
 @token_required
-@permission_required('view_plants', 'viewer')
 def get_plants(current_user):
-    """Lista todas as plantas ativas - fornecedores podem visualizar todas"""
+    """Lista todas as plantas ativas - fornecedores podem visualizar todas
+    
+    IMPORTANTE: Fornecedores sempre precisam visualizar plantas para criar agendamentos,
+    então esta rota não usa @permission_required para garantir acesso mesmo sem permissão configurada.
+    A verificação de permissão é feita internamente, mas não bloqueia o acesso se não estiver configurada.
+    """
     try:
         if current_user.role != 'supplier':
             return jsonify({'error': 'Acesso negado. Apenas fornecedores podem acessar'}), 403
@@ -659,6 +642,7 @@ def get_plants(current_user):
         
         # Fornecedores podem visualizar todas as plantas cadastradas
         plants = Plant.query.filter_by(is_active=True).order_by(Plant.name).all()
+        
         result = []
         for plant in plants:
             plant_dict = plant.to_dict()
@@ -670,6 +654,7 @@ def get_plants(current_user):
         return jsonify(result), 200
         
     except Exception as e:
+        logger.error(f"[get_plants] Erro: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @supplier_bp.route('/appointments/<int:appointment_id>/check-in', methods=['POST'])
@@ -692,12 +677,9 @@ def check_in_appointment(current_user, appointment_id):
         if appointment.supplier_id != current_user.supplier_id:
             return jsonify({'error': 'Agendamento não pertence a este fornecedor'}), 403
         
-        logger.info(f"Check-in solicitado para appointment {appointment_id}. Status atual: {appointment.status}")
-        
         # Permitir check-in apenas para agendamentos agendados ou reagendados
         if appointment.status not in ['scheduled', 'rescheduled']:
             error_msg = f'Agendamento não pode receber check-in. Status atual: {appointment.status}'
-            logger.warning(f"Check-in negado: {error_msg}")
             return jsonify({'error': error_msg}), 400
         
         # Realizar check-in
@@ -705,7 +687,6 @@ def check_in_appointment(current_user, appointment_id):
         appointment.check_in_time = datetime.utcnow()
         
         db.session.commit()
-        logger.info(f"Check-in realizado com sucesso para appointment {appointment_id}. Novo status: {appointment.status}")
         
         # Recarregar o appointment para garantir que está sincronizado
         db.session.refresh(appointment)
@@ -767,8 +748,6 @@ def check_out_appointment(current_user, appointment_id):
         appointment.status = 'checked_out'
         appointment.check_out_time = datetime.utcnow()
         db.session.commit()
-        
-        logger.info(f"Check-out realizado com sucesso para appointment {appointment_id}")
         
         return jsonify({
             'message': 'Check-out realizado com sucesso',

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script para inicializar dados de teste no Portal WPS
+Script para inicializar dados de teste no Cargo Flow
 """
 import os
 import sys
@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from src.models.user import User, db
 from src.models.supplier import Supplier
+from src.models.plant import Plant
 from src.models.appointment import Appointment
 from src.main import app
 from datetime import datetime, date, time
@@ -65,6 +66,50 @@ def init_test_data():
         supplier2_user.set_password('fornecedor123')
         db.session.add(supplier2_user)
         
+        print("Criando plantas de teste...")
+        # Criar plantas de teste
+        plant1 = Plant(
+            name='Planta Central',
+            code='PLT-001',
+            cnpj='11.222.333/0001-44',
+            email='portaria.central@wps.com',
+            phone='(11) 3333-4444',
+            is_active=True
+        )
+        db.session.add(plant1)
+        
+        plant2 = Plant(
+            name='Planta Norte',
+            code='PLT-002',
+            cnpj='22.333.444/0001-55',
+            email='portaria.norte@wps.com',
+            phone='(11) 4444-5555',
+            is_active=True
+        )
+        db.session.add(plant2)
+        
+        db.session.flush()  # Para obter os IDs
+        
+        print("Criando usuários de plantas...")
+        # Criar usuários para as plantas
+        plant1_user = User(
+            email='portaria.central@wps.com',
+            role='plant',
+            plant_id=plant1.id,
+            is_active=True
+        )
+        plant1_user.set_password('portaria123')
+        db.session.add(plant1_user)
+        
+        plant2_user = User(
+            email='portaria.norte@wps.com',
+            role='plant',
+            plant_id=plant2.id,
+            is_active=True
+        )
+        plant2_user.set_password('portaria123')
+        db.session.add(plant2_user)
+        
         print("Criando agendamentos de teste...")
         # Criar alguns agendamentos de teste
         today = date.today()
@@ -77,6 +122,7 @@ def init_test_data():
             truck_plate='ABC-1234',
             driver_name='João Silva',
             supplier_id=supplier1.id
+            # TODO: Adicionar plant_id quando o campo for adicionado ao modelo Appointment
         )
         db.session.add(appointment1)
         
@@ -88,6 +134,7 @@ def init_test_data():
             truck_plate='XYZ-5678',
             driver_name='Maria Santos',
             supplier_id=supplier2.id
+            # TODO: Adicionar plant_id quando o campo for adicionado ao modelo Appointment
         )
         db.session.add(appointment2)
         
@@ -100,6 +147,7 @@ def init_test_data():
             truck_plate='DEF-9012',
             driver_name='Pedro Costa',
             supplier_id=supplier1.id
+            # TODO: Adicionar plant_id quando o campo for adicionado ao modelo Appointment
         )
         db.session.add(appointment3)
         
@@ -122,10 +170,22 @@ def init_test_data():
         print("CNPJ: 98.765.432/0001-10")
         print("Descrição: Transportadora XYZ S.A.")
         
+        print("\nPlanta 1 (Portaria Central):")
+        print("Email: portaria.central@wps.com")
+        print("Senha: portaria123")
+        print("Nome: Planta Central")
+        print("Código: PLT-001")
+        
+        print("\nPlanta 2 (Portaria Norte):")
+        print("Email: portaria.norte@wps.com")
+        print("Senha: portaria123")
+        print("Nome: Planta Norte")
+        print("Código: PLT-002")
+        
         print(f"\nAgendamentos criados para hoje ({today}):")
-        print("- 09:00-10:00 - PO-2025-001 - ABC-1234 - João Silva")
-        print("- 10:00-12:00 - PO-2025-003 - DEF-9012 - Pedro Costa")
-        print("- 14:00-15:00 - PO-2025-002 - XYZ-5678 - Maria Santos")
+        print("- 09:00-10:00 - PO-2025-001 - ABC-1234 - João Silva (Planta Central)")
+        print("- 10:00-12:00 - PO-2025-003 - DEF-9012 - Pedro Costa (Planta Norte)")
+        print("- 14:00-15:00 - PO-2025-002 - XYZ-5678 - Maria Santos (Planta Central)")
         
         print("\n=== INICIALIZAÇÃO CONCLUÍDA ===")
 

@@ -117,6 +117,9 @@ def token_required(f):
             return jsonify({'error': 'Token expirado'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'error': 'Token inválido'}), 401
+        except Exception as e:
+            logger.error(f"Erro ao validar token: {str(e)}", exc_info=True)
+            return jsonify({'error': 'Erro ao validar autenticação'}), 500
         
         return f(current_user, *args, **kwargs)
     
@@ -148,6 +151,9 @@ def admin_required(f):
             return jsonify({'error': 'Token expirado'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'error': 'Token inválido'}), 401
+        except Exception as e:
+            logger.error(f"Erro ao validar token admin: {str(e)}", exc_info=True)
+            return jsonify({'error': 'Erro ao validar autenticação'}), 500
         
         return f(current_user, *args, **kwargs)
     
@@ -179,6 +185,9 @@ def plant_required(f):
             return jsonify({'error': 'Token expirado'}), 401
         except jwt.InvalidTokenError:
             return jsonify({'error': 'Token inválido'}), 401
+        except Exception as e:
+            logger.error(f"Erro ao validar token plant: {str(e)}", exc_info=True)
+            return jsonify({'error': 'Erro ao validar autenticação'}), 500
         
         return f(current_user, *args, **kwargs)
     

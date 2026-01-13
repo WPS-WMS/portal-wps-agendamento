@@ -96,7 +96,17 @@ def permission_required(function_id, required_permission='editor'):
         function_id: ID da funcionalidade
         required_permission: Tipo de permissão necessário
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     def decorator(f):
+        import inspect
+        # Verificar assinatura da função ANTES de criar o wrapper
+        sig = inspect.signature(f)
+        params = list(sig.parameters.keys())
+        num_params = len(params)
+        expects_only_current_user = (num_params == 1)
+        
         @wraps(f)
         def decorated(*args, **kwargs):
             current_user = get_current_user_from_token()
@@ -107,25 +117,79 @@ def permission_required(function_id, required_permission='editor'):
             if not current_user.is_active:
                 return jsonify({'error': 'Usuário inativo'}), 403
             
-            # Admin sempre tem acesso completo
-            if current_user.role == 'admin':
+            # Verificar permissão específica (antes de chamar a função)
+            if current_user.role != 'admin':
+                if not has_permission(function_id, required_permission, current_user):
+                    logger.warning(f"Acesso negado para {current_user.email} ({current_user.role}) na funcionalidade {function_id} (requer: {required_permission})")
+                    permission_type = Permission.get_permission(current_user.role, function_id)
+                    logger.warning(f"Permissão atual do usuário: {permission_type}")
+                    return jsonify({
+                        'error': 'Acesso negado. Permissão insuficiente para esta ação',
+                        'function_id': function_id,
+                        'required_permission': required_permission,
+                        'user_permission': permission_type
+                    }), 403
+            
+            # Chamar a função com os argumentos corretos baseado na assinatura
+            try:
+                logger.info(f"[permission_required] Chamando {f.__name__} - params: {params}, num_params: {num_params}, args recebidos do Flask: {args}, kwargs recebidos do Flask: {kwargs}")
+                
+                # Se a função espera apenas current_user (num_params == 1)
+                # SEMPRE chamar apenas com current_user, ignorando qualquer args/kwargs do Flask
+                if expects_only_current_user:
+                    if args or kwargs:
+                        logger.warning(f"[permission_required] Função {f.__name__} espera apenas current_user mas Flask passou args={args}, kwargs={kwargs} - IGNORANDO")
+                    logger.info(f"[permission_required] Chamando {f.__name__} apenas com current_user")
+                    # Chamar diretamente com apenas current_user, ignorando completamente args e kwargs
+                    return f(current_user)
+                
+                # Se a função espera current_user + outros parâmetros (num_params > 1)
+                # Passar current_user + args do Flask
+                logger.info(f"[permission_required] Chamando {f.__name__} com current_user + args={args}, kwargs={kwargs}")
                 return f(current_user, *args, **kwargs)
-            
-            # Verificar permissão específica
-            # Passar current_user para evitar buscar do token novamente
-            if not has_permission(function_id, required_permission, current_user):
-                logger.warning(f"Acesso negado para {current_user.email} ({current_user.role}) na funcionalidade {function_id} (requer: {required_permission})")
-                # Buscar permissão atual para debug
-                permission_type = Permission.get_permission(current_user.role, function_id)
-                logger.warning(f"Permissão atual do usuário: {permission_type}")
+                
+            except TypeError as e:
+                error_msg = str(e)
+                logger.error(f"[permission_required] TypeError ao chamar {f.__name__}: {error_msg}")
+                logger.error(f"[permission_required] Args recebidos do Flask: {args}, kwargs: {kwargs}")
+                try:
+                    sig = inspect.signature(f)
+                    logger.error(f"[permission_required] Signature esperada: {sig}")
+                    logger.error(f"[permission_required] Parâmetros esperados: {list(sig.parameters.keys())}")
+                except:
+                    pass
+                
+                # Se o erro é sobre número de argumentos, tentar chamar apenas com current_user
+                if "positional argument" in error_msg or "takes" in error_msg or "required positional" in error_msg:
+                    try:
+                        logger.warning(f"[permission_required] Tentando chamar {f.__name__} apenas com current_user como fallback")
+                        return f(current_user)
+                    except Exception as e2:
+                        logger.error(f"[permission_required] Erro no fallback: {e2}")
+                        try:
+                            sig = inspect.signature(f)
+                            return jsonify({
+                                'error': f'Erro interno: {error_msg}',
+                                'function': f.__name__,
+                                'expected_params': list(sig.parameters.keys()),
+                                'received_args': len(args),
+                                'received_kwargs': len(kwargs),
+                                'args': str(args),
+                                'kwargs': str(kwargs)
+                            }), 500
+                        except:
+                            return jsonify({
+                                'error': f'Erro interno: {error_msg}',
+                                'function': f.__name__
+                            }), 500
+                
                 return jsonify({
-                    'error': 'Acesso negado. Permissão insuficiente para esta ação',
-                    'function_id': function_id,
-                    'required_permission': required_permission,
-                    'user_permission': permission_type
-                }), 403
-            
-            return f(current_user, *args, **kwargs)
+                    'error': f'Erro interno: {error_msg}',
+                    'function': f.__name__
+                }), 500
+            except Exception as e:
+                logger.error(f"[permission_required] Erro inesperado ao chamar {f.__name__}: {e}", exc_info=True)
+                return jsonify({'error': f'Erro interno: {str(e)}'}), 500
         
         decorated.__name__ = f.__name__
         return decorated
