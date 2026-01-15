@@ -27,12 +27,13 @@ function DrawerClose({
   return <DrawerPrimitive.Close data-slot="drawer-close" {...props} />;
 }
 
-function DrawerOverlay({
+const DrawerOverlay = React.forwardRef(({
   className,
   ...props
-}) {
+}, ref) => {
   return (
     <DrawerPrimitive.Overlay
+      ref={ref}
       data-slot="drawer-overlay"
       className={cn(
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
@@ -40,18 +41,21 @@ function DrawerOverlay({
       )}
       {...props} />
   );
-}
+});
+DrawerOverlay.displayName = "DrawerOverlay";
 
-function DrawerContent({
+const DrawerContent = React.forwardRef(({
   className,
   children,
   ...props
-}) {
+}, ref) => {
   return (
     <DrawerPortal data-slot="drawer-portal">
       <DrawerOverlay />
       <DrawerPrimitive.Content
+        ref={ref}
         data-slot="drawer-content"
+        tabIndex={-1}
         className={cn(
           "group/drawer-content bg-background fixed z-50 flex h-auto flex-col",
           "data-[vaul-drawer-direction=top]:inset-x-0 data-[vaul-drawer-direction=top]:top-0 data-[vaul-drawer-direction=top]:mb-24 data-[vaul-drawer-direction=top]:max-h-[80vh] data-[vaul-drawer-direction=top]:rounded-b-lg data-[vaul-drawer-direction=top]:border-b",
@@ -67,7 +71,8 @@ function DrawerContent({
       </DrawerPrimitive.Content>
     </DrawerPortal>
   );
-}
+});
+DrawerContent.displayName = "DrawerContent";
 
 function DrawerHeader({
   className,

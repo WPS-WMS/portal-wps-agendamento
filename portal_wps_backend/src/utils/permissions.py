@@ -60,11 +60,14 @@ def has_permission(function_id, required_permission='editor', current_user=None)
         return True
     
     # Buscar permissão configurada para o role do usuário
-    permission_type = Permission.get_permission(current_user.role, function_id)
-    
-    # Log para debug
     import logging
     logger = logging.getLogger(__name__)
+    
+    # Debug: verificar todas as permissões do role antes de buscar a específica
+    all_perms = Permission.query.filter_by(role=current_user.role).all()
+    logger.info(f"Todas as permissões do role {current_user.role}: {[(p.function_id, p.permission_type) for p in all_perms]}")
+    
+    permission_type = Permission.get_permission(current_user.role, function_id)
     logger.info(f"Verificando permissão: function_id={function_id}, role={current_user.role}, permission_type={permission_type}, required={required_permission}")
     
     # REGRA DE NEGÓCIO: Hierarquia de permissões
@@ -111,24 +114,32 @@ def permission_required(function_id, required_permission='editor'):
         def decorated(*args, **kwargs):
             current_user = get_current_user_from_token()
             
+            logger.info(f"[permission_required] {f.__name__} - Usuário obtido: {current_user.email if current_user else 'None'}, Role: {current_user.role if current_user else 'None'}")
+            
             if not current_user:
+                logger.warning(f"[permission_required] {f.__name__} - Token não fornecido ou inválido")
                 return jsonify({'error': 'Token não fornecido ou inválido'}), 401
             
             if not current_user.is_active:
+                logger.warning(f"[permission_required] {f.__name__} - Usuário inativo: {current_user.email}")
                 return jsonify({'error': 'Usuário inativo'}), 403
             
             # Verificar permissão específica (antes de chamar a função)
             if current_user.role != 'admin':
+                logger.info(f"[permission_required] {f.__name__} - Verificando permissão para {current_user.email} ({current_user.role}): function_id={function_id}, required={required_permission}")
                 if not has_permission(function_id, required_permission, current_user):
-                    logger.warning(f"Acesso negado para {current_user.email} ({current_user.role}) na funcionalidade {function_id} (requer: {required_permission})")
                     permission_type = Permission.get_permission(current_user.role, function_id)
-                    logger.warning(f"Permissão atual do usuário: {permission_type}")
+                    logger.warning(f"[permission_required] {f.__name__} - Acesso negado para {current_user.email} ({current_user.role}) na funcionalidade {function_id} (requer: {required_permission}, tem: {permission_type})")
                     return jsonify({
                         'error': 'Acesso negado. Permissão insuficiente para esta ação',
                         'function_id': function_id,
                         'required_permission': required_permission,
-                        'user_permission': permission_type
+                        'user_permission': permission_type,
+                        'user_role': current_user.role,
+                        'user_email': current_user.email
                     }), 403
+                else:
+                    logger.info(f"[permission_required] {f.__name__} - Permissão concedida para {current_user.email} ({current_user.role})")
             
             # Chamar a função com os argumentos corretos baseado na assinatura
             try:

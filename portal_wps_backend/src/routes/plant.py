@@ -5,6 +5,7 @@ from src.models.appointment import Appointment
 from src.models.plant import Plant
 from src.routes.auth import token_required, plant_required
 from src.utils.permissions import permission_required
+from src.utils.helpers import generate_appointment_number
 import logging
 
 logger = logging.getLogger(__name__)
@@ -154,8 +155,12 @@ def create_appointment(current_user):
         if not is_valid:
             return jsonify({'error': error_msg}), 400
         
+        # Gerar número único do agendamento
+        appointment_number = generate_appointment_number(appointment_date)
+        
         # Criar agendamento (plant_id preenchido automaticamente com a planta do usuário)
         appointment = Appointment(
+            appointment_number=appointment_number,
             date=appointment_date,
             time=appointment_time,
             time_end=appointment_time_end,
@@ -264,6 +269,15 @@ def update_appointment(current_user, appointment_id):
         is_rescheduling = date_changed or time_changed
         
         if is_rescheduling:
+            # Verificar se o usuário tem permissão para reagendar
+            from src.utils.permissions import has_permission
+            if not has_permission('reschedule', 'editor', current_user):
+                return jsonify({
+                    'error': 'Você não tem permissão para reagendar agendamentos. Apenas usuários com perfil Editor podem reagendar.',
+                    'permission_required': 'reschedule',
+                    'permission_level': 'editor'
+                }), 403
+            
             if 'motivo_reagendamento' not in data or not data.get('motivo_reagendamento', '').strip():
                 return jsonify({'error': 'Motivo do reagendamento é obrigatório quando há alteração de data ou horário'}), 400
             appointment.status = 'rescheduled'

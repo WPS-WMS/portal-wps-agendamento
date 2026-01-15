@@ -17,7 +17,12 @@ const Header = ({ user, onLogout }) => {
   }
 
   const getRoleLabel = (role) => {
-    return role === 'admin' ? 'Administrador' : 'Fornecedor'
+    const labels = {
+      admin: 'Administrador',
+      supplier: 'Fornecedor',
+      plant: 'Planta'
+    }
+    return labels[role] || role
   }
 
   // Fechar dropdown ao clicar fora

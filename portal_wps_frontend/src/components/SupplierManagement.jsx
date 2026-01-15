@@ -16,8 +16,14 @@ import {
   Loader2
 } from 'lucide-react'
 import { adminAPI } from '../lib/api'
+import usePermissions from '../hooks/usePermissions'
 
-const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
+const SupplierManagement = ({ supplier, onBack, onUpdate, user }) => {
+  const { hasPermission, getPermissionType } = usePermissions(user)
+  const canInactivate = hasPermission('inactivate_supplier', 'editor')
+  const canDelete = hasPermission('delete_supplier', 'editor')
+  const deletePermissionType = getPermissionType('delete_supplier')
+  const canViewDelete = deletePermissionType !== 'none'
   const [formData, setFormData] = useState({
     description: supplier?.description || '',
     is_active: supplier?.is_active !== false
@@ -53,7 +59,8 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
       await adminAPI.deleteSupplier(supplier.id)
       onUpdate()
     } catch (err) {
-      setError(err.message)
+      const errorMessage = err.response?.data?.error || err.message || 'Erro ao excluir fornecedor'
+      setError(errorMessage)
       setShowDeleteConfirm(false)
     } finally {
       setLoading(false)
@@ -192,26 +199,35 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {!canInactivate && (
+            <Alert className="mb-4">
+              <AlertDescription>
+                Você não tem permissão para inativar/ativar fornecedores. Apenas usuários com perfil Editor podem realizar esta ação.
+              </AlertDescription>
+            </Alert>
+          )}
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant={formData.is_active ? "destructive" : "default"}
-              onClick={handleToggleStatus}
-              disabled={loading}
-              className="flex items-center gap-1"
-            >
-              {formData.is_active ? (
-                <>
-                  <Ban className="w-3 h-3" />
-                  Inativar
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-3 h-3" />
-                  Ativar
-                </>
-              )}
-            </Button>
+            {canInactivate && (
+              <Button
+                size="sm"
+                variant={formData.is_active ? "destructive" : "default"}
+                onClick={handleToggleStatus}
+                disabled={loading}
+                className="flex items-center gap-1"
+              >
+                {formData.is_active ? (
+                  <>
+                    <Ban className="w-3 h-3" />
+                    Inativar
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-3 h-3" />
+                    Ativar
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -256,16 +272,25 @@ const SupplierManagement = ({ supplier, onBack, onUpdate }) => {
           </div>
 
           {/* Botões de Ação */}
+          {canViewDelete && !canDelete && (
+            <Alert className="mb-4">
+              <AlertDescription>
+                Você não tem permissão para excluir fornecedores. Apenas usuários com perfil Editor podem realizar esta ação.
+              </AlertDescription>
+            </Alert>
+          )}
           <DialogFooter>
-            <Button
-              variant="destructive"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={loading}
-              className="flex items-center gap-2"
-            >
-              <Trash2 className="w-4 h-4" />
-              Excluir Fornecedor
-            </Button>
+            {canViewDelete && (
+              <Button
+                variant="destructive"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={loading || !canDelete}
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Excluir Fornecedor
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={onBack}

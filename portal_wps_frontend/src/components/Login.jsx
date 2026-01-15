@@ -86,16 +86,9 @@ const Login = ({ onLogin }) => {
       localStorage.setItem('user', JSON.stringify(data.user))
       onLogin(data.user, data.token)
     } catch (err) {
-      console.error('Erro no login:', err)
-      console.error('Response:', err.response)
-      console.error('Request:', err.request)
-      
       // RN01 - Mensagem genérica, não expor qual campo está incorreto
       if (err.response) {
         const status = err.response.status
-        const errorMessage = err.response.data?.error || 'Erro desconhecido'
-        
-        console.error(`Status: ${status}, Mensagem: ${errorMessage}`)
         
         if (status === 401 || status === 403) {
           setError('Dados inválidos')
@@ -104,17 +97,15 @@ const Login = ({ onLogin }) => {
           setError('Erro no servidor. Tente novamente mais tarde.')
           setFieldErrors({ email: false, password: false })
         } else {
-          setError(`Erro: ${errorMessage}`)
+          setError('Erro ao fazer login. Tente novamente.')
           setFieldErrors({ email: false, password: false })
         }
       } else if (err.request) {
         // Requisição foi feita mas não houve resposta
-        console.error('Backend não está respondendo')
-        setError('Servidor não está respondendo. Verifique se o backend está rodando na porta 5000.')
+        setError('Servidor não está respondendo. Verifique se o backend está rodando.')
         setFieldErrors({ email: false, password: false })
       } else {
         // Erro ao configurar a requisição
-        console.error('Erro ao configurar requisição:', err.message)
         setError('Erro de conexão. Tente novamente.')
         setFieldErrors({ email: false, password: false })
       }

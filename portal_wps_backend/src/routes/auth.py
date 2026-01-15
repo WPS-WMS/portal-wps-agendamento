@@ -14,15 +14,12 @@ SECRET_KEY = 'asdf#FGSgvasgf$5$WGT'  # Em produção, usar variável de ambiente
 def login():
     """Endpoint de login que retorna JWT token"""
     try:
-        logger.info("Tentativa de login recebida")
         data = request.get_json()
         
         if not data:
-            logger.warning("Requisição sem dados JSON")
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
         if not data.get('email') or not data.get('password'):
-            logger.warning("Email ou senha não fornecidos")
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
         email = data.get('email')
@@ -30,16 +27,13 @@ def login():
         
         if not user:
             # Não expor informações sobre usuários existentes (segurança)
-            logger.warning("Tentativa de login com credenciais inválidas")
             return jsonify({'error': 'Credenciais inválidas'}), 401
         
         if not user.check_password(data['password']):
             # Não expor se a senha está incorreta (segurança)
-            logger.warning("Tentativa de login com credenciais inválidas")
             return jsonify({'error': 'Credenciais inválidas'}), 401
         
         if not user.is_active:
-            logger.warning("Tentativa de login com usuário inativo")
             return jsonify({'error': 'Usuário inativo. Entre em contato com o administrador'}), 403
         
         # Gerar JWT token
@@ -53,7 +47,6 @@ def login():
         }
         
         token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
-        logger.info(f"Login bem-sucedido - role: {user.role}")
         
         return jsonify({
             'token': token,
@@ -220,8 +213,7 @@ def forgot_password():
             # 2. Salvar token no banco de dados
             # 3. Enviar email com link de recuperação
             # 
-            # Por enquanto, apenas log genérico (não implementado envio de email)
-            logger.info("Solicitação de recuperação de senha recebida")
+            # Por enquanto, não implementado envio de email
         
         # RN03 - Sempre mesma mensagem, não informar se email existe
         return jsonify({

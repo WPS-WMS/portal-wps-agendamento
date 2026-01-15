@@ -38,7 +38,12 @@ const ProfileModal = ({ isOpen, onClose, user, onUpdateSuccess }) => {
   }, [isOpen, user])
 
   const getRoleLabel = (role) => {
-    return role === 'admin' ? 'Administrador' : 'Fornecedor'
+    const labels = {
+      admin: 'Administrador',
+      supplier: 'Fornecedor',
+      plant: 'Planta'
+    }
+    return labels[role] || role
   }
 
   const handleSubmit = async (e) => {

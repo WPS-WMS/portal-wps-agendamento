@@ -100,39 +100,51 @@ def validate_operating_hours(plant_id, appointment_date, appointment_time, appoi
         
         logger.info(f"✅ [VALIDATE] Usando configuração: {operating_hours_config.operating_start} às {operating_hours_config.operating_end} (plant_id={operating_hours_config.plant_id}, schedule_type={operating_hours_config.schedule_type})")
         
-        # Validar horário inicial
+        # Validar horário inicial e final
         time_str = appointment_time.strftime('%H:%M')
+        time_end_str = appointment_time_end.strftime('%H:%M')
         start_time_str = operating_hours_config.operating_start.strftime('%H:%M')
         end_time_str = operating_hours_config.operating_end.strftime('%H:%M')
         
-        logger.info(f"🔍 [VALIDATE] Validando horário inicial {time_str} contra range {start_time_str}-{end_time_str}")
-        is_start_valid = operating_hours_config.is_time_in_range(time_str)
+        # Converter para minutos para comparação
+        def time_to_minutes(time_obj):
+            return time_obj.hour * 60 + time_obj.minute
         
-        if not is_start_valid:
+        start_minutes = time_to_minutes(operating_hours_config.operating_start)
+        end_minutes = time_to_minutes(operating_hours_config.operating_end)
+        appointment_start_minutes = time_to_minutes(appointment_time)
+        appointment_end_minutes = time_to_minutes(appointment_time_end)
+        
+        logger.info(f"🔍 [VALIDATE] Validando horário inicial {time_str} ({appointment_start_minutes} min) e final {time_end_str} ({appointment_end_minutes} min) contra range {start_time_str} ({start_minutes} min) - {end_time_str} ({end_minutes} min)")
+        
+        # Validar horário inicial: deve estar >= start_time e < end_time (não pode ser igual ou maior que end_time)
+        if appointment_start_minutes < start_minutes or appointment_start_minutes >= end_minutes:
             error_msg = f'O horário inicial {time_str} está fora do horário de funcionamento configurado ({start_time_str} às {end_time_str}). Por favor, escolha um horário dentro deste intervalo.'
             logger.error(f"❌ [VALIDATE] Validação FALHOU - horário inicial {time_str} fora do range {start_time_str}-{end_time_str} (plant_id={plant_id})")
             return (False, error_msg)
         else:
             logger.info(f"✅ [VALIDATE] Horário inicial {time_str} válido")
         
-        # Validar horário final
-        time_end_str = appointment_time_end.strftime('%H:%M')
-        is_end_valid = operating_hours_config.is_time_in_range(time_end_str)
-        
-        if not is_end_valid:
+        # Validar horário final: deve estar >= start_time e <= end_time (pode ser igual ao end_time)
+        if appointment_end_minutes < start_minutes or appointment_end_minutes > end_minutes:
             error_msg = f'O horário final {time_end_str} está fora do horário de funcionamento configurado ({start_time_str} às {end_time_str}). Por favor, escolha um horário dentro deste intervalo.'
             logger.warning(f"Validação falhou - horário final {time_end_str} fora do range {start_time_str}-{end_time_str}")
             return (False, error_msg)
+        else:
+            logger.info(f"✅ [VALIDATE] Horário final {time_end_str} válido (pode ser igual ao horário final de funcionamento)")
         
         # Validar todos os slots intermediários também
+        # Os slots intermediários devem estar dentro do intervalo (>= start_time e < end_time)
         current = datetime.combine(appointment_date, appointment_time)
         end = datetime.combine(appointment_date, appointment_time_end)
         
         while current < end:
-            slot_time_str = current.time().strftime('%H:%M')
-            is_slot_valid = operating_hours_config.is_time_in_range(slot_time_str)
+            slot_time = current.time()
+            slot_time_str = slot_time.strftime('%H:%M')
+            slot_minutes = time_to_minutes(slot_time)
             
-            if not is_slot_valid:
+            # Slots intermediários devem estar >= start_time e < end_time (não podem ser iguais ao end_time)
+            if slot_minutes < start_minutes or slot_minutes >= end_minutes:
                 error_msg = f'O intervalo de agendamento contém horários ({slot_time_str}) fora do horário de funcionamento configurado ({start_time_str} às {end_time_str}). Por favor, escolha um intervalo completamente dentro deste horário.'
                 logger.warning(f"Validação falhou - slot intermediário {slot_time_str} fora do range {start_time_str}-{end_time_str}")
                 return (False, error_msg)

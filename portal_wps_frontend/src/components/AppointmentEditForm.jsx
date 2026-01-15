@@ -12,8 +12,13 @@ import DateInput from '@/components/ui/date-input'
 import { ArrowLeft, Save, Loader2, Plus, AlertCircle } from 'lucide-react'
 import { adminAPI, plantAPI, supplierAPI } from '../lib/api'
 import { dateUtils, statusUtils } from '../lib/utils'
+import usePermissions from '../hooks/usePermissions'
 
 const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmit, onCancel, user = null }) => {
+  const { hasPermission } = usePermissions(user)
+  
+  // Verificar se o usuário tem permissão para reagendar
+  const canReschedule = hasPermission('reschedule', 'editor')
   const [formData, setFormData] = useState({
     date: '',
     time: '',
@@ -31,6 +36,8 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
   const [rescheduleReason, setRescheduleReason] = useState('')
   const [pendingSubmit, setPendingSubmit] = useState(null)
   const [isRescheduling, setIsRescheduling] = useState(false) // Flag para indicar que é um reagendamento
+  const [plantScheduleConfig, setPlantScheduleConfig] = useState(null) // Configurações de horário da planta selecionada
+  const [loadingScheduleConfig, setLoadingScheduleConfig] = useState(false)
 
   // Determinar se é criação ou edição
   const isCreating = !appointment?.id
@@ -97,6 +104,61 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
     }
   }, [appointment, isCreating, user])
 
+  // Carregar configurações da planta quando planta ou data mudarem
+  useEffect(() => {
+    const loadPlantScheduleConfig = async () => {
+      // Apenas para fornecedores criando novo agendamento
+      if (user?.role === 'supplier' && isCreating && formData.plant_id) {
+        setLoadingScheduleConfig(true)
+        try {
+          const plantId = parseInt(formData.plant_id, 10)
+          const date = formData.date || null
+          
+          const config = await supplierAPI.getPlantScheduleConfig(plantId, date)
+          setPlantScheduleConfig(config)
+          
+          // Se há data e horários configurados, validar horários existentes
+          if (date && config.operating_hours && config.operating_hours.length > 0) {
+            const operatingHours = config.operating_hours[0]
+            const startTime = operatingHours.operating_start
+            const endTime = operatingHours.operating_end
+            
+            if (startTime && endTime) {
+              // Verificar se o horário inicial está fora do horário de funcionamento
+              setFormData(prev => {
+                let updated = { ...prev }
+                if (prev.time && (prev.time < startTime || prev.time >= endTime)) {
+                  updated.time = ''
+                  updated.time_end = ''
+                  setError(`Horário de funcionamento da planta: ${startTime} às ${endTime}`)
+                }
+                // Verificar se o horário final está fora do horário de funcionamento
+                if (prev.time_end && (prev.time_end <= startTime || prev.time_end > endTime)) {
+                  updated.time_end = ''
+                  if (!error) {
+                    setError(`Horário de funcionamento da planta: ${startTime} às ${endTime}`)
+                  }
+                }
+                return updated
+              })
+            }
+          }
+        } catch (err) {
+          console.error('Erro ao carregar configurações da planta:', err)
+          // Não mostrar erro ao usuário, apenas logar
+        } finally {
+          setLoadingScheduleConfig(false)
+        }
+      } else if (!formData.plant_id) {
+        // Limpar configurações se planta não estiver selecionada
+        setPlantScheduleConfig(null)
+      }
+    }
+    
+    loadPlantScheduleConfig()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.plant_id, formData.date, user?.role, isCreating])
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     // Limpar erro do campo quando o usuário começa a digitar
@@ -104,6 +166,22 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
       setFieldErrors(prev => ({ ...prev, [field]: false }))
     }
     setError('')
+    
+    // Se a planta foi selecionada, carregar configurações imediatamente (mesmo sem data)
+    if (field === 'plant_id' && value && user?.role === 'supplier' && isCreating) {
+      const loadConfig = async () => {
+        setLoadingScheduleConfig(true)
+        try {
+          const config = await supplierAPI.getPlantScheduleConfig(parseInt(value, 10))
+          setPlantScheduleConfig(config)
+        } catch (err) {
+          console.error('Erro ao carregar configurações da planta:', err)
+        } finally {
+          setLoadingScheduleConfig(false)
+        }
+      }
+      loadConfig()
+    }
   }
 
   const validateForm = () => {
@@ -185,8 +263,20 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
       return
     }
 
-    // Se houve mudança de data/horário e não é criação, exibir modal de motivo
+    // Se houve mudança de data/horário e não é criação, verificar permissão de reagendamento
     if (!isCreating && hasDateTimeChanged()) {
+      // Verificar se o usuário tem permissão para reagendar
+      if (!canReschedule) {
+        // Restaurar valores originais
+        setFormData(prev => ({
+          ...prev,
+          date: originalValues.date,
+          time: originalValues.time,
+          time_end: originalValues.time_end
+        }))
+        return
+      }
+      
       setIsRescheduling(true) // Marcar que é um reagendamento
       setShowRescheduleModal(true)
       return
@@ -440,6 +530,14 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {!isCreating && !canReschedule && (
+              <Alert className="bg-orange-50 border-orange-200">
+                <AlertCircle className="w-4 h-4 text-orange-600" />
+                <AlertDescription className="text-orange-800">
+                  Você não tem permissão para reagendar agendamentos. Apenas usuários com perfil Editor podem alterar data e horários.
+                </AlertDescription>
+              </Alert>
+            )}
             {error && (
               <Alert variant="destructive">
                 <AlertDescription>{error}</AlertDescription>
@@ -488,7 +586,7 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
                   value={formData.plant_id}
                   onChange={(e) => handleInputChange('plant_id', e.target.value)}
                   required
-                  disabled={loading}
+                  disabled={loading || loadingScheduleConfig}
                   className={`flex h-10 w-full rounded-md border ${
                     fieldErrors.plant_id ? 'border-red-500' : 'border-input'
                   } bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50`}
@@ -505,6 +603,32 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
                 {fieldErrors.plant_id && (
                   <p className="text-xs text-red-500">Campo obrigatório</p>
                 )}
+                {/* Mostrar informações de horário de funcionamento quando planta for selecionada */}
+                {plantScheduleConfig && plantScheduleConfig.operating_hours && plantScheduleConfig.operating_hours.length > 0 && (
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                    <p className="text-sm font-medium text-blue-900">Horário de Funcionamento:</p>
+                    {plantScheduleConfig.operating_hours.map((oh, idx) => (
+                      <p key={idx} className="text-sm text-blue-700">
+                        {oh.operating_start && oh.operating_end 
+                          ? `${oh.operating_start} às ${oh.operating_end}`
+                          : 'Não configurado'}
+                      </p>
+                    ))}
+                    {plantScheduleConfig.blocked_times && plantScheduleConfig.blocked_times.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-xs font-medium text-orange-800">Horários bloqueados:</p>
+                        {plantScheduleConfig.blocked_times.map((bt, idx) => (
+                          <p key={idx} className="text-xs text-orange-700">
+                            {bt.time} {bt.reason ? `- ${bt.reason}` : ''}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {loadingScheduleConfig && (
+                  <p className="text-xs text-gray-500">Carregando configurações da planta...</p>
+                )}
               </div>
             )}
 
@@ -516,8 +640,14 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
               <DateInput
                 id="date"
                 value={formData.date}
-                onChange={(value) => handleInputChange('date', value)}
-                disabled={loading || isDateTimeLocked}
+                onChange={(value) => {
+                  // Se não é criação e não tem permissão para reagendar, não permitir alteração
+                  if (!isCreating && !canReschedule && value !== originalValues.date) {
+                    return
+                  }
+                  handleInputChange('date', value)
+                }}
+                disabled={loading || isDateTimeLocked || (!isCreating && !canReschedule)}
                 className={fieldErrors.date ? 'border-red-500' : ''}
                 required
               />
@@ -536,13 +666,17 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
                 id="time"
                 value={formData.time}
                 onChange={(value) => {
+                  // Se não é criação e não tem permissão para reagendar, não permitir alteração
+                  if (!isCreating && !canReschedule && value !== originalValues.time) {
+                    return
+                  }
                   handleInputChange('time', value)
                   // Se o horário final for menor ou igual ao inicial, limpar
                   if (formData.time_end && value && value >= formData.time_end) {
                     handleInputChange('time_end', '')
                   }
                 }}
-                disabled={loading || isDateTimeLocked}
+                disabled={loading || isDateTimeLocked || (!isCreating && !canReschedule)}
                 placeholder="--:--"
                 intervalMinutes={30}
                 className={fieldErrors.time ? 'border-red-500' : ''}
@@ -565,6 +699,11 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
                 id="time_end"
                 value={formData.time_end}
                 onChange={(value) => {
+                  // Se não é criação e não tem permissão para reagendar, não permitir alteração
+                  if (!isCreating && !canReschedule && value !== originalValues.time_end) {
+                    return
+                  }
+                  
                   if (value && formData.time && value <= formData.time) {
                     setError('O horário final deve ser maior que o horário inicial')
                     setFieldErrors(prev => ({ ...prev, time_end: true }))
@@ -574,7 +713,7 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
                     handleInputChange('time_end', value)
                   }
                 }}
-                disabled={loading || isDateTimeLocked || !formData.time}
+                disabled={loading || isDateTimeLocked || !formData.time || (!isCreating && !canReschedule)}
                 placeholder="--:--"
                 intervalMinutes={30}
                 className={fieldErrors.time_end ? 'border-red-500' : ''}

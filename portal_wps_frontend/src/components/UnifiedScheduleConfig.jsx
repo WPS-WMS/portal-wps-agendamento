@@ -33,8 +33,25 @@ import DateInput from '@/components/ui/date-input'
 import TimeInput from '@/components/ui/time-input'
 import { adminAPI } from '../lib/api'
 import { dateUtils } from '../lib/utils'
+import usePermissions from '../hooks/usePermissions'
 
-const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => {
+const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user }) => {
+  const { hasViewPermission, getPermissionType, loading: permissionsLoading } = usePermissions(user)
+  
+  // Verificar permissões específicas para cada seção
+  // Se user não estiver disponível ou ainda carregando, assumir permissões padrão (editor)
+  const defaultHoursPermission = (user && !permissionsLoading) ? getPermissionType('configure_default_hours') : 'editor'
+  const weeklyBlockPermission = (user && !permissionsLoading) ? getPermissionType('configure_weekly_block') : 'editor'
+  const dateBlockPermission = (user && !permissionsLoading) ? getPermissionType('configure_date_block') : 'editor'
+  
+  // Determinar se cada seção está em modo somente leitura ou oculta
+  const isDefaultHoursViewOnly = defaultHoursPermission === 'viewer'
+  const isWeeklyBlockViewOnly = weeklyBlockPermission === 'viewer'
+  const isDateBlockViewOnly = dateBlockPermission === 'viewer'
+  
+  const canViewDefaultHours = (user && !permissionsLoading) ? hasViewPermission('configure_default_hours') : true
+  const canViewWeeklyBlock = (user && !permissionsLoading) ? hasViewPermission('configure_weekly_block') : true
+  const canViewDateBlock = (user && !permissionsLoading) ? hasViewPermission('configure_date_block') : true
   // Estados para Bloqueio Semanal (Recorrente)
   const [weeklyConfigs, setWeeklyConfigs] = useState([])
   const [loadingWeekly, setLoadingWeekly] = useState(true)
@@ -826,6 +843,39 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
         </div>
       </div>
 
+      {(() => {
+        const viewOnlySections = []
+        if (isDefaultHoursViewOnly) viewOnlySections.push('Horário Padrão')
+        if (isWeeklyBlockViewOnly) viewOnlySections.push('Bloqueio Semanal')
+        if (isDateBlockViewOnly) viewOnlySections.push('Bloqueio por Data Específica')
+        
+        if (viewOnlySections.length === 0) return null
+        
+        let message = ''
+        if (viewOnlySections.length === 1) {
+          message = `Você está visualizando a seção "${viewOnlySections[0]}" em modo somente leitura. Para editar as configurações, é necessário ter permissão de Editor.`
+        } else {
+          const sectionsList = viewOnlySections.map((section, index) => {
+            if (index === viewOnlySections.length - 1) {
+              return ` e "${section}"`
+            } else if (index === 0) {
+              return `"${section}"`
+            } else {
+              return `, "${section}"`
+            }
+          }).join('')
+          message = `Você está visualizando as seções ${sectionsList} em modo somente leitura. Para editar as configurações, é necessário ter permissão de Editor.`
+        }
+        
+        return (
+          <Alert>
+            <AlertDescription>
+              {message}
+            </AlertDescription>
+          </Alert>
+        )
+      })()}
+
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
@@ -838,19 +888,25 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
         </Alert>
       )}
 
-      <Tabs defaultValue="blocking" className="w-full">
+      {(canViewDefaultHours || canViewWeeklyBlock || canViewDateBlock) ? (
+      <Tabs defaultValue={canViewDateBlock ? "blocking" : (canViewDefaultHours ? "operating-hours" : "blocking")} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="operating-hours">
-            <Clock className="w-4 h-4 mr-2" />
-            Horário Padrão
-          </TabsTrigger>
-          <TabsTrigger value="blocking">
-            <Lock className="w-4 h-4 mr-2" />
-            Bloqueio de Horários
-          </TabsTrigger>
+          {canViewDefaultHours && (
+            <TabsTrigger value="operating-hours">
+              <Clock className="w-4 h-4 mr-2" />
+              Horário Padrão
+            </TabsTrigger>
+          )}
+          {(canViewWeeklyBlock || canViewDateBlock) && (
+            <TabsTrigger value="blocking">
+              <Lock className="w-4 h-4 mr-2" />
+              Bloqueio de Horários
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Aba: Horário Padrão */}
+        {canViewDefaultHours && (
         <TabsContent value="operating-hours" className="space-y-6 mt-6">
           <Card>
             <CardHeader>
@@ -878,6 +934,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                   <Switch
                     checked={defaultSchedule.weekdays.enabled}
                     onCheckedChange={handleWeekdaysToggle}
+                    disabled={isDefaultHoursViewOnly}
                   />
                 </div>
 
@@ -897,6 +954,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                             intervalMinutes={30}
                             minHour={0}
                             maxHour={23}
+                            disabled={isDefaultHoursViewOnly}
                             className={scheduleErrors.weekdays ? 'border-red-500' : ''}
                           />
                         </div>
@@ -911,6 +969,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                             minHour={0}
                             maxHour={23}
                             className={scheduleErrors.weekdays ? 'border-red-500' : ''}
+                            disabled={isDefaultHoursViewOnly}
                           />
                         </div>
                       </div>
@@ -946,6 +1005,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                   <Switch
                     checked={defaultSchedule.weekend.enabled}
                     onCheckedChange={handleWeekendToggle}
+                    disabled={isDefaultHoursViewOnly}
                   />
                 </div>
 
@@ -959,6 +1019,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                             id="saturday"
                             checked={defaultSchedule.weekend.days.includes('SATURDAY')}
                             onCheckedChange={() => handleWeekendDayToggle('SATURDAY')}
+                            disabled={isDefaultHoursViewOnly}
                           />
                           <Label htmlFor="saturday" className="cursor-pointer font-normal">
                             Sábado
@@ -969,6 +1030,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                             id="sunday"
                             checked={defaultSchedule.weekend.days.includes('SUNDAY')}
                             onCheckedChange={() => handleWeekendDayToggle('SUNDAY')}
+                            disabled={isDefaultHoursViewOnly}
                           />
                           <Label htmlFor="sunday" className="cursor-pointer font-normal">
                             Domingo
@@ -991,6 +1053,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                             minHour={0}
                             maxHour={23}
                             className={scheduleErrors.weekend ? 'border-red-500' : ''}
+                            disabled={isDefaultHoursViewOnly}
                           />
                         </div>
                         <div className="space-y-2">
@@ -1033,6 +1096,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                   <Switch
                     checked={defaultSchedule.holiday.enabled}
                     onCheckedChange={handleHolidayToggle}
+                    disabled={isDefaultHoursViewOnly}
                   />
                 </div>
 
@@ -1052,6 +1116,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                             minHour={0}
                             maxHour={23}
                             className={scheduleErrors.holiday ? 'border-red-500' : ''}
+                            disabled={isDefaultHoursViewOnly}
                           />
                         </div>
                         <div className="space-y-2">
@@ -1060,6 +1125,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                             id="holiday-operating-end"
                             value={defaultSchedule.holiday.operating_end || ''}
                             onChange={(value) => handleHolidayOperatingTimeChange('operating_end', value)}
+                            disabled={isDefaultHoursViewOnly}
                             placeholder="HH:mm"
                             intervalMinutes={30}
                             minHour={0}
@@ -1085,6 +1151,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
               </Alert>
 
               {/* Botão de Salvar */}
+              {!isDefaultHoursViewOnly && (
               <div className="flex justify-end pt-4">
                 <Button
                   onClick={handleSaveOperatingHours}
@@ -1104,14 +1171,18 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                   )}
                 </Button>
               </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
+        )}
 
         {/* Aba: Bloqueio de Horários */}
+        {(canViewWeeklyBlock || canViewDateBlock) && (
         <TabsContent value="blocking" className="space-y-8 mt-6">
           <div className="space-y-8">
             {/* Seção 1: Bloqueio Semanal (Recorrente) */}
+            {canViewWeeklyBlock && (
             <div className="space-y-4">
               <div className="flex items-center gap-3 pb-2 border-b">
                 <div className="p-2 bg-blue-100 rounded-lg">
@@ -1144,6 +1215,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                       ...newWeeklyConfig, 
                       day_of_week: value === 'null' ? null : parseInt(value)
                     })}
+                    disabled={isWeeklyBlockViewOnly}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione o dia" />
@@ -1163,6 +1235,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                   <Select 
                     value={newWeeklyConfig.time_start} 
                     onValueChange={(value) => setNewWeeklyConfig({...newWeeklyConfig, time_start: value})}
+                    disabled={isWeeklyBlockViewOnly}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Ex: 12:00" />
@@ -1182,6 +1255,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                   <Select 
                     value={newWeeklyConfig.time_end} 
                     onValueChange={(value) => setNewWeeklyConfig({...newWeeklyConfig, time_end: value})}
+                    disabled={isWeeklyBlockViewOnly}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Ex: 13:00" />
@@ -1212,6 +1286,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                   value={newWeeklyConfig.reason}
                   onChange={(e) => setNewWeeklyConfig({...newWeeklyConfig, reason: e.target.value})}
                   rows={2}
+                  disabled={isWeeklyBlockViewOnly}
                 />
               </div>
 
@@ -1224,6 +1299,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                 </div>
               )}
 
+              {!isWeeklyBlockViewOnly && (
               <Button 
                 onClick={handleSaveWeeklyConfig} 
                 disabled={savingWeekly || !newWeeklyConfig.day_of_week || !newWeeklyConfig.time_start || !newWeeklyConfig.time_end || !newWeeklyConfig.reason.trim()} 
@@ -1241,6 +1317,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                   </>
                 )}
                 </Button>
+                )}
                 </CardContent>
               </Card>
 
@@ -1303,6 +1380,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                           </div>
                         </div>
                         
+                        {!isWeeklyBlockViewOnly && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -1311,6 +1389,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
+                        )}
                       </div>
                     )
                   })}
@@ -1319,8 +1398,10 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                 </CardContent>
               </Card>
             </div>
+            )}
 
             {/* Seção 2: Bloqueio por Data Específica */}
+            {canViewDateBlock && (
             <div className="space-y-4 pt-6 border-t">
               <div className="flex items-center gap-3 pb-2">
                 <div className="p-2 bg-green-100 rounded-lg">
@@ -1347,12 +1428,14 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                       onChange={(value) => setSelectedDate(value)}
                       minDate={dateUtils.toISODate(new Date())}
                       className="w-auto min-w-[200px]"
+                      disabled={isDateBlockViewOnly}
                       placeholder="DD/MM/AAAA"
                     />
                   </div>
                 </div>
                 
                 {/* Ações Rápidas */}
+                {!isDateBlockViewOnly && (
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
@@ -1404,12 +1487,13 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                     </Button>
                   )}
                 </div>
+                )}
               </div>
             </CardHeader>
-              </Card>
+            </Card>
 
-              {/* Grade de Horários */}
-              <Card>
+            {/* Grade de Horários */}
+            <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -1459,8 +1543,8 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
                                   }
                                   ${localChanges.hasOwnProperty(timeSlot.time) ? 'ring-2 ring-blue-400 ring-offset-1' : ''}
                                 `}
-                                onClick={() => isClickable && handleToggleAvailability(timeSlot.time, isAvailable)}
-                                disabled={!isClickable}
+                                onClick={() => isClickable && !isDateBlockViewOnly && handleToggleAvailability(timeSlot.time, isAvailable)}
+                                disabled={!isClickable || isDateBlockViewOnly}
                               >
                                 <div className={`text-sm font-semibold ${isScheduled ? 'text-gray-500' : ''}`}>
                                   {timeSlot.time}
@@ -1541,9 +1625,18 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null }) => 
             </CardContent>
               </Card>
             </div>
+            )}
           </div>
         </TabsContent>
+        )}
       </Tabs>
+      ) : (
+        <Alert>
+          <AlertDescription>
+            Você não tem permissão para acessar nenhuma seção de configuração de horários.
+          </AlertDescription>
+        </Alert>
+      )}
     </div>
   )
 }

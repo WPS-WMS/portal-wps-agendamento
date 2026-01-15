@@ -162,9 +162,61 @@ const usePermissions = (user) => {
     }
   }, [permissions, user])
 
+  /**
+   * Verifica se o usuário tem pelo menos permissão "viewer" (não é "none")
+   * Útil para mostrar botões que devem aparecer mesmo em modo visualização
+   * @param {string} functionId - ID da funcionalidade
+   * @returns {boolean}
+   */
+  const hasViewPermission = useMemo(() => {
+    return (functionId) => {
+      // Admin sempre tem acesso
+      if (user?.role === 'admin') {
+        return true
+      }
+
+      if (!user?.role) {
+        return false
+      }
+
+      // Verificar se há permissão configurada para esta função e role
+      const functionPermissions = permissions[functionId]
+      if (!functionPermissions) {
+        // Se não há permissão configurada, retornar false (sem acesso)
+        return false
+      }
+
+      const userPermission = functionPermissions[user.role] || PERMISSION_TYPES.NONE
+      const hasAccess = userPermission !== PERMISSION_TYPES.NONE
+      
+      return hasAccess
+    }
+  }, [permissions, user])
+
+  /**
+   * Retorna o tipo de permissão do usuário para uma funcionalidade
+   * @param {string} functionId - ID da funcionalidade
+   * @returns {string} - 'editor', 'viewer' ou 'none'
+   */
+  const getPermissionType = useMemo(() => {
+    return (functionId) => {
+      if (user?.role === 'admin') {
+        return PERMISSION_TYPES.EDITOR
+      }
+
+      if (!user?.role) {
+        return PERMISSION_TYPES.NONE
+      }
+
+      return permissions[functionId]?.[user.role] || PERMISSION_TYPES.NONE
+    }
+  }, [permissions, user])
+
   return {
     hasPermission,
     canAccessResource,
+    hasViewPermission,
+    getPermissionType,
     loading,
     permissions
   }

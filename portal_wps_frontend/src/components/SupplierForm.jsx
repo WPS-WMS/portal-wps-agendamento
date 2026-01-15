@@ -54,7 +54,23 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
       const result = await adminAPI.createSupplier(formData)
       setSuccess(result)
     } catch (err) {
-      setError(err.message)
+      console.error('Erro ao criar fornecedor:', err)
+      console.error('Detalhes do erro:', {
+        message: err.message,
+        response: err.response,
+        status: err.response?.status,
+        data: err.response?.data
+      })
+      const errorMessage = err.response?.data?.error || err.message || 'Erro desconhecido ao criar fornecedor'
+      setError(errorMessage)
+      
+      // Se for erro de permissão, mostrar mensagem mais detalhada
+      if (err.response?.status === 403) {
+        const errorData = err.response?.data
+        if (errorData?.user_permission) {
+          setError(`Você não tem permissão para criar fornecedores. Sua permissão atual: ${errorData.user_permission}. Necessário: ${errorData.required_permission || 'editor'}`)
+        }
+      }
     } finally {
       setLoading(false)
     }

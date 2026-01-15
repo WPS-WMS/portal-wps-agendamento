@@ -13,12 +13,20 @@ import {
   CheckCircle, 
   Save,
   Loader2,
-  Clock
+  Clock,
+  Trash2
 } from 'lucide-react'
 import { adminAPI } from '../lib/api'
 import { formatPhone, formatCEP } from '../lib/formatters'
+import usePermissions from '../hooks/usePermissions'
 
-const PlantManagement = ({ plant, onBack, onUpdate }) => {
+const PlantManagement = ({ plant, onBack, onUpdate, user, permissionType = 'editor' }) => {
+  const { hasPermission, getPermissionType } = usePermissions(user)
+  const canInactivate = hasPermission('inactivate_plant', 'editor')
+  const canDelete = hasPermission('delete_plant', 'editor')
+  const deletePermissionType = getPermissionType('delete_plant')
+  const canViewDelete = deletePermissionType !== 'none'
+  const isViewOnly = permissionType === 'viewer'
   const [formData, setFormData] = useState({
     name: plant?.name || '',
     code: plant?.code || '',
@@ -33,6 +41,7 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [activeTab, setActiveTab] = useState('dados')
   const [maxCapacity, setMaxCapacity] = useState(1)
   const [maxCapacityLoading, setMaxCapacityLoading] = useState(false)
@@ -72,10 +81,16 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
         is_active: plant.is_active !== false
       })
       
-      // Carregar capacidade máxima da planta
-      loadMaxCapacity()
+      // Carregar capacidade máxima da planta apenas se tiver permissão de editor
+      // Em modo viewer, não precisa carregar pois não pode editar
+      if (!isViewOnly) {
+        loadMaxCapacity()
+      } else {
+        // Em modo viewer, usar valor padrão ou do plant se disponível
+        setMaxCapacity(plant.max_capacity || 1)
+      }
     }
-  }, [plant])
+  }, [plant, isViewOnly])
   
   const loadMaxCapacity = async () => {
     if (!plant?.id) return
@@ -153,6 +168,116 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
     }
   }
 
+  const handleDelete = async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      await adminAPI.deletePlant(plant.id)
+      setShowDeleteConfirm(false)
+      onUpdate()
+      onBack() // Fechar o modal principal já que a planta não existe mais
+    } catch (err) {
+      const errorMessage = err.response?.data?.error || err.message || 'Erro ao excluir planta'
+      setError(errorMessage)
+      setShowDeleteConfirm(false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (showDeleteConfirm) {
+    return (
+      <Dialog open={true} onOpenChange={() => setShowDeleteConfirm(false)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-red-800 flex items-center gap-2">
+              <Trash2 className="w-5 h-5" />
+              Confirmar Exclusão
+            </DialogTitle>
+            <DialogDescription>
+              Esta ação não pode ser desfeita
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <Card className="border-red-200 bg-red-50">
+              <CardHeader>
+                <CardTitle className="text-red-800 flex items-center gap-2">
+                  <Trash2 className="w-5 h-5" />
+                  Excluir Planta
+                </CardTitle>
+                <CardDescription className="text-red-700">
+                  Tem certeza que deseja excluir a planta "{plant.name}"?
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="bg-white p-4 rounded border">
+                  <p className="text-sm text-gray-600 mb-2">
+                    <strong>Código:</strong> {plant.code}
+                  </p>
+                  {plant.cnpj && (
+                    <p className="text-sm text-gray-600 mb-2">
+                      <strong>CNPJ:</strong> {plant.cnpj}
+                    </p>
+                  )}
+                  <p className="text-sm text-gray-600">
+                    <strong>Nome:</strong> {plant.name}
+                  </p>
+                </div>
+
+                <Alert>
+                  <AlertDescription>
+                    <strong>Atenção:</strong> Esta ação irá:
+                    <ul className="list-disc list-inside mt-2 space-y-1">
+                      <li>Excluir a planta do sistema</li>
+                      <li>Inativar o acesso dos usuários desta planta</li>
+                      <li>Manter o histórico de agendamentos para auditoria</li>
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              </CardContent>
+            </Card>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={loading}
+              className="flex items-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4" />
+                  Excluir Planta
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
   return (
     <Dialog open={true} onOpenChange={onBack}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -184,26 +309,35 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {!canInactivate && (
+            <Alert className="mb-4">
+              <AlertDescription>
+                Você não tem permissão para inativar/ativar plantas. Apenas usuários com perfil Editor podem realizar esta ação.
+              </AlertDescription>
+            </Alert>
+          )}
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant={formData.is_active ? "destructive" : "default"}
-              onClick={handleToggleStatus}
-              disabled={loading}
-              className="flex items-center gap-1"
-            >
-              {formData.is_active ? (
-                <>
-                  <Ban className="w-3 h-3" />
-                  Inativar
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="w-3 h-3" />
-                  Ativar
-                </>
-              )}
-            </Button>
+            {canInactivate && (
+              <Button
+                size="sm"
+                variant={formData.is_active ? "destructive" : "default"}
+                onClick={handleToggleStatus}
+                disabled={loading}
+                className="flex items-center gap-1"
+              >
+                {formData.is_active ? (
+                  <>
+                    <Ban className="w-3 h-3" />
+                    Inativar
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-3 h-3" />
+                    Ativar
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -231,6 +365,14 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
             </Alert>
           )}
 
+          {isViewOnly && (
+            <Alert className="mb-4">
+              <AlertDescription>
+                Você está visualizando os dados em modo somente leitura. Para editar, é necessário ter permissão de Editor.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Nome */}
           <div className="space-y-2">
             <Label htmlFor="name">Nome da Planta</Label>
@@ -238,7 +380,9 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
               id="name"
               value={formData.name}
               onChange={(e) => handleInputChange('name', e.target.value)}
-              disabled={loading}
+              disabled={loading || isViewOnly}
+              readOnly={isViewOnly}
+              className={isViewOnly ? "bg-gray-50 cursor-not-allowed" : ""}
             />
           </div>
 
@@ -249,7 +393,9 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
               id="code"
               value={formData.code}
               onChange={(e) => handleInputChange('code', e.target.value)}
-              disabled={loading}
+              disabled={loading || isViewOnly}
+              readOnly={isViewOnly}
+              className={isViewOnly ? "bg-gray-50 cursor-not-allowed" : ""}
             />
           </div>
 
@@ -275,7 +421,9 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
               value={formData.phone}
               onChange={handlePhoneChange}
               maxLength={15}
-              disabled={loading}
+              disabled={loading || isViewOnly}
+              readOnly={isViewOnly}
+              className={isViewOnly ? "bg-gray-50 cursor-not-allowed" : ""}
             />
           </div>
 
@@ -293,7 +441,9 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
                 value={formData.cep}
                 onChange={handleCEPChange}
                 maxLength={9}
-                disabled={loading}
+                disabled={loading || isViewOnly}
+                readOnly={isViewOnly}
+                className={isViewOnly ? "bg-gray-50 cursor-not-allowed" : ""}
               />
             </div>
 
@@ -306,7 +456,9 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
                 placeholder="Nome da rua"
                 value={formData.street}
                 onChange={(e) => handleInputChange('street', e.target.value)}
-                disabled={loading}
+                disabled={loading || isViewOnly}
+                readOnly={isViewOnly}
+                className={isViewOnly ? "bg-gray-50 cursor-not-allowed" : ""}
               />
             </div>
 
@@ -320,7 +472,9 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
                   placeholder="123"
                   value={formData.number}
                   onChange={(e) => handleInputChange('number', e.target.value)}
-                  disabled={loading}
+                  disabled={loading || isViewOnly}
+                  readOnly={isViewOnly}
+                  className={isViewOnly ? "bg-gray-50 cursor-not-allowed" : ""}
                 />
               </div>
               <div className="space-y-2">
@@ -331,7 +485,9 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
                   placeholder="Nome do bairro"
                   value={formData.neighborhood}
                   onChange={(e) => handleInputChange('neighborhood', e.target.value)}
-                  disabled={loading}
+                  disabled={loading || isViewOnly}
+                  readOnly={isViewOnly}
+                  className={isViewOnly ? "bg-gray-50 cursor-not-allowed" : ""}
                 />
               </div>
             </div>
@@ -345,13 +501,33 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
                 placeholder="Ponto de referência próximo"
                 value={formData.reference}
                 onChange={(e) => handleInputChange('reference', e.target.value)}
-                disabled={loading}
+                disabled={loading || isViewOnly}
+                readOnly={isViewOnly}
+                className={isViewOnly ? "bg-gray-50 cursor-not-allowed" : ""}
               />
             </div>
           </div>
 
               {/* Botões de Ação */}
+              {canViewDelete && !canDelete && (
+                <Alert className="mb-4">
+                  <AlertDescription>
+                    Você não tem permissão para excluir plantas. Apenas usuários com perfil Editor podem realizar esta ação.
+                  </AlertDescription>
+                </Alert>
+              )}
               <DialogFooter>
+                {canViewDelete && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={loading || !canDelete}
+                    className="flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Excluir Planta
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={onBack}
@@ -359,11 +535,12 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
                 >
                   Cancelar
                 </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={loading || !formData.name.trim() || !formData.code.trim()}
-                  className="flex items-center gap-2"
-                >
+                {!isViewOnly && (
+                  <Button
+                    onClick={handleSave}
+                    disabled={loading || !formData.name.trim() || !formData.code.trim()}
+                    className="flex items-center gap-2"
+                  >
                   {loading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -376,6 +553,7 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
                     </>
                   )}
                 </Button>
+                )}
               </DialogFooter>
             </CardContent>
           </Card>
@@ -406,6 +584,14 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
                 </Alert>
               )}
               
+              {isViewOnly && (
+                <Alert className="mb-4">
+                  <AlertDescription>
+                    Você está visualizando os dados em modo somente leitura. Para editar, é necessário ter permissão de Editor.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="max_capacity">Capacidade Máxima por Horário</Label>
                 <Input
@@ -419,8 +605,9 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
                     setMaxCapacityError('')
                     setMaxCapacitySuccess('')
                   }}
-                  disabled={maxCapacityLoading}
-                  className="w-32"
+                  disabled={maxCapacityLoading || isViewOnly}
+                  readOnly={isViewOnly}
+                  className={isViewOnly ? "w-32 bg-gray-50 cursor-not-allowed" : "w-32"}
                 />
                 <p className="text-sm text-gray-500">
                   Número máximo de agendamentos que podem ser realizados no mesmo horário para esta planta.
@@ -435,11 +622,12 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
                 >
                   Cancelar
                 </Button>
-                <Button
-                  onClick={handleSaveMaxCapacity}
-                  disabled={maxCapacityLoading || maxCapacity < 1}
-                  className="flex items-center gap-2"
-                >
+                {!isViewOnly && (
+                  <Button
+                    onClick={handleSaveMaxCapacity}
+                    disabled={maxCapacityLoading || maxCapacity < 1}
+                    className="flex items-center gap-2"
+                  >
                   {maxCapacityLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -452,6 +640,7 @@ const PlantManagement = ({ plant, onBack, onUpdate }) => {
                     </>
                   )}
                 </Button>
+                )}
               </DialogFooter>
             </CardContent>
           </Card>

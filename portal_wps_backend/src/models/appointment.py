@@ -4,6 +4,7 @@ from src.models.user import db
 
 class Appointment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    appointment_number = db.Column(db.String(50), unique=True, nullable=True)  # Número único do agendamento
     date = db.Column(db.Date, nullable=False)
     time = db.Column(db.Time, nullable=False)
     time_end = db.Column(db.Time, nullable=True)  # Horário final (opcional para compatibilidade com agendamentos antigos)
@@ -31,6 +32,7 @@ class Appointment(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'appointment_number': self.appointment_number,
             'date': self.date.isoformat() if self.date else None,
             'time': self.time.isoformat() if self.time else None,
             'time_end': self.time_end.isoformat() if self.time_end else None,

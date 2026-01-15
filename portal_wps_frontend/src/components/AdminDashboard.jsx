@@ -89,17 +89,6 @@ const AdminDashboard = ({ user, token }) => {
       const data = await adminAPI.getPlants()
       // Garantir que sempre seja um array
       if (Array.isArray(data)) {
-        console.log('Plantas carregadas:', data.length, 'plantas')
-        console.log('Plantas bloqueadas:', data.filter(p => !p.is_active).length)
-        // Log para verificar CNPJ de cada planta
-        data.forEach((plant, index) => {
-          console.log(`Planta ${index + 1} (ID: ${plant.id}):`, {
-            name: plant.name,
-            cnpj: plant.cnpj,
-            hasCnpj: !!plant.cnpj,
-            cnpjType: typeof plant.cnpj
-          })
-        })
         setPlants(data)
       } else {
         setPlants([])
@@ -116,26 +105,7 @@ const AdminDashboard = ({ user, token }) => {
       // Converter para string ISO (YYYY-MM-DD) antes de passar para a API
       // Isso garante que a API receba o formato correto
       const dateISO = dateUtils.toISODate(date)
-      console.log(`[AdminDashboard] Carregando agendamentos para data: ${dateISO}, planta: ${plantId}`)
       const data = await adminAPI.getAppointments(dateISO, plantId)
-      console.log(`[AdminDashboard] Agendamentos recebidos da API:`, data.length)
-      
-      // Log detalhado de todos os agendamentos finalizados recebidos
-      const checkedOutFromAPI = data.filter(a => a.status === 'checked_out')
-      if (checkedOutFromAPI.length > 0) {
-        console.log(`[AdminDashboard] Agendamentos finalizados recebidos da API:`, checkedOutFromAPI.map(a => ({
-          id: a.id,
-          date: a.date,
-          dateType: typeof a.date,
-          status: a.status,
-          checkOutTime: a.check_out_time,
-          plant_id: a.plant_id
-        })))
-      }
-      
-      if (data.length > 0) {
-        console.log(`[AdminDashboard] Primeiros agendamentos:`, data.slice(0, 3).map(a => ({ id: a.id, date: a.date, status: a.status, plant_id: a.plant_id })))
-      }
       setAppointments(data)
       setError('')
     } catch (err) {
@@ -152,13 +122,11 @@ const AdminDashboard = ({ user, token }) => {
     loadPlants()
     // Carregar agendamentos sempre, mesmo sem planta selecionada
     // O filtro por planta será aplicado no frontend
-    console.log(`[AdminDashboard] useEffect disparado - selectedPlantId: ${selectedPlantId} (tipo: ${typeof selectedPlantId}), currentDate: ${currentDate}`)
     loadAppointments(currentDate, selectedPlantId || null)
   }, [currentDate, activeTab, selectedPlantId])
   
   // Handler para mudança de planta
   const handlePlantChange = (plantId) => {
-    console.log(`[AdminDashboard] handlePlantChange chamado com plantId: ${plantId} (tipo: ${typeof plantId})`)
     setSelectedPlantId(plantId)
     // Manter a data atual, apenas recarregar agendamentos
   }
@@ -256,21 +224,12 @@ const AdminDashboard = ({ user, token }) => {
   const handlePlantFormSubmit = async () => {
     setShowPlantForm(false)
     await loadPlants()
-    // Log para verificar se as plantas foram carregadas com CNPJ
-    console.log('handlePlantFormSubmit - Plantas após reload:', plants.map(p => ({ id: p.id, name: p.name, cnpj: p.cnpj })))
   }
 
   const handleManagePlant = (plant) => {
-    console.log('handleManagePlant - Planta selecionada:', plant)
-    console.log('handleManagePlant - CNPJ:', plant.cnpj)
-    console.log('handleManagePlant - Todas as chaves do objeto:', Object.keys(plant))
-    console.log('handleManagePlant - Objeto completo:', JSON.stringify(plant, null, 2))
-    
     // Buscar a planta atualizada da lista para garantir que temos todos os dados
     const updatedPlant = plants.find(p => p.id === plant.id)
     if (updatedPlant) {
-      console.log('handleManagePlant - Planta atualizada encontrada:', updatedPlant)
-      console.log('handleManagePlant - CNPJ da planta atualizada:', updatedPlant.cnpj)
       setManagingPlant(updatedPlant)
     } else {
       setManagingPlant(plant)
@@ -284,14 +243,11 @@ const AdminDashboard = ({ user, token }) => {
       const data = await adminAPI.getPlants()
       // Garantir que sempre seja um array
       if (Array.isArray(data)) {
-        console.log('Plantas atualizadas após bloqueio:', data.length, 'plantas')
-        console.log('Plantas bloqueadas:', data.filter(p => !p.is_active).map(p => p.name))
         setPlants(data)
         // Atualizar o objeto managingPlant se ainda estiver aberto
         if (managingPlant) {
           const updatedPlant = data.find(p => p.id === managingPlant.id)
           if (updatedPlant) {
-            console.log('Planta atualizada no modal:', updatedPlant.name, 'is_active:', updatedPlant.is_active)
             setManagingPlant(updatedPlant)
           }
         }
@@ -333,8 +289,6 @@ const AdminDashboard = ({ user, token }) => {
       if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
         return dateOnly
       }
-      // Se não está no formato correto, tentar converter
-      console.warn(`[AdminDashboard] Data em formato inesperado: ${date}`)
       return dateOnly
     }
     
@@ -355,7 +309,6 @@ const AdminDashboard = ({ user, token }) => {
       return `${year}-${month}-${day}`
     }
     
-    console.warn(`[AdminDashboard] Tipo de data não reconhecido:`, typeof date, date)
     return null
   }
   
@@ -366,7 +319,6 @@ const AdminDashboard = ({ user, token }) => {
   // independente do status (scheduled, checked_in, checked_out, rescheduled)
   let dayAppointments = appointments.filter(apt => {
     if (!apt.date) {
-      console.warn(`[AdminDashboard] Agendamento sem data:`, apt.id, apt)
       return false
     }
     
@@ -376,57 +328,21 @@ const AdminDashboard = ({ user, token }) => {
     
     // VALIDAÇÃO RIGOROSA: Se não corresponder, não incluir
     if (!matches) {
-      // Log detalhado para agendamentos finalizados que não correspondem
-      if (apt.status === 'checked_out') {
-        console.warn(`[AdminDashboard] ⚠️ Agendamento finalizado EXCLUÍDO (data diferente):`, {
-          id: apt.id,
-          status: apt.status,
-          originalDate: apt.date,
-          normalizedDate: aptDate,
-          selectedDate: currentDateISO,
-          checkOutTime: apt.check_out_time,
-          checkOutDate: apt.check_out_time ? getDateString(apt.check_out_time) : null
-        })
-      }
       return false
     }
     
     return true
   })
   
-  console.log(`[AdminDashboard] Data selecionada: ${currentDateISO}`)
-  console.log(`[AdminDashboard] Total de agendamentos carregados: ${appointments.length}`)
-  console.log(`[AdminDashboard] Agendamentos do dia ${currentDateISO}: ${dayAppointments.length}`)
-  
-  // Log detalhado de todos os agendamentos finalizados
-  const checkedOutAppointments = appointments.filter(a => a.status === 'checked_out')
-  if (checkedOutAppointments.length > 0) {
-    console.log(`[AdminDashboard] Todos os agendamentos finalizados carregados:`, checkedOutAppointments.map(a => ({
-      id: a.id,
-      date: a.date,
-      normalizedDate: getDateString(a.date),
-      checkOutTime: a.check_out_time,
-      checkOutDate: a.check_out_time ? getDateString(a.check_out_time) : null
-    })))
-  }
-  
-  if (dayAppointments.length > 0) {
-    console.log(`[AdminDashboard] Status dos agendamentos do dia:`, dayAppointments.map(a => ({ id: a.id, status: a.status, date: a.date, plant_id: a.plant_id })))
-  }
-  
   // Filtrar pela planta selecionada (se houver)
   // REGRA DE NEGÓCIO: Nenhum dado deve ser exibido sem que uma planta esteja selecionada
   if (selectedPlantId) {
-    const beforePlantFilter = dayAppointments.length
     // Filtrar APENAS agendamentos da planta selecionada
     // Não incluir agendamentos sem plant_id para evitar mistura de dados entre plantas
     dayAppointments = dayAppointments.filter(apt => apt.plant_id === selectedPlantId)
-    console.log(`[AdminDashboard] Agendamentos após filtrar por planta ${selectedPlantId}: ${dayAppointments.length} (antes: ${beforePlantFilter})`)
-    console.log(`[AdminDashboard] Agendamentos incluídos:`, dayAppointments.map(a => ({ id: a.id, plant_id: a.plant_id })))
   } else {
     // Se nenhuma planta estiver selecionada, não mostrar agendamentos
     dayAppointments = []
-    console.log(`[AdminDashboard] Nenhuma planta selecionada - não exibindo agendamentos`)
   }
   
   // Filtrar agendamentos baseado no filtro ativo (após filtrar por data e planta)
@@ -446,23 +362,10 @@ const AdminDashboard = ({ user, token }) => {
     if (!appointment.date) return false
     const aptDate = getDateString(appointment.date)
     if (aptDate !== currentDateISO) {
-      console.error(`[AdminDashboard] ❌ ERRO: Agendamento ${appointment.id} passou pelo filtro mas tem data incorreta:`, {
-        id: appointment.id,
-        status: appointment.status,
-        date: appointment.date,
-        normalizedDate: aptDate,
-        selectedDate: currentDateISO
-      })
       return false
     }
     return true
       })
-  
-  console.log(`[AdminDashboard] Filtro ativo: ${activeFilter}`)
-  console.log(`[AdminDashboard] Agendamentos após filtro: ${filteredAppointments.length}`)
-  if (filteredAppointments.length > 0) {
-    console.log(`[AdminDashboard] Agendamentos filtrados:`, filteredAppointments.map(a => ({ id: a.id, status: a.status, time: a.time })))
-  }
 
   // Carregar capacidade da planta selecionada imediatamente quando selecionada
   useEffect(() => {
@@ -477,9 +380,6 @@ const AdminDashboard = ({ user, token }) => {
       try {
         const data = await adminAPI.getPlantMaxCapacity(selectedPlantId)
         const capacity = data.max_capacity || 1
-        const plantName = data.plant_name || `ID ${selectedPlantId}`
-        
-        console.log(`[AdminDashboard] Planta selecionada ${plantName} (ID: ${selectedPlantId}): capacidade = ${capacity}`)
         
         // Criar mapa com a capacidade da planta selecionada
         const capacitiesMap = new Map()
@@ -651,8 +551,6 @@ const AdminDashboard = ({ user, token }) => {
     appointmentsByPlant.forEach((plantAppointments, plantId) => {
       // Obter capacidade específica desta planta (padrão: 1 se não encontrada)
       const plantCapacity = plantCapacities.get(plantId) || 1
-      
-      console.log(`[AdminDashboard] Processando planta ID ${plantId} com capacidade ${plantCapacity}, ${plantAppointments.length} agendamentos`)
       
       // Ordenar agendamentos desta planta por horário de início
       const sortedAppointments = [...plantAppointments].sort((a, b) => {
@@ -927,6 +825,7 @@ const AdminDashboard = ({ user, token }) => {
               loadPlants()
             }}
             onUpdate={handlePlantManagementUpdate}
+            user={user}
           />
         )}
       </div>
@@ -1030,6 +929,7 @@ const AdminDashboard = ({ user, token }) => {
         supplier={managingSupplier}
         onBack={() => setShowSupplierManagement(false)}
         onUpdate={handleSupplierManagementUpdate}
+        user={user}
       />
         )}
       </div>
@@ -1414,6 +1314,11 @@ const AdminDashboard = ({ user, token }) => {
                                       <p className="text-xs text-gray-500 mt-0.5 leading-tight">
                                         {dateUtils.formatTimeRange(appointment.time, appointment.time_end)}
                                       </p>
+                                      {appointment.appointment_number && (
+                                        <p className="text-xs font-mono text-blue-600 mt-0.5 leading-tight">
+                                          Nº: {appointment.appointment_number}
+                                        </p>
+                                      )}
                                     </div>
                                     <Badge className={`text-[10px] px-1.5 py-0.5 shrink-0 ${statusUtils.getStatusColor(appointment.status)}`}>
                                       {statusUtils.getStatusLabel(appointment.status)}
@@ -1422,11 +1327,22 @@ const AdminDashboard = ({ user, token }) => {
                                   
                                   {/* Conteúdo condicional baseado na altura do card */}
                                   {contentLevel === 'minimal' ? (
-                                    // Apenas fornecedor e horário (já exibidos acima)
-                                    null
+                                    // Apenas número de agendamento se disponível
+                                    appointment.appointment_number ? (
+                                      <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
+                                        <p className="truncate leading-tight font-mono text-blue-600">
+                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
+                                        </p>
+                                      </div>
+                                    ) : null
                                   ) : contentLevel === 'summary' ? (
                                     // Resumo: PO e Placa
                                     <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
+                                      {appointment.appointment_number && (
+                                        <p className="truncate leading-tight font-mono text-blue-600">
+                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
+                                        </p>
+                                      )}
                                       <p className="truncate leading-tight">
                                         <span className="font-medium">PO:</span> {appointment.purchase_order}
                                       </p>
@@ -1442,6 +1358,11 @@ const AdminDashboard = ({ user, token }) => {
                                   ) : (
                                     // Todos os dados
                                     <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
+                                      {appointment.appointment_number && (
+                                        <p className="truncate leading-tight font-mono text-blue-600">
+                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
+                                        </p>
+                                      )}
                                       <p className="truncate leading-tight">
                                         <span className="font-medium">PO:</span> {appointment.purchase_order}
                                       </p>
@@ -1470,6 +1391,11 @@ const AdminDashboard = ({ user, token }) => {
                                   <p className="text-xs text-gray-500 mt-0.5">{dateUtils.formatTimeRange(appointment.time, appointment.time_end)}</p>
                                 </div>
                                 <div className="space-y-1 text-xs border-t pt-2">
+                                  {appointment.appointment_number && (
+                                    <p className="font-mono text-blue-600">
+                                      <span className="font-medium">Nº:</span> {appointment.appointment_number}
+                                    </p>
+                                  )}
                                   <p><span className="font-medium">PO:</span> {appointment.purchase_order}</p>
                                   <p><span className="font-medium">Placa:</span> {appointment.truck_plate}</p>
                                   {appointment.driver_name && (
@@ -1631,6 +1557,11 @@ const AdminDashboard = ({ user, token }) => {
                                   <p className="text-xs text-gray-500 mt-0.5">
                                     {dateUtils.formatTimeRange(appointment.time, appointment.time_end)}
                                   </p>
+                                  {appointment.appointment_number && (
+                                    <p className="text-xs font-mono text-blue-600 mt-0.5">
+                                      Nº: {appointment.appointment_number}
+                                    </p>
+                                  )}
                                 </div>
                                 <Badge className={`text-[10px] px-1.5 py-0 shrink-0 ${statusUtils.getStatusColor(appointment.status)}`}>
                                   {statusUtils.getStatusLabel(appointment.status)}
@@ -1638,6 +1569,11 @@ const AdminDashboard = ({ user, token }) => {
                               </div>
                               
                               <div className="space-y-1 text-xs text-gray-600 mb-3">
+                                {appointment.appointment_number && (
+                                  <p className="truncate font-mono text-blue-600">
+                                    <span className="font-medium">Nº:</span> {appointment.appointment_number}
+                                  </p>
+                                )}
                                 <p className="truncate">
                                   <span className="font-medium">PO:</span> {appointment.purchase_order}
                                 </p>
@@ -1778,6 +1714,14 @@ const AdminDashboard = ({ user, token }) => {
               
               <div className="px-4 pb-4 overflow-y-auto">
                 <div className="space-y-4">
+                  {selectedAppointment.appointment_number && (
+                    <div className="pb-4 border-b">
+                      <Label className="text-xs text-gray-500">Número do Agendamento</Label>
+                      <p className="text-sm font-medium font-mono text-blue-600">
+                        {selectedAppointment.appointment_number}
+                      </p>
+                    </div>
+                  )}
                   {/* Informações principais */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>

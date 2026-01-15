@@ -42,7 +42,7 @@ import usePermissions from '../hooks/usePermissions'
 const HOUR_HEIGHT = UI_CONFIG.HOUR_HEIGHT
 
 const PlantDashboard = ({ user, token }) => {
-  const { hasPermission, loading: permissionsLoading } = usePermissions(user)
+  const { hasPermission, hasViewPermission, getPermissionType, loading: permissionsLoading } = usePermissions(user)
   
   const [suppliers, setSuppliers] = useState([])
   const [appointments, setAppointments] = useState([])
@@ -72,72 +72,38 @@ const PlantDashboard = ({ user, token }) => {
   const [plantInfo, setPlantInfo] = useState(null)
 
   const loadSuppliers = async () => {
-    console.log('[PlantDashboard] loadSuppliers chamado')
-    console.log('[PlantDashboard] hasPermission view_suppliers:', hasPermission('view_suppliers', 'viewer'))
-    
     if (!hasPermission('view_suppliers', 'viewer')) {
-      console.warn('[PlantDashboard] Sem permissão para visualizar fornecedores')
       setSuppliers([])
       return
     }
     try {
-      console.log('[PlantDashboard] Chamando plantAPI.getSuppliers()')
       const data = await plantAPI.getSuppliers()
-      console.log('[PlantDashboard] Resposta recebida:', data)
-      console.log('[PlantDashboard] Tipo da resposta:', typeof data)
-      console.log('[PlantDashboard] É array?', Array.isArray(data))
       
       if (Array.isArray(data)) {
-        console.log(`[PlantDashboard] ${data.length} fornecedores carregados`)
         setSuppliers(data)
       } else {
-        console.error('[PlantDashboard] Resposta não é um array:', data)
         setSuppliers([])
       }
     } catch (err) {
-      console.error('[PlantDashboard] Erro ao carregar fornecedores:', err)
-      console.error('[PlantDashboard] Erro completo:', {
-        message: err.message,
-        response: err.response,
-        status: err.response?.status,
-        data: err.response?.data
-      })
       setSuppliers([])
       setError('Erro ao carregar fornecedores: ' + (err.response?.data?.error || err.message || 'Erro desconhecido'))
     }
   }
 
   const loadPlants = async () => {
-    console.log('[PlantDashboard] loadPlants chamado')
-    console.log('[PlantDashboard] hasPermission view_plants:', hasPermission('view_plants', 'viewer'))
-    
     if (!hasPermission('view_plants', 'viewer')) {
-      console.warn('[PlantDashboard] Sem permissão para visualizar plantas')
       setPlants([])
       return
     }
     try {
-      console.log('[PlantDashboard] Chamando plantAPI.getPlants()')
       const data = await plantAPI.getPlants()
-      console.log('[PlantDashboard] Resposta recebida:', data)
-      console.log('[PlantDashboard] Tipo da resposta:', typeof data)
-      console.log('[PlantDashboard] É array?', Array.isArray(data))
       
       if (Array.isArray(data)) {
-        console.log(`[PlantDashboard] ${data.length} plantas carregadas`)
         setPlants(data)
       } else {
-        console.error('[PlantDashboard] Resposta não é um array:', data)
         setPlants([])
       }
     } catch (err) {
-      console.error('[PlantDashboard] Erro ao carregar plantas:', err)
-      console.error('[PlantDashboard] Erro completo:', {
-        message: err.message,
-        response: err.response,
-        status: err.response?.status,
-        data: err.response?.data
-      })
       setPlants([])
       setError('Erro ao carregar plantas: ' + (err.response?.data?.error || err.message || 'Erro desconhecido'))
     }
@@ -171,11 +137,9 @@ const PlantDashboard = ({ user, token }) => {
   useEffect(() => {
     if (plantInfo?.max_capacity !== undefined) {
       const capacity = plantInfo.max_capacity || 1
-      console.log(`[PlantDashboard] Capacidade da planta ${plantInfo.name} (ID: ${plantInfo.id}): ${capacity}`)
       setMaxCapacity(capacity)
     } else if (plantInfo?.id) {
       // Fallback: se max_capacity não estiver disponível, usar valor padrão
-      console.log(`[PlantDashboard] max_capacity não disponível no plantInfo, usando padrão: 1`)
       setMaxCapacity(1)
     }
   }, [plantInfo])
@@ -218,7 +182,6 @@ const PlantDashboard = ({ user, token }) => {
     if (showAppointmentForm && editingAppointment && !editingAppointment.id) {
       // É um novo agendamento - carregar fornecedores se ainda não foram carregados
       if (suppliers.length === 0 && hasPermission('view_suppliers', 'viewer')) {
-        console.log('[PlantDashboard] Carregando fornecedores para novo agendamento')
         loadSuppliers()
       }
     }
@@ -292,7 +255,7 @@ const PlantDashboard = ({ user, token }) => {
   }
 
   const handleManageSupplier = (supplier) => {
-    if (!hasPermission('edit_suppliers', 'editor')) {
+    if (!hasPermission('edit_supplier', 'editor')) {
       setError('Você não tem permissão para gerenciar fornecedores')
       return
     }
@@ -313,9 +276,12 @@ const PlantDashboard = ({ user, token }) => {
   }
 
   const handleManagePlant = (plant) => {
-    if (!hasPermission('edit_plants', 'editor')) {
-      setError('Você não tem permissão para gerenciar plantas')
-      return
+    // Verificar permissão apenas se não for admin e se as permissões já foram carregadas
+    if (user?.role !== 'admin' && !permissionsLoading) {
+      if (!hasViewPermission('edit_plant')) {
+        setError('Você não tem permissão para visualizar plantas')
+        return
+      }
     }
     const updatedPlant = plants.find(p => p.id === plant.id)
     if (updatedPlant) {
@@ -395,17 +361,11 @@ const PlantDashboard = ({ user, token }) => {
   // IMPORTANTE: Filtrar apenas agendamentos da própria planta
   const dayAppointments = appointments.filter(apt => {
     if (!apt.date) {
-      console.warn(`[PlantDashboard] Agendamento sem data:`, apt.id, apt)
       return false
     }
     
     // VALIDAÇÃO: Garantir que o agendamento pertence à planta do usuário
     if (plantInfo && plantInfo.id && apt.plant_id !== plantInfo.id) {
-      console.warn(`[PlantDashboard] ⚠️ Agendamento de outra planta EXCLUÍDO:`, {
-        id: apt.id,
-        appointmentPlantId: apt.plant_id,
-        userPlantId: plantInfo.id
-      })
       return false
     }
     
@@ -414,15 +374,6 @@ const PlantDashboard = ({ user, token }) => {
     
     // VALIDAÇÃO RIGOROSA: Se não corresponder, não incluir
     if (!matches) {
-      if (apt.status === 'checked_out') {
-        console.warn(`[PlantDashboard] ⚠️ Agendamento finalizado EXCLUÍDO (data diferente):`, {
-          id: apt.id,
-          status: apt.status,
-          originalDate: apt.date,
-          normalizedDate: aptDate,
-          selectedDate: currentDateISO
-        })
-      }
       return false
     }
     
@@ -438,7 +389,6 @@ const PlantDashboard = ({ user, token }) => {
     if (!appointment.date) return false
     const aptDate = getDateString(appointment.date)
     if (aptDate !== currentDateISO) {
-      console.error(`[PlantDashboard] ❌ ERRO: Agendamento ${appointment.id} passou pelo filtro mas tem data incorreta`)
       return false
     }
     return true
@@ -665,11 +615,12 @@ const PlantDashboard = ({ user, token }) => {
   }
 
   // Tela de Configurar Horários
-  if (showUnifiedScheduleConfig && hasPermission('manage_schedules', 'editor')) {
+  if (showUnifiedScheduleConfig && hasViewPermission('configure_plant_hours')) {
     return (
       <UnifiedScheduleConfig
         plantId={selectedPlantForSchedule?.id}
         plantName={selectedPlantForSchedule?.name}
+        user={user}
         onBack={() => {
           setShowUnifiedScheduleConfig(false)
           setSelectedPlantForSchedule(null)
@@ -709,7 +660,7 @@ const PlantDashboard = ({ user, token }) => {
           </Button>
         </div>
 
-        {hasPermission('create_plants', 'editor') && (
+        {hasPermission('create_plant', 'editor') && (
           <div className="flex justify-end">
             <Button 
               onClick={() => setShowPlantForm(true)} 
@@ -769,7 +720,7 @@ const PlantDashboard = ({ user, token }) => {
                     )}
                     
                     <div className="flex gap-2">
-                      {hasPermission('edit_plants', 'editor') && (
+                      {hasViewPermission('edit_plant') && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -780,7 +731,7 @@ const PlantDashboard = ({ user, token }) => {
                           Gerenciar
                         </Button>
                       )}
-                      {hasPermission('manage_schedules', 'editor') && (
+                      {hasViewPermission('configure_plant_hours') && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -802,14 +753,14 @@ const PlantDashboard = ({ user, token }) => {
           </div>
         )}
 
-        {showPlantForm && hasPermission('create_plants', 'editor') && (
+        {showPlantForm && hasPermission('create_plant', 'editor') && (
           <PlantForm
             onCancel={() => setShowPlantForm(false)}
             onSubmit={handlePlantFormSubmit}
           />
         )}
 
-        {showPlantManagement && hasPermission('edit_plants', 'editor') && (
+        {showPlantManagement && managingPlant && (
           <PlantManagement
             plant={managingPlant}
             onBack={() => {
@@ -818,6 +769,8 @@ const PlantDashboard = ({ user, token }) => {
               loadPlants()
             }}
             onUpdate={handlePlantManagementUpdate}
+            user={user}
+            permissionType={getPermissionType('edit_plant') || 'viewer'}
           />
         )}
       </div>
@@ -855,7 +808,7 @@ const PlantDashboard = ({ user, token }) => {
           </Button>
         </div>
 
-        {hasPermission('create_suppliers', 'editor') && (
+        {hasPermission('create_supplier', 'editor') && (
           <div className="flex justify-end">
             <Button onClick={() => setShowSupplierForm(true)} className="flex items-center gap-2">
               <Plus className="w-4 h-4" />
@@ -874,7 +827,7 @@ const PlantDashboard = ({ user, token }) => {
             <CardContent className="py-12 text-center">
               <Building2 className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-600 mb-2">Nenhum fornecedor cadastrado</p>
-              {hasPermission('create_suppliers', 'editor') && (
+              {hasPermission('create_supplier', 'editor') && (
                 <Button onClick={() => setShowSupplierForm(true)} variant="outline" className="mt-4">
                   <Plus className="w-4 h-4 mr-2" />
                   Criar primeiro fornecedor
@@ -906,7 +859,7 @@ const PlantDashboard = ({ user, token }) => {
                       Agendamentos hoje: {appointments.filter(a => a.supplier_id === supplier.id && getDateString(a.date) === currentDateISO).length}
                     </p>
                     
-                    {hasPermission('edit_suppliers', 'editor') && (
+                    {hasPermission('edit_supplier', 'editor') && (
                       <div className="flex gap-2">
                         <Button
                           size="sm"
@@ -926,25 +879,26 @@ const PlantDashboard = ({ user, token }) => {
           </div>
         )}
 
-        {showSupplierForm && hasPermission('create_suppliers', 'editor') && (
+        {showSupplierForm && hasPermission('create_supplier', 'editor') && (
           <SupplierForm
             onCancel={() => setShowSupplierForm(false)}
             onSubmit={handleSupplierFormSubmit}
           />
         )}
 
-        {showSupplierManagement && hasPermission('edit_suppliers', 'editor') && (
+        {showSupplierManagement && hasPermission('edit_supplier', 'editor') && (
           <SupplierManagement
             supplier={managingSupplier}
             onBack={() => setShowSupplierManagement(false)}
             onUpdate={handleSupplierManagementUpdate}
+            user={user}
           />
         )}
       </div>
     )
   }
 
-  if (showSupplierForm && !showSuppliersScreen && hasPermission('create_suppliers', 'editor')) {
+  if (showSupplierForm && !showSuppliersScreen && hasPermission('create_supplier', 'editor')) {
     return (
       <SupplierForm
         onSubmit={handleSupplierFormSubmit}
@@ -1279,6 +1233,11 @@ const PlantDashboard = ({ user, token }) => {
                                       <p className="text-xs text-gray-500 mt-0.5 leading-tight">
                                         {dateUtils.formatTimeRange(appointment.time, appointment.time_end)}
                                       </p>
+                                      {appointment.appointment_number && (
+                                        <p className="text-xs font-mono text-blue-600 mt-0.5 leading-tight">
+                                          Nº: {appointment.appointment_number}
+                                        </p>
+                                      )}
                                     </div>
                                     <Badge className={`text-[10px] px-1.5 py-0.5 shrink-0 ${statusUtils.getStatusColor(appointment.status)}`}>
                                       {statusUtils.getStatusLabel(appointment.status)}
@@ -1286,9 +1245,21 @@ const PlantDashboard = ({ user, token }) => {
                                   </div>
                                   
                                   {contentLevel === 'minimal' ? (
-                                    null
+                                    // Apenas número de agendamento se disponível
+                                    appointment.appointment_number ? (
+                                      <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
+                                        <p className="truncate leading-tight font-mono text-blue-600">
+                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
+                                        </p>
+                                      </div>
+                                    ) : null
                                   ) : contentLevel === 'summary' ? (
                                     <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
+                                      {appointment.appointment_number && (
+                                        <p className="truncate leading-tight font-mono text-blue-600">
+                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
+                                        </p>
+                                      )}
                                       <p className="truncate leading-tight">
                                         <span className="font-medium">PO:</span> {appointment.purchase_order}
                                       </p>
@@ -1303,6 +1274,11 @@ const PlantDashboard = ({ user, token }) => {
                                     </div>
                                   ) : (
                                     <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
+                                      {appointment.appointment_number && (
+                                        <p className="truncate leading-tight font-mono text-blue-600">
+                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
+                                        </p>
+                                      )}
                                       <p className="truncate leading-tight">
                                         <span className="font-medium">PO:</span> {appointment.purchase_order}
                                       </p>
@@ -1331,6 +1307,11 @@ const PlantDashboard = ({ user, token }) => {
                                   <p className="text-xs text-gray-500 mt-0.5">{dateUtils.formatTimeRange(appointment.time, appointment.time_end)}</p>
                                 </div>
                                 <div className="space-y-1 text-xs border-t pt-2">
+                                  {appointment.appointment_number && (
+                                    <p className="font-mono text-blue-600">
+                                      <span className="font-medium">Nº:</span> {appointment.appointment_number}
+                                    </p>
+                                  )}
                                   <p><span className="font-medium">PO:</span> {appointment.purchase_order}</p>
                                   <p><span className="font-medium">Placa:</span> {appointment.truck_plate}</p>
                                   {appointment.driver_name && (
@@ -1486,6 +1467,11 @@ const PlantDashboard = ({ user, token }) => {
                                   <p className="text-xs text-gray-500 mt-0.5">
                                     {dateUtils.formatTimeRange(appointment.time, appointment.time_end)}
                                   </p>
+                                  {appointment.appointment_number && (
+                                    <p className="text-xs font-mono text-blue-600 mt-0.5">
+                                      Nº: {appointment.appointment_number}
+                                    </p>
+                                  )}
                                 </div>
                                 <Badge className={`text-[10px] px-1.5 py-0 shrink-0 ${statusUtils.getStatusColor(appointment.status)}`}>
                                   {statusUtils.getStatusLabel(appointment.status)}
@@ -1493,6 +1479,11 @@ const PlantDashboard = ({ user, token }) => {
                               </div>
                               
                               <div className="space-y-1 text-xs text-gray-600 mb-3">
+                                {appointment.appointment_number && (
+                                  <p className="truncate font-mono text-blue-600">
+                                    <span className="font-medium">Nº:</span> {appointment.appointment_number}
+                                  </p>
+                                )}
                                 <p className="truncate">
                                   <span className="font-medium">PO:</span> {appointment.purchase_order}
                                 </p>
@@ -1680,6 +1671,14 @@ const PlantDashboard = ({ user, token }) => {
               
               <div className="px-4 pb-4 overflow-y-auto">
                 <div className="space-y-4">
+                  {selectedAppointment.appointment_number && (
+                    <div className="pb-4 border-b">
+                      <Label className="text-xs text-gray-500">Número do Agendamento</Label>
+                      <p className="text-sm font-medium font-mono text-blue-600">
+                        {selectedAppointment.appointment_number}
+                      </p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs text-gray-500">Data</Label>

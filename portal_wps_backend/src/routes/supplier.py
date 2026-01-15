@@ -4,8 +4,10 @@ import logging
 from src.models.user import User, db
 from src.models.appointment import Appointment
 from src.models.supplier import Supplier
+from src.models.operating_hours import OperatingHours
 from src.routes.auth import token_required
-from src.utils.permissions import permission_required
+from src.utils.permissions import permission_required, has_permission
+from src.utils.helpers import generate_appointment_number
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +19,56 @@ AVAILABLE_HOURS = [
     time(12, 0), time(13, 0), time(14, 0), time(15, 0),
     time(16, 0), time(17, 0)
 ]
+
+def get_plant_operating_hours_message(plant_id, appointment_date):
+    """
+    Busca os horários de funcionamento da planta para uma data específica
+    e retorna uma mensagem formatada com os horários disponíveis.
+    
+    Args:
+        plant_id: ID da planta
+        appointment_date: Data do agendamento (date object)
+    
+    Returns:
+        str: Mensagem formatada com os horários de funcionamento da planta
+    """
+    try:
+        # Determinar tipo de dia (weekday, weekend)
+        python_weekday = appointment_date.weekday()  # 0=Segunda, 6=Domingo
+        if python_weekday == 6:  # Domingo
+            db_day_of_week = 0
+        else:
+            db_day_of_week = python_weekday + 1  # 1=Segunda, ..., 6=Sábado
+        
+        is_weekend = db_day_of_week == 0 or db_day_of_week == 6  # Domingo ou Sábado
+        
+        # Buscar configuração específica da planta
+        if plant_id:
+            if is_weekend:
+                operating_hours_config = OperatingHours.query.filter_by(
+                    plant_id=plant_id,
+                    schedule_type='weekend',
+                    day_of_week=db_day_of_week,
+                    is_active=True
+                ).first()
+            else:
+                operating_hours_config = OperatingHours.query.filter_by(
+                    plant_id=plant_id,
+                    schedule_type='weekdays',
+                    day_of_week=None,
+                    is_active=True
+                ).first()
+            
+            if operating_hours_config:
+                start_str = operating_hours_config.operating_start.strftime('%H:%M')
+                end_str = operating_hours_config.operating_end.strftime('%H:%M')
+                return f'Horários disponíveis: {start_str} às {end_str}'
+        
+        # Se não encontrou configuração específica, retornar mensagem padrão
+        return 'Horários disponíveis: 08:00 às 17:00'
+    except Exception as e:
+        logger.error(f"Erro ao buscar horários de funcionamento da planta: {str(e)}", exc_info=True)
+        return 'Horários disponíveis: 08:00 às 17:00'
 
 @supplier_bp.route('/appointments', methods=['GET'])
 @permission_required('view_appointments', 'viewer')
@@ -82,6 +134,22 @@ def get_supplier_appointments(current_user):
         result = []
         for appointment in appointments:
             appointment_dict = appointment.to_dict()
+            # Buscar informações do fornecedor usando o relacionamento ou query direta
+            supplier = None
+            try:
+                # Tentar usar o relacionamento primeiro (mais eficiente)
+                supplier = appointment.supplier
+            except:
+                # Se o relacionamento não estiver carregado, buscar explicitamente
+                if appointment.supplier_id:
+                    supplier = Supplier.query.get(appointment.supplier_id)
+            
+            if supplier:
+                appointment_dict['supplier'] = supplier.to_dict()
+                logger.info(f"Supplier adicionado ao appointment {appointment.id}: {supplier.description} (ID: {supplier.id})")
+            else:
+                logger.warning(f"Supplier não encontrado para appointment {appointment.id} com supplier_id {appointment.supplier_id}")
+            
             appointment_dict['is_own'] = True  # Todos são do próprio fornecedor
             appointment_dict['can_edit'] = appointment.status == 'scheduled'
             result.append(appointment_dict)
@@ -226,10 +294,6 @@ def create_appointment(current_user):
         if appointment_date < datetime.now().date():
             return jsonify({'error': 'Não é possível agendar para datas passadas'}), 400
         
-        # Verificar se o horário está na lista de horários permitidos
-        if appointment_time not in AVAILABLE_HOURS:
-            return jsonify({'error': 'Horário não permitido. Horários disponíveis: 08:00 às 17:00'}), 400
-        
         # Validar plant_id (obrigatório para fornecedores)
         plant_id = data.get('plant_id')
         if not plant_id:
@@ -241,7 +305,8 @@ def create_appointment(current_user):
         if not plant:
             return jsonify({'error': 'Planta não encontrada ou inativa'}), 404
         
-        # Validar horários de funcionamento da planta
+        # Validar horários de funcionamento da planta (validação específica da planta)
+        # Esta validação já retorna mensagens específicas com os horários corretos da planta
         from src.utils.operating_hours_validator import validate_operating_hours
         is_valid, error_msg = validate_operating_hours(plant_id, appointment_date, appointment_time, appointment_time_end)
         if not is_valid:
@@ -320,8 +385,13 @@ def create_appointment(current_user):
                     'error': f'Capacidade máxima de {max_capacity} agendamento(s) por horário foi atingida. Por favor, escolha outro horário.'
                 }), 400
         
+        # Gerar número único do agendamento
+        appointment_number = generate_appointment_number(appointment_date)
+        logger.info(f"Gerado número de agendamento: {appointment_number} para data {appointment_date}")
+        
         # Criar agendamento
         appointment = Appointment(
+            appointment_number=appointment_number,
             date=appointment_date,
             time=appointment_time,
             time_end=appointment_time_end,
@@ -334,6 +404,9 @@ def create_appointment(current_user):
         
         db.session.add(appointment)
         db.session.commit()
+        
+        # Log para verificar se o número foi salvo
+        logger.info(f"Agendamento criado com ID {appointment.id}, número: {appointment.appointment_number}")
         
         return jsonify({
             'message': 'Agendamento criado com sucesso',
@@ -393,8 +466,6 @@ def update_supplier_appointment(current_user, appointment_id):
         if 'time' in data:
             try:
                 new_time = datetime.strptime(data['time'], '%H:%M').time()
-                if new_time not in AVAILABLE_HOURS:
-                    return jsonify({'error': 'Horário não permitido. Horários disponíveis: 08:00 às 17:00'}), 400
                 if new_time != original_time:
                     time_changed = True
                 appointment.time = new_time
@@ -426,8 +497,17 @@ def update_supplier_appointment(current_user, appointment_id):
         # Verificar se houve reagendamento (mudança de data ou horário)
         is_rescheduling = date_changed or time_changed
         
-        # Se houve reagendamento, exigir motivo
+        # Se houve reagendamento, verificar permissão específica de reagendamento
         if is_rescheduling:
+            # Verificar se o usuário tem permissão para reagendar
+            if not has_permission('reschedule', 'editor', current_user):
+                return jsonify({
+                    'error': 'Você não tem permissão para reagendar agendamentos. Apenas usuários com perfil Editor podem reagendar.',
+                    'permission_required': 'reschedule',
+                    'permission_level': 'editor'
+                }), 403
+            
+            # Se houve reagendamento, exigir motivo
             if 'motivo_reagendamento' not in data or not data.get('motivo_reagendamento', '').strip():
                 return jsonify({
                     'error': 'Motivo do reagendamento é obrigatório quando há alteração de data ou horário',
@@ -597,6 +677,121 @@ def get_suppliers(current_user):
 
 # IMPORTANTE: Rotas mais específicas devem vir ANTES das rotas mais genéricas
 # A rota /plants/<int:plant_id>/max-capacity deve vir ANTES de /plants
+@supplier_bp.route('/plants/<int:plant_id>/schedule-config', methods=['GET'])
+@token_required
+def get_plant_schedule_config(current_user, plant_id):
+    """Retorna as configurações de horário de funcionamento e bloqueios de uma planta para uma data específica"""
+    try:
+        if current_user.role != 'supplier':
+            return jsonify({'error': 'Acesso negado. Apenas fornecedores podem acessar'}), 403
+        
+        from src.models.plant import Plant
+        from src.models.schedule_config import ScheduleConfig
+        from src.models.default_schedule import DefaultSchedule
+        
+        # Verificar se a planta existe e está ativa
+        plant = Plant.query.filter_by(id=plant_id, is_active=True).first()
+        if not plant:
+            return jsonify({'error': 'Planta não encontrada'}), 404
+        
+        # Obter data do parâmetro (opcional, se não fornecido, retorna apenas horários de funcionamento)
+        date_str = request.args.get('date')
+        target_date = None
+        if date_str:
+            try:
+                target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({'error': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
+        
+        # Buscar horários de funcionamento da planta
+        operating_hours = []
+        if target_date:
+            # Determinar tipo de dia (weekday, weekend)
+            python_weekday = target_date.weekday()  # 0=Segunda, 6=Domingo
+            if python_weekday == 6:  # Domingo
+                db_day_of_week = 0
+            else:
+                db_day_of_week = python_weekday + 1  # 1=Segunda, ..., 6=Sábado
+            
+            is_weekend = db_day_of_week == 0 or db_day_of_week == 6
+            
+            if is_weekend:
+                config = OperatingHours.query.filter_by(
+                    plant_id=plant_id,
+                    schedule_type='weekend',
+                    day_of_week=db_day_of_week,
+                    is_active=True
+                ).first()
+            else:
+                config = OperatingHours.query.filter_by(
+                    plant_id=plant_id,
+                    schedule_type='weekdays',
+                    day_of_week=None,
+                    is_active=True
+                ).first()
+            
+            if config:
+                operating_hours.append({
+                    'schedule_type': config.schedule_type,
+                    'day_of_week': config.day_of_week,
+                    'operating_start': config.operating_start.strftime('%H:%M') if config.operating_start else None,
+                    'operating_end': config.operating_end.strftime('%H:%M') if config.operating_end else None,
+                    'is_active': config.is_active
+                })
+        else:
+            # Se não há data específica, retornar todas as configurações de horário de funcionamento da planta
+            all_configs = OperatingHours.query.filter_by(plant_id=plant_id, is_active=True).all()
+            for config in all_configs:
+                operating_hours.append({
+                    'schedule_type': config.schedule_type,
+                    'day_of_week': config.day_of_week,
+                    'operating_start': config.operating_start.strftime('%H:%M') if config.operating_start else None,
+                    'operating_end': config.operating_end.strftime('%H:%M') if config.operating_end else None,
+                    'is_active': config.is_active
+                })
+        
+        # Buscar horários bloqueados para a data específica (se fornecida)
+        blocked_times = []
+        if target_date:
+            # Buscar configurações específicas da data
+            schedule_configs = ScheduleConfig.query.filter_by(date=target_date).all()
+            for config in schedule_configs:
+                if not config.is_available:
+                    blocked_times.append({
+                        'time': config.time.strftime('%H:%M') if config.time else None,
+                        'reason': config.reason
+                    })
+            
+            # Buscar configurações padrão para o dia da semana
+            day_of_week = target_date.weekday()  # 0=Segunda, 6=Domingo
+            if day_of_week == 6:
+                day_of_week = 0  # Domingo = 0
+            
+            default_configs = DefaultSchedule.query.filter(
+                (DefaultSchedule.day_of_week == day_of_week) | 
+                (DefaultSchedule.day_of_week.is_(None))
+            ).all()
+            
+            for config in default_configs:
+                if not config.is_available:
+                    blocked_times.append({
+                        'time': config.time.strftime('%H:%M') if config.time else None,
+                        'reason': config.reason
+                    })
+        
+        return jsonify({
+            'plant_id': plant.id,
+            'plant_name': plant.name,
+            'date': target_date.isoformat() if target_date else None,
+            'operating_hours': operating_hours,
+            'blocked_times': blocked_times,
+            'max_capacity': plant.max_capacity if plant.max_capacity and plant.max_capacity > 0 else 1
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar configurações da planta {plant_id}: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 @supplier_bp.route('/plants/<int:plant_id>/max-capacity', methods=['GET'])
 @token_required
 def get_plant_max_capacity(current_user, plant_id):

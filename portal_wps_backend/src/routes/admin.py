@@ -1,11 +1,13 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta, time
+from sqlalchemy import func
 from src.models.user import User, db
 from src.models.supplier import Supplier
 from src.models.appointment import Appointment
 from src.models.plant import Plant
 from src.routes.auth import admin_required
-from src.utils.helpers import generate_temp_password
+from src.utils.helpers import generate_temp_password, generate_appointment_number
+from src.utils.permissions import permission_required
 import logging
 
 logger = logging.getLogger(__name__)
@@ -73,7 +75,7 @@ def validate_time_range_capacity(date, start_time, end_time, max_capacity, plant
     return True, None
 
 @admin_bp.route('/suppliers', methods=['GET'])
-@admin_required
+@permission_required('view_suppliers', 'viewer')
 def get_suppliers(current_user):
     """Lista todos os fornecedores ativos"""
     try:
@@ -83,7 +85,7 @@ def get_suppliers(current_user):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/suppliers', methods=['POST'])
-@admin_required
+@permission_required('create_supplier', 'editor')
 def create_supplier(current_user):
     """Cria um novo fornecedor e seu usuário de acesso"""
     try:
@@ -193,10 +195,6 @@ def manage_appointments(current_user):
                     
                     appointments = query.order_by(Appointment.date, Appointment.time).all()
                     
-                    logger.info(f"Encontrados {len(appointments)} agendamentos para data {target_date}")
-                    if len(appointments) > 0:
-                        logger.info(f"Primeiros agendamentos: {[{'id': a.id, 'date': str(a.date), 'status': a.status, 'plant_id': a.plant_id} for a in appointments[:3]]}")
-                    
                     # Serializar agendamentos com tratamento de erro
                     result = []
                     for appointment in appointments:
@@ -207,6 +205,7 @@ def manage_appointments(current_user):
                             # Retornar dados básicos mesmo com erro
                             result.append({
                                 'id': appointment.id,
+                                'appointment_number': appointment.appointment_number,
                                 'date': appointment.date.isoformat() if appointment.date else None,
                                 'time': appointment.time.isoformat() if appointment.time else None,
                                 'time_end': appointment.time_end.isoformat() if appointment.time_end else None,
@@ -243,8 +242,6 @@ def manage_appointments(current_user):
                 Appointment.date <= end_date
             ).order_by(Appointment.date, Appointment.time).all()
             
-            logger.info(f"Encontrados {len(appointments)} agendamentos para a semana")
-            
             # Serializar agendamentos com tratamento de erro
             result = []
             for appointment in appointments:
@@ -255,6 +252,7 @@ def manage_appointments(current_user):
                     # Retornar dados básicos mesmo com erro
                     result.append({
                         'id': appointment.id,
+                        'appointment_number': appointment.appointment_number,
                         'date': appointment.date.isoformat() if appointment.date else None,
                         'time': appointment.time.isoformat() if appointment.time else None,
                         'time_end': appointment.time_end.isoformat() if appointment.time_end else None,
@@ -376,8 +374,12 @@ def manage_appointments(current_user):
                         'error': f'Capacidade máxima de {max_capacity} agendamento(s) por horário foi atingida. Por favor, escolha outro horário.'
                     }), 409
             
+            # Gerar número único do agendamento
+            appointment_number = generate_appointment_number(appointment_date)
+            
             # Criar agendamento
             appointment = Appointment(
+                appointment_number=appointment_number,
                 date=appointment_date,
                 time=appointment_time,
                 time_end=appointment_time_end,
@@ -392,9 +394,11 @@ def manage_appointments(current_user):
             db.session.add(appointment)
             db.session.commit()
             
+            appointment_dict = appointment.to_dict()
+            
             return jsonify({
                 'message': 'Agendamento criado com sucesso',
-                'appointment': appointment.to_dict()
+                'appointment': appointment_dict
             }), 201
             
         except Exception as e:
@@ -411,19 +415,15 @@ def check_in_appointment(current_user, appointment_id):
         if not appointment:
             return jsonify({'error': 'Agendamento não encontrado'}), 404
         
-        logger.info(f"Check-in solicitado para appointment {appointment_id}. Status atual: {appointment.status}")
-        
         # Permitir check-in apenas para agendamentos agendados ou reagendados
         if appointment.status not in ['scheduled', 'rescheduled']:
             error_msg = f'Agendamento não pode receber check-in. Status atual: {appointment.status}'
-            logger.warning(f"Check-in negado: {error_msg}")
             return jsonify({'error': error_msg}), 400
         
         appointment.status = 'checked_in'
         appointment.check_in_time = datetime.utcnow()
         
         db.session.commit()
-        logger.info(f"Check-in realizado com sucesso para appointment {appointment_id}. Novo status: {appointment.status}")
         
         # Recarregar o appointment para garantir que está sincronizado
         db.session.refresh(appointment)
@@ -493,20 +493,11 @@ def update_appointment(current_user, appointment_id):
         if not data:
             return jsonify({'error': 'Dados não fornecidos'}), 400
         
-        # Log completo dos dados recebidos
-        logger.info(f"=== INÍCIO ATUALIZAÇÃO APPOINTMENT {appointment_id} ===")
-        logger.info(f"Dados recebidos: {data}")
-        logger.info(f"Chaves presentes: {list(data.keys())}")
-        logger.info(f"motivo_reagendamento presente: {'motivo_reagendamento' in data}")
-        if 'motivo_reagendamento' in data:
-            logger.info(f"Valor do motivo_reagendamento: '{data.get('motivo_reagendamento')}'")
         
         # Armazenar valores originais para validação
         original_date = appointment.date
         original_time = appointment.time
         original_time_end = appointment.time_end
-        
-        logger.info(f"Valores originais - Data: {original_date}, Time: {original_time}, Time_end: {original_time_end}")
         
         # Detectar se houve mudança de data ou horário
         date_changed = False
@@ -518,10 +509,8 @@ def update_appointment(current_user, appointment_id):
                 new_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
                 if new_date < datetime.now().date():
                     return jsonify({'error': 'Não é possível agendar para datas passadas'}), 400
-                logger.info(f"Comparando datas - Original: {original_date} ({type(original_date)}), Nova: {new_date} ({type(new_date)})")
                 if new_date != original_date:
                     date_changed = True
-                    logger.info(f"Data alterada detectada: {original_date} -> {new_date}")
                 appointment.date = new_date
             except ValueError:
                 return jsonify({'error': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
@@ -537,10 +526,8 @@ def update_appointment(current_user, appointment_id):
                 else:
                     raise ValueError("Formato inválido")
                 
-                logger.info(f"Comparando horários - Original: {original_time} ({type(original_time)}), Novo: {new_time} ({type(new_time)})")
                 if new_time != original_time:
                     time_changed = True
-                    logger.info(f"Horário alterado detectado: {original_time} -> {new_time}")
                 appointment.time = new_time
             except ValueError:
                 return jsonify({'error': 'Formato de hora inválido. Use HH:MM ou HH:MM:SS'}), 400
@@ -563,10 +550,8 @@ def update_appointment(current_user, appointment_id):
                 if new_time_end <= appointment.time:
                     return jsonify({'error': 'O horário final deve ser maior que o horário inicial'}), 400
                 
-                logger.info(f"Comparando horários finais - Original: {original_time_end} ({type(original_time_end)}), Novo: {new_time_end} ({type(new_time_end)})")
                 if new_time_end != original_time_end:
                     time_changed = True
-                    logger.info(f"Horário final alterado detectado: {original_time_end} -> {new_time_end}")
                 appointment.time_end = new_time_end
             except ValueError:
                 return jsonify({'error': 'Formato de hora final inválido. Use HH:MM ou HH:MM:SS'}), 400
@@ -580,13 +565,9 @@ def update_appointment(current_user, appointment_id):
         has_motivo_in_data = 'motivo_reagendamento' in data and data.get('motivo_reagendamento', '').strip()
         is_rescheduling = date_changed or time_changed or has_motivo_in_data
         
-        logger.info(f"Reagendamento detectado? date_changed={date_changed}, time_changed={time_changed}, has_motivo={has_motivo_in_data}, is_rescheduling={is_rescheduling}")
-        logger.info(f"Dados recebidos - motivo_reagendamento presente: {'motivo_reagendamento' in data}, valor: {data.get('motivo_reagendamento', 'NÃO ENVIADO')}")
-        
         # Se houve reagendamento (mudança detectada OU motivo enviado), exigir motivo e aplicar status
         if is_rescheduling:
             motivo = data.get('motivo_reagendamento', '').strip() if 'motivo_reagendamento' in data else ''
-            logger.info(f"Motivo recebido: '{motivo}' (tipo: {type(motivo)}, vazio: {not motivo})")
             
             if not motivo:
                 return jsonify({
@@ -595,14 +576,8 @@ def update_appointment(current_user, appointment_id):
                 }), 400
             
             # Aplicar status rescheduled e salvar motivo ANTES de qualquer outra atualização
-            logger.info(f"=== APLICANDO STATUS RESCHEDULED ===")
-            logger.info(f"Status anterior: {appointment.status}")
-            logger.info(f"Motivo a ser salvo: '{motivo}'")
             appointment.status = 'rescheduled'
             appointment.motivo_reagendamento = motivo
-            logger.info(f"Status após atribuição: {appointment.status}")
-            logger.info(f"Motivo após atribuição: {appointment.motivo_reagendamento}")
-            logger.info(f"Verificação direta - appointment.status == 'rescheduled': {appointment.status == 'rescheduled'}")
         
         # Validar horários de funcionamento se data, time ou time_end foram alterados
         if is_rescheduling:
@@ -674,39 +649,23 @@ def update_appointment(current_user, appointment_id):
         
         appointment.updated_at = datetime.utcnow()
         
-        # Log final antes do commit
-        logger.info(f"=== ANTES DO COMMIT ===")
-        logger.info(f"Status: {appointment.status}, Motivo: {appointment.motivo_reagendamento}")
-        logger.info(f"is_rescheduling: {is_rescheduling}")
-        logger.info(f"motivo_reagendamento presente nos dados: {'motivo_reagendamento' in data}")
-        
         # FORÇAR aplicação do status se é reagendamento
         if is_rescheduling:
-            logger.info(f"FORÇANDO aplicação do status 'rescheduled'")
             appointment.status = 'rescheduled'
             if 'motivo_reagendamento' in data and data.get('motivo_reagendamento', '').strip():
                 appointment.motivo_reagendamento = data['motivo_reagendamento'].strip()
-            logger.info(f"Status após forçar: {appointment.status}, Motivo: {appointment.motivo_reagendamento}")
         
         db.session.commit()
         
         # Recarregar o objeto do banco para garantir que temos os dados atualizados
         db.session.refresh(appointment)
         
-        # Log após commit para confirmar
-        logger.info(f"=== APÓS COMMIT ===")
-        logger.info(f"Status no banco: {appointment.status}, Motivo: {appointment.motivo_reagendamento}")
-        
         # Criar dicionário de resposta FORÇANDO status e motivo corretos
         appointment_dict = appointment.to_dict()
         if is_rescheduling:
-            logger.info(f"FORÇANDO status e motivo na resposta")
             appointment_dict['status'] = 'rescheduled'
             if 'motivo_reagendamento' in data and data.get('motivo_reagendamento', '').strip():
                 appointment_dict['motivo_reagendamento'] = data['motivo_reagendamento'].strip()
-            logger.info(f"Resposta final - Status: {appointment_dict['status']}, Motivo: {appointment_dict.get('motivo_reagendamento', 'NÃO DEFINIDO')}")
-        
-        logger.info(f"=== FIM ATUALIZAÇÃO APPOINTMENT {appointment_id} ===")
         
         return jsonify({
             'message': 'Agendamento atualizado com sucesso',
@@ -719,7 +678,7 @@ def update_appointment(current_user, appointment_id):
 
 
 @admin_bp.route('/suppliers/<int:supplier_id>', methods=['PUT'])
-@admin_required
+@permission_required('edit_supplier', 'editor')
 def update_supplier(current_user, supplier_id):
     """Atualiza dados de um fornecedor"""
     try:
@@ -732,6 +691,17 @@ def update_supplier(current_user, supplier_id):
         
         if not data:
             return jsonify({'error': 'Dados não fornecidos'}), 400
+        
+        # Verificar se está tentando alterar o is_active (inativar/ativar)
+        # Se está alterando o status, verificar permissão específica de inativar/ativar
+        if 'is_active' in data:
+            from src.utils.permissions import has_permission
+            if not has_permission('inactivate_supplier', 'editor', current_user):
+                return jsonify({
+                    'error': 'Você não tem permissão para inativar/ativar fornecedores. Apenas usuários com perfil Editor podem realizar esta ação.',
+                    'permission_required': 'inactivate_supplier',
+                    'permission_level': 'editor'
+                }), 403
         
         # Atualizar campos permitidos
         if 'description' in data:
@@ -754,7 +724,7 @@ def update_supplier(current_user, supplier_id):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/suppliers/<int:supplier_id>', methods=['DELETE'])
-@admin_required
+@permission_required('delete_supplier', 'editor')
 def delete_supplier(current_user, supplier_id):
     """Soft delete de um fornecedor"""
     try:
@@ -778,12 +748,14 @@ def delete_supplier(current_user, supplier_id):
         supplier.is_active = False
         supplier.updated_at = datetime.utcnow()
         
-        # Desativar usuários do fornecedor
-        User.query.filter_by(supplier_id=supplier_id).update({'is_active': False})
+        # Buscar e excluir todos os usuários associados ao fornecedor
+        users_to_delete = User.query.filter_by(supplier_id=supplier_id).all()
+        for user in users_to_delete:
+            db.session.delete(user)
         
         db.session.commit()
         
-        return jsonify({'message': 'Fornecedor excluído com sucesso'}), 200
+        return jsonify({'message': 'Fornecedor e usuários associados excluídos com sucesso'}), 200
         
     except Exception as e:
         db.session.rollback()
@@ -813,7 +785,7 @@ def delete_appointment(current_user, appointment_id):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/schedule-config', methods=['GET'])
-@admin_required
+@permission_required('configure_plant_hours', 'viewer')
 def get_schedule_config(current_user):
     """Retorna configurações de horários para uma data específica"""
     try:
@@ -897,7 +869,7 @@ def create_schedule_config(current_user):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/available-times', methods=['GET'])
-@admin_required
+@permission_required('configure_plant_hours', 'viewer')
 def get_available_times(current_user):
     """Retorna horários disponíveis para uma data específica"""
     try:
@@ -1018,7 +990,7 @@ def get_available_times(current_user):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/default-schedule', methods=['GET'])
-@admin_required
+@permission_required('configure_plant_hours', 'viewer')
 def get_default_schedule(current_user):
     """Retorna configurações padrão de horários"""
     try:
@@ -1032,7 +1004,7 @@ def get_default_schedule(current_user):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/default-schedule', methods=['POST'])
-@admin_required
+@permission_required('configure_default_hours', 'editor')
 def create_default_schedule(current_user):
     """Cria configuração padrão de horário"""
     try:
@@ -1084,7 +1056,7 @@ def create_default_schedule(current_user):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/default-schedule/<int:config_id>', methods=['DELETE'])
-@admin_required
+@permission_required('configure_default_hours', 'editor')
 def delete_default_schedule(current_user, config_id):
     """Remove configuração padrão de horário"""
     try:
@@ -1145,7 +1117,7 @@ def set_max_capacity(current_user):
 
 # Rotas específicas devem vir ANTES das rotas genéricas
 @admin_bp.route('/plants/<int:plant_id>/max-capacity', methods=['GET'])
-@admin_required
+@permission_required('edit_plant', 'editor')
 def get_plant_max_capacity(current_user, plant_id):
     """Retorna a configuração de capacidade máxima por horário de uma planta"""
     try:
@@ -1165,7 +1137,7 @@ def get_plant_max_capacity(current_user, plant_id):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/plants/<int:plant_id>/max-capacity', methods=['POST'])
-@admin_required
+@permission_required('edit_plant', 'editor')
 def set_plant_max_capacity(current_user, plant_id):
     """Define a configuração de capacidade máxima por horário de uma planta"""
     try:
@@ -1210,7 +1182,7 @@ def set_plant_max_capacity(current_user, plant_id):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/plants', methods=['GET'])
-@admin_required
+@permission_required('view_plants', 'viewer')
 def get_plants(current_user):
     """Lista todas as plantas"""
     try:
@@ -1245,16 +1217,13 @@ def get_plants(current_user):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/plants', methods=['POST'])
-@admin_required
+@permission_required('create_plant', 'editor')
 def create_plant(current_user):
     """Cria uma nova planta e seu usuário de acesso"""
     try:
         from src.models.plant import Plant
         
         data = request.get_json()
-        
-        # Log para debug
-        logger.info(f"Dados recebidos para criar planta: {data}")
         
         if not data:
             logger.error("Dados vazios recebidos")
@@ -1406,7 +1375,7 @@ def create_plant(current_user):
         return jsonify({'error': f'Erro ao criar planta: {str(e)}'}), 500
 
 @admin_bp.route('/plants/<int:plant_id>', methods=['PUT'])
-@admin_required
+@permission_required('edit_plant', 'editor')
 def update_plant(current_user, plant_id):
     """Atualiza uma planta existente"""
     try:
@@ -1417,6 +1386,17 @@ def update_plant(current_user, plant_id):
             return jsonify({'error': 'Planta não encontrada'}), 404
         
         data = request.get_json()
+        
+        # Verificar se está tentando alterar o is_active (inativar/ativar)
+        # Se está alterando o status, verificar permissão específica de inativar/ativar
+        if 'is_active' in data:
+            from src.utils.permissions import has_permission
+            if not has_permission('inactivate_plant', 'editor', current_user):
+                return jsonify({
+                    'error': 'Você não tem permissão para inativar/ativar plantas. Apenas usuários com perfil Editor podem realizar esta ação.',
+                    'permission_required': 'inactivate_plant',
+                    'permission_level': 'editor'
+                }), 403
         
         if 'name' in data and data['name']:
             # Verificar se outro nome já existe
@@ -1478,9 +1458,9 @@ def update_plant(current_user, plant_id):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/plants/<int:plant_id>', methods=['DELETE'])
-@admin_required
+@permission_required('delete_plant', 'editor')
 def delete_plant(current_user, plant_id):
-    """Deleta uma planta"""
+    """Deleta uma planta, exclui usuário com mesmo email e inativa outros usuários vinculados"""
     try:
         from src.models.plant import Plant
         
@@ -1488,17 +1468,62 @@ def delete_plant(current_user, plant_id):
         if not plant:
             return jsonify({'error': 'Planta não encontrada'}), 404
         
+        # Buscar usuário com mesmo email da planta (independente de plant_id)
+        user_to_delete = None
+        if plant.email:
+            plant_email_clean = plant.email.strip().lower()
+            
+            # Buscar usuário com email correspondente (case-insensitive)
+            users_with_email = User.query.filter(User.email.isnot(None)).all()
+            
+            for user in users_with_email:
+                user_email_clean = user.email.strip().lower() if user.email else None
+                if user_email_clean == plant_email_clean:
+                    user_to_delete = user
+                    break
+        
+        # Buscar todos os outros usuários vinculados à planta pelo plant_id
+        users_linked_to_plant = User.query.filter_by(plant_id=plant_id).all()
+        
+        # Separar usuários para inativação (excluir o que já será deletado da lista)
+        users_to_inactivate = []
+        for user in users_linked_to_plant:
+            # Não incluir o usuário que será excluído
+            if user_to_delete and user.id == user_to_delete.id:
+                continue
+            users_to_inactivate.append(user)
+        
+        # Excluir o usuário com mesmo email da planta
+        if user_to_delete:
+            db.session.delete(user_to_delete)
+        
+        # Inativar os outros usuários vinculados à planta
+        for user in users_to_inactivate:
+            user.is_active = False
+            user.plant_id = None  # Remover vínculo com a planta
+        
+        # Excluir a planta
         db.session.delete(plant)
         db.session.commit()
         
-        return jsonify({'message': 'Planta deletada com sucesso'}), 200
+        deleted_count = 1 if user_to_delete else 0
+        inactivated_count = len(users_to_inactivate)
+        
+        message = f'Planta deletada com sucesso'
+        if deleted_count > 0:
+            message += f'. {deleted_count} usuário(s) excluído(s)'
+        if inactivated_count > 0:
+            message += f'. {inactivated_count} usuário(s) inativado(s)'
+        
+        return jsonify({'message': message}), 200
         
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Erro ao deletar planta ID {plant_id}: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/operating-hours', methods=['GET'])
-@admin_required
+@permission_required('configure_plant_hours', 'viewer')
 def get_operating_hours(current_user):
     """Retorna horários de funcionamento configurados"""
     try:
@@ -1553,7 +1578,7 @@ def get_operating_hours(current_user):
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/operating-hours', methods=['POST'])
-@admin_required
+@permission_required('configure_plant_hours', 'editor')
 def save_operating_hours(current_user):
     """Salva horários de funcionamento"""
     try:
@@ -1566,8 +1591,6 @@ def save_operating_hours(current_user):
         
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"=== SALVANDO HORÁRIOS DE FUNCIONAMENTO ===")
-        logger.info(f"Dados recebidos: {data}")
         
         # Obter plant_id do body (opcional)
         plant_id = data.get('plant_id', None)
@@ -1841,11 +1864,43 @@ def update_user(current_user, user_id):
         if 'is_active' in data:
             user.is_active = data['is_active']
         
+        # Limpar associações baseadas no role ANTES de atualizar novas associações
+        # Se o role mudou para admin, limpar todas as associações
+        if 'role' in data and data['role'] == 'admin':
+            user.supplier_id = None
+            user.plant_id = None
+        # Se o role mudou para supplier, limpar associação com planta
+        elif 'role' in data and data['role'] == 'supplier':
+            user.plant_id = None
+        # Se o role mudou para plant, limpar associação com fornecedor
+        elif 'role' in data and data['role'] == 'plant':
+            user.supplier_id = None
+        
         # Atualizar associações (se fornecido)
+        # Permite passar None/null para limpar associações
         if 'supplier_id' in data:
-            user.supplier_id = data['supplier_id']
+            supplier_id = data['supplier_id']
+            if supplier_id is not None:
+                # Validar se o fornecedor existe
+                from src.models.supplier import Supplier
+                supplier = Supplier.query.get(supplier_id)
+                if not supplier:
+                    return jsonify({'error': 'Fornecedor não encontrado'}), 404
+                if not supplier.is_active:
+                    return jsonify({'error': 'Fornecedor inativo'}), 400
+            user.supplier_id = supplier_id
+        
         if 'plant_id' in data:
-            user.plant_id = data['plant_id']
+            plant_id = data['plant_id']
+            if plant_id is not None:
+                # Validar se a planta existe
+                from src.models.plant import Plant
+                plant = Plant.query.get(plant_id)
+                if not plant:
+                    return jsonify({'error': 'Planta não encontrada'}), 404
+                if not plant.is_active:
+                    return jsonify({'error': 'Planta inativa'}), 400
+            user.plant_id = plant_id
         
         db.session.commit()
         
@@ -1864,15 +1919,15 @@ def update_user(current_user, user_id):
 def delete_user(current_user, user_id):
     """Deleta permanentemente um usuário"""
     try:
-        logger.info(f"Tentando excluir usuário ID: {user_id}")
         user = User.query.get(user_id)
         if not user:
             logger.warning(f"Usuário ID {user_id} não encontrado")
             return jsonify({'error': 'Usuário não encontrado'}), 404
         
+        user_id_to_delete = user.id
+        
         # Não permitir deletar o próprio usuário
         if user.id == current_user.id:
-            logger.warning("Tentativa de excluir próprio usuário")
             return jsonify({'error': 'Você não pode deletar seu próprio usuário'}), 400
         
         # Verificar se há agendamentos vinculados ao fornecedor do usuário
@@ -1890,26 +1945,67 @@ def delete_user(current_user, user_id):
             }), 400
         
         # Hard delete: remover permanentemente do banco
-        # Guardar ID para log (não expor email)
-        user_id_to_delete = user.id
-        
-        logger.info(f"Executando exclusão permanente do usuário {user_email} (ID: {user_id_to_delete})")
+        try:
+            user_role = getattr(user, 'role', 'unknown')
+            user_plant_id = getattr(user, 'plant_id', None)
+            user_supplier_id = getattr(user, 'supplier_id', None)
+        except:
+            user_role = 'unknown'
+            user_plant_id = None
+            user_supplier_id = None
         
         try:
+            # Verificar se a planta/supplier ainda existe antes de deletar
+            # Se não existir, limpar a referência para evitar erro de constraint
+            needs_cleanup = False
+            
+            if user_plant_id:
+                try:
+                    plant_exists = Plant.query.get(user_plant_id)
+                    if not plant_exists:
+                        logger.warning(f"Planta ID {user_plant_id} não existe mais. Limpando referência antes de excluir usuário.")
+                        user.plant_id = None
+                        needs_cleanup = True
+                except Exception as e:
+                    logger.warning(f"Erro ao verificar planta ID {user_plant_id}: {str(e)}. Limpando referência.")
+                    user.plant_id = None
+                    needs_cleanup = True
+            
+            if user_supplier_id:
+                try:
+                    supplier_exists = Supplier.query.get(user_supplier_id)
+                    if not supplier_exists:
+                        logger.warning(f"Fornecedor ID {user_supplier_id} não existe mais. Limpando referência antes de excluir usuário.")
+                        user.supplier_id = None
+                        needs_cleanup = True
+                except Exception as e:
+                    logger.warning(f"Erro ao verificar fornecedor ID {user_supplier_id}: {str(e)}. Limpando referência.")
+                    user.supplier_id = None
+                    needs_cleanup = True
+            
+            # Se limpamos referências, fazer flush uma vez antes de deletar
+            if needs_cleanup:
+                db.session.flush()
+            
             # Remover o usuário da sessão
             db.session.delete(user)
             
-            # Fazer flush para garantir que a operação seja executada
-            db.session.flush()
-            
-            # Commit da transação
+            # Commit da transação (flush é feito automaticamente antes do commit)
             db.session.commit()
-            
-            logger.info(f"Commit realizado com sucesso para usuário {user_email} (ID: {user_id_to_delete})")
             
         except Exception as commit_error:
             db.session.rollback()
-            logger.error(f"Erro ao fazer commit da exclusão: {str(commit_error)}", exc_info=True)
+            error_type = type(commit_error).__name__
+            error_message = str(commit_error)
+            logger.error(f"Erro ao fazer commit da exclusão do usuário ID {user_id_to_delete} (Tipo: {error_type}): {error_message}", exc_info=True)
+            
+            # Verificar se é erro de constraint de chave estrangeira
+            if 'foreign key' in error_message.lower() or 'constraint' in error_message.lower() or 'integrity' in error_message.lower():
+                return jsonify({
+                    'error': 'Não é possível excluir o usuário devido a referências no banco de dados. Tente desativar o usuário ao invés de excluí-lo.'
+                }), 400
+            
+            # Re-raise para ser capturado pelo handler externo
             raise commit_error
         
         logger.info(f"Usuário ID {user_id_to_delete} excluído permanentemente com sucesso")
@@ -1918,9 +2014,23 @@ def delete_user(current_user, user_id):
         
     except Exception as e:
         db.session.rollback()
+        error_type = type(e).__name__
         error_msg = str(e)
-        logger.error(f"Erro ao deletar usuário ID {user_id}: {error_msg}", exc_info=True)
-        return jsonify({'error': f'Erro ao excluir usuário: {error_msg}'}), 500
+        
+        logger.error(f"Erro ao deletar usuário ID {user_id} (Tipo: {error_type}): {error_msg}", exc_info=True)
+        
+        # Retornar mensagem de erro mais amigável
+        error_lower = error_msg.lower()
+        if 'foreign key' in error_lower or 'constraint' in error_lower or 'integrity' in error_lower:
+            return jsonify({
+                'error': 'Não é possível excluir o usuário devido a referências no banco de dados. Tente desativar o usuário ao invés de excluí-lo.'
+            }), 400
+        
+        # Retornar mensagem genérica mas informativa
+        return jsonify({
+            'error': f'Erro ao excluir usuário: {error_msg}',
+            'error_type': error_type
+        }), 500
 
 @admin_bp.route('/users/<int:user_id>/reset-password', methods=['POST'])
 @admin_required
@@ -2022,7 +2132,7 @@ def get_my_permissions():
                 'edit_supplier', 'inactivate_supplier', 'delete_supplier', 'create_plant',
                 'view_plants', 'edit_plant', 'inactivate_plant', 'delete_plant',
                 'configure_plant_hours', 'configure_default_hours', 'configure_weekly_block',
-                'configure_date_block', 'view_available_hours', 'configure_max_capacity',
+                'configure_date_block', 'configure_max_capacity',
                 'view_statistics', 'manage_users', 'view_profile', 'edit_profile',
                 'change_password', 'configure_notifications'
             ]
@@ -2114,4 +2224,40 @@ def check_permission(current_user):
         
     except Exception as e:
         logger.error(f"Erro ao verificar permissão: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@admin_bp.route('/permissions/debug', methods=['GET'])
+@permission_required('create_supplier', 'editor')
+def debug_permissions(current_user):
+    """Endpoint de debug para verificar permissões do usuário atual"""
+    try:
+        from src.models.permission import Permission
+        from src.utils.permissions import has_permission
+        
+        # Buscar todas as permissões do role do usuário
+        all_perms = Permission.query.filter_by(role=current_user.role).all()
+        permissions_dict = {p.function_id: p.permission_type for p in all_perms}
+        
+        # Verificar permissão específica
+        create_supplier_permission = Permission.get_permission(current_user.role, 'create_supplier')
+        has_create_permission = has_permission('create_supplier', 'editor', current_user)
+        
+        return jsonify({
+            'user': {
+                'id': current_user.id,
+                'email': current_user.email,
+                'role': current_user.role,
+                'is_active': current_user.is_active
+            },
+            'permissions': permissions_dict,
+            'create_supplier': {
+                'permission_type': create_supplier_permission,
+                'has_permission': has_create_permission,
+                'required': 'editor'
+            },
+            'total_permissions': len(permissions_dict)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erro ao debugar permissões: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500

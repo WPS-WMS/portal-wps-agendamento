@@ -62,7 +62,7 @@ const MODULES = [
   {
     id: 'schedule_config',
     name: 'Configurações de Horários',
-    functions: ['configure_default_hours', 'configure_weekly_block', 'configure_date_block', 'view_available_hours']
+    functions: ['configure_default_hours', 'configure_weekly_block', 'configure_date_block']
   },
   {
     id: 'system_config',
@@ -143,7 +143,7 @@ const UserPermissionsPreview = ({ userRole, onNavigateToAccessProfiles }) => {
 
   const viewPermissions = [
     'view_suppliers', 'view_plants', 'view_appointments', 
-    'view_profile', 'view_system_config', 'view_available_hours',
+    'view_profile', 'view_system_config',
     'view_statistics'
   ]
 

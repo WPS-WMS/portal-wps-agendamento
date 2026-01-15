@@ -26,6 +26,8 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
   const [formData, setFormData] = useState({
     email: user?.email || '',
     role: user?.role || '',
+    supplier_id: user?.supplier_id || '',
+    plant_id: user?.plant_id || '',
     is_active: user?.is_active !== false
   })
   const [loading, setLoading] = useState(false)
@@ -45,6 +47,8 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
       setFormData({
         email: user.email || '',
         role: user.role || '',
+        supplier_id: user.supplier_id ? user.supplier_id.toString() : '',
+        plant_id: user.plant_id ? user.plant_id.toString() : '',
         is_active: user.is_active !== false
       })
     }
@@ -71,7 +75,17 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
   }
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+    setFormData(prev => {
+      const newData = { ...prev, [field]: value }
+      
+      // Limpar associações quando mudar o role
+      if (field === 'role') {
+        newData.supplier_id = ''
+        newData.plant_id = ''
+      }
+      
+      return newData
+    })
     setError('')
     setSuccess('')
   }
@@ -81,6 +95,19 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
     setError('')
     setSuccess('')
 
+    // Validações
+    if (formData.role === 'supplier' && !formData.supplier_id) {
+      setError('Selecione um fornecedor')
+      setLoading(false)
+      return
+    }
+
+    if (formData.role === 'plant' && !formData.plant_id) {
+      setError('Selecione uma planta')
+      setLoading(false)
+      return
+    }
+
     try {
       const updateData = {
         email: formData.email,
@@ -88,12 +115,17 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
         is_active: formData.is_active
       }
 
-      if (formData.role === 'supplier' && user?.supplier_id) {
-        updateData.supplier_id = user.supplier_id
-      }
-
-      if (formData.role === 'plant' && user?.plant_id) {
-        updateData.plant_id = user.plant_id
+      // Limpar associações antigas e adicionar novas baseadas no role
+      if (formData.role === 'supplier') {
+        updateData.supplier_id = parseInt(formData.supplier_id)
+        updateData.plant_id = null // Limpar associação com planta
+      } else if (formData.role === 'plant') {
+        updateData.plant_id = parseInt(formData.plant_id)
+        updateData.supplier_id = null // Limpar associação com fornecedor
+      } else if (formData.role === 'admin') {
+        // Admin não tem associações
+        updateData.supplier_id = null
+        updateData.plant_id = null
       }
 
       await adminAPI.updateUser(user.id, updateData)
@@ -346,7 +378,68 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
             </Select>
           </div>
 
-          {user?.supplier && (
+          {/* Campo de seleção de Fornecedor - aparece quando o perfil é supplier */}
+          {formData.role === 'supplier' && (
+            <div className="space-y-2">
+              <Label htmlFor="supplier_id">Fornecedor *</Label>
+              {suppliers.length > 0 ? (
+                <Select
+                  value={formData.supplier_id}
+                  onValueChange={(value) => handleInputChange('supplier_id', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o fornecedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id.toString()}>
+                        {supplier.description} - {supplier.cnpj}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Alert>
+                  <AlertDescription>
+                    Nenhum fornecedor ativo disponível. Por favor, cadastre um fornecedor antes de criar um usuário com perfil de fornecedor.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+
+          {/* Campo de seleção de Planta - aparece quando o perfil é plant */}
+          {formData.role === 'plant' && (
+            <div className="space-y-2">
+              <Label htmlFor="plant_id">Planta *</Label>
+              {plants.length > 0 ? (
+                <Select
+                  value={formData.plant_id}
+                  onValueChange={(value) => handleInputChange('plant_id', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a planta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {plants.map((plant) => (
+                      <SelectItem key={plant.id} value={plant.id.toString()}>
+                        {plant.name} - {plant.code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Alert>
+                  <AlertDescription>
+                    Nenhuma planta ativa disponível. Por favor, cadastre uma planta antes de criar um usuário com perfil de planta.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+
+          {/* Mostrar associação atual apenas se o perfil não foi alterado */}
+          {formData.role === user?.role && user?.supplier && (
             <div className="p-3 bg-blue-50 rounded border border-blue-200">
               <p className="text-sm text-blue-800">
                 <strong>Fornecedor associado:</strong> {user.supplier.description} - {user.supplier.cnpj}
@@ -354,7 +447,7 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
             </div>
           )}
 
-          {user?.plant && (
+          {formData.role === user?.role && user?.plant && (
             <div className="p-3 bg-green-50 rounded border border-green-200">
               <p className="text-sm text-green-800">
                 <strong>Planta associada:</strong> {user.plant.name} - {user.plant.code}

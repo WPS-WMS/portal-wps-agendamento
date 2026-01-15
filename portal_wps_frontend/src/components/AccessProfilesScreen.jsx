@@ -89,8 +89,7 @@ const MODULES = [
     functions: [
       { id: 'configure_default_hours', name: 'Horário Padrão', icon: '🕐' },
       { id: 'configure_weekly_block', name: 'Bloqueio Semanal', icon: '📆' },
-      { id: 'configure_date_block', name: 'Bloqueio por Data', icon: '📅' },
-      { id: 'view_available_hours', name: 'Visualizar horários disponíveis', icon: '👁️' }
+      { id: 'configure_date_block', name: 'Bloqueio por Data', icon: '📅' }
     ]
   }
 ]
@@ -134,9 +133,9 @@ const PERMISSION_DEPENDENCIES = {
   delete_plant: ['view_plants'],
   configure_plant_hours: ['view_plants'],
   // Configurações de Horários
-  configure_weekly_block: ['view_available_hours'],
-  configure_date_block: ['view_available_hours'],
-  configure_default_hours: ['view_available_hours']
+  configure_weekly_block: [],
+  configure_date_block: [],
+  configure_default_hours: []
 }
 
 const AccessProfilesScreen = ({ onBack, user }) => {

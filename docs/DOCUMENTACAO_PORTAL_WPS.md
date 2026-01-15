@@ -6,7 +6,7 @@
 
 ## Visão Geral
 
-O **Portal WPS** é um sistema completo de agendamento logístico desenvolvido para facilitar a gestão de cargas entre fornecedores e clientes. O sistema oferece duas visões distintas: uma para administradores (clientes) e outra para fornecedores, proporcionando controle total sobre o processo de agendamento, check-in e check-out de veículos.
+O **Portal WPS** é um sistema completo de agendamento logístico desenvolvido para facilitar a gestão de cargas entre fornecedores e clientes. O sistema oferece três visões distintas: uma para administradores (clientes), outra para fornecedores e uma para plantas, proporcionando controle total sobre o processo de agendamento, check-in e check-out de veículos.
 
 ## Arquitetura do Sistema
 
@@ -16,11 +16,11 @@ O **Portal WPS** é um sistema completo de agendamento logístico desenvolvido p
 |------------|------------|---------|
 | **Backend** | Flask (Python) | 3.1.1 |
 | **Python** | Python | 3.11+ |
-| **Frontend** | React + Vite | 18.x |
+| **Frontend** | React + Vite | 18.2.0 / 6.3.5 |
 | **Banco de Dados** | SQLite | 3.x |
 | **Autenticação** | JWT (JSON Web Tokens) | PyJWT 2.10.1 |
-| **UI Framework** | Tailwind CSS + shadcn/ui | - |
-| **Ícones** | Lucide React | - |
+| **UI Framework** | Tailwind CSS + shadcn/ui | 4.1.7 |
+| **Ícones** | Lucide React | 0.510.0 |
 
 ### Estrutura do Projeto
 
@@ -36,31 +36,50 @@ portal-wps-agendamento/
 │   │   │   ├── plant.py        # Modelo de planta
 │   │   │   ├── system_config.py # Configurações do sistema
 │   │   │   ├── schedule_config.py # Configurações de horários
-│   │   │   └── default_schedule.py # Horários padrão
+│   │   │   ├── default_schedule.py # Horários padrão
+│   │   │   ├── operating_hours.py # Horários de funcionamento
+│   │   │   └── permission.py   # Modelo de permissões
 │   │   ├── routes/             # Rotas da API
 │   │   │   ├── auth.py         # Autenticação
 │   │   │   ├── admin.py        # Rotas administrativas
 │   │   │   ├── supplier.py     # Rotas do fornecedor
+│   │   │   ├── plant.py        # Rotas da planta
 │   │   │   └── user.py         # Rotas de usuário
 │   │   ├── utils/              # Utilitários
-│   │   │   └── helpers.py      # Funções auxiliares
+│   │   │   ├── helpers.py      # Funções auxiliares
+│   │   │   ├── permissions.py  # Sistema de permissões
+│   │   │   └── operating_hours_validator.py # Validação de horários
 │   │   └── database/           # Banco de dados SQLite
-│   │       └── app.db          # Arquivo do banco
-│   ├── venv/                   # Ambiente virtual Python
+│   │       └── app.db          # Arquivo do banco (criado automaticamente)
+│   ├── venv/                   # Ambiente virtual Python (criar)
 │   ├── requirements.txt        # Dependências Python
-│   └── init_data.py           # Script de dados iniciais
-└── portal_wps_frontend/         # Aplicação React
-    ├── src/
-    │   ├── components/         # Componentes React
-    │   │   └── ui/             # Componentes UI (shadcn/ui)
-    │   ├── lib/                # Utilitários e API
-    │   │   ├── api.js          # Cliente API
-    │   │   ├── utils.js        # Funções utilitárias
-    │   │   ├── constants.js   # Constantes do sistema
-    │   │   └── formatters.js  # Formatadores de dados
-    │   ├── hooks/              # React Hooks customizados
-    │   └── App.jsx             # Componente principal
-    └── package.json            # Dependências Node.js
+│   └── init_data.py           # Script opcional de dados iniciais
+├── portal_wps_frontend/         # Aplicação React
+│   ├── src/
+│   │   ├── components/         # Componentes React
+│   │   │   ├── ui/             # Componentes UI (shadcn/ui)
+│   │   │   ├── AdminDashboard.jsx
+│   │   │   ├── SupplierDashboard.jsx
+│   │   │   ├── PlantDashboard.jsx
+│   │   │   ├── Login.jsx
+│   │   │   ├── Header.jsx
+│   │   │   └── ...             # Outros componentes
+│   │   ├── hooks/              # React Hooks customizados
+│   │   │   ├── useAuth.js
+│   │   │   ├── usePermissions.js
+│   │   │   └── use-mobile.js
+│   │   ├── lib/                # Utilitários e API
+│   │   │   └── api.js          # Cliente API
+│   │   └── App.jsx             # Componente principal
+│   └── package.json            # Dependências Node.js
+├── docs/                        # Documentação do projeto
+│   ├── GUIA_INSTALACAO.md      # Guia de instalação
+│   ├── DOCUMENTACAO_PORTAL_WPS.md # Este arquivo
+│   └── README.md               # README da documentação
+├── iniciar_servidores.ps1      # Script PowerShell para iniciar ambos os servidores
+├── iniciar_backend.ps1         # Script PowerShell para iniciar backend
+├── iniciar_frontend.ps1        # Script PowerShell para iniciar frontend
+└── README.md                   # README principal
 ```
 
 ## Funcionalidades Principais
@@ -77,6 +96,7 @@ O sistema utiliza **JWT (JSON Web Tokens)** para autenticação segura, diferenc
 - Recuperação de senha com mensagens genéricas (prevenção de enumeração)
 - Validação de campos obrigatórios
 - Mensagens de erro genéricas para não expor informações sensíveis
+- Senhas criptografadas com hash bcrypt
 
 ### 2. Visão Administrador
 
@@ -113,12 +133,19 @@ O sistema utiliza **JWT (JSON Web Tokens)** para autenticação segura, diferenc
 - **Horários por Planta**: Configuração de horários específicos por planta
 - **Validação Automática**: Sistema valida horários ao criar/editar agendamentos
 
+#### Gestão de Usuários
+- **Criação de usuários**: Cadastro de novos usuários com diferentes perfis
+- **Edição de usuários**: Modificação de dados de usuários existentes
+- **Gerenciamento de permissões**: Controle de acesso por funcionalidade
+- **Redefinição de senha**: Sistema de redefinição de senha por administradores
+
 #### Integração ERP
 Quando um check-in é realizado, o sistema gera automaticamente um **payload JSON** para integração com sistemas ERP externos:
 
 ```json
 {
   "appointment_id": 1,
+  "appointment_number": "AG-20260114-0001",
   "supplier_cnpj": "12.345.678/0001-90",
   "supplier_name": "Fornecedor ABC Ltda",
   "purchase_order": "PO-2025-001",
@@ -198,6 +225,7 @@ O sistema implementa um controle de acesso granular por funcionalidade através 
 |--------|----------|-----------|
 | POST | `/api/login` | Autenticação de usuário |
 | POST | `/api/forgot-password` | Recuperação de senha (mensagem genérica) |
+| GET | `/api/verify` | Verificação de token JWT |
 
 ### Administrador
 | Método | Endpoint | Descrição |
@@ -318,11 +346,12 @@ O sistema implementa um controle de acesso granular por funcionalidade através 
 ```python
 {
   "id": Integer,
+  "appointment_number": String,  # Número único do agendamento (formato: AG-YYYYMMDD-XXXX)
   "supplier_id": Integer,  # Fornecedor (obrigatório)
   "plant_id": Integer,  # Planta de destino (obrigatório)
   "date": Date,  # Data do agendamento
   "time": Time,  # Horário inicial
-  "time_end": Time,  # Horário final (obrigatório)
+  "time_end": Time,  # Horário final (opcional para compatibilidade)
   "purchase_order": String,  # Número do PO (obrigatório)
   "truck_plate": String,  # Placa do caminhão (obrigatório)
   "driver_name": String,  # Nome do motorista (obrigatório)
@@ -330,6 +359,31 @@ O sistema implementa um controle de acesso granular por funcionalidade através 
   "motivo_reagendamento": String,  # Motivo do reagendamento (nullable, obrigatório ao reagendar)
   "check_in_time": DateTime,  # Timestamp do check-in (nullable)
   "check_out_time": DateTime,  # Timestamp do check-out (nullable)
+  "created_at": DateTime,
+  "updated_at": DateTime
+}
+```
+
+### Permissão (Permission)
+```python
+{
+  "id": Integer,
+  "role": String,  # "admin", "supplier" ou "plant"
+  "function_id": String,  # ID da funcionalidade (ex: "create_appointment")
+  "permission_type": String,  # "editor", "viewer", "none"
+  "created_at": DateTime,
+  "updated_at": DateTime
+}
+```
+
+### Horários de Funcionamento (OperatingHours)
+```python
+{
+  "id": Integer,
+  "plant_id": Integer,  # ID da planta (nullable para horários globais)
+  "day_of_week": Integer,  # 0=Domingo, 1=Segunda, ..., 6=Sábado (nullable para todos os dias)
+  "start_time": Time,  # Horário de início
+  "end_time": Time,  # Horário de término
   "created_at": DateTime,
   "updated_at": DateTime
 }
@@ -360,7 +414,8 @@ O sistema implementa um controle de acesso granular por funcionalidade através 
 5. Preenche dados do agendamento (data, horário inicial, horário final, PO, placa, motorista)
 6. Sistema valida disponibilidade e capacidade máxima da planta selecionada
 7. Sistema valida horários de funcionamento da planta
-8. Sistema salva agendamento com status "scheduled"
+8. Sistema gera número único do agendamento (formato: AG-YYYYMMDD-XXXX)
+9. Sistema salva agendamento com status "scheduled"
 
 ### 4. Reagendamento (Fornecedor/Administrador)
 1. Usuário edita agendamento existente
@@ -389,12 +444,14 @@ O sistema implementa um controle de acesso granular por funcionalidade através 
 - **Controle de acesso**: Fornecedores só acessam próprios dados
 - **Validação de entrada**: Sanitização de todos os inputs
 - **Senhas criptografadas**: Hash bcrypt para senhas
+- **Permissões granulares**: Sistema de permissões por funcionalidade
 
 ### Validações
 - **CNPJ**: Validação de formato e dígitos verificadores
 - **Email**: Validação de formato RFC 5322
 - **Datas**: Validação de formato e consistência
-- **Horários**: Verificação de disponibilidade
+- **Horários**: Verificação de disponibilidade e capacidade
+- **Campos obrigatórios**: Validação de todos os campos requeridos
 
 ## Interface do Usuário
 
@@ -423,30 +480,61 @@ O sistema utiliza um design moderno e profissional baseado em:
 - Python 3.11+
 - Node.js 18+
 - pnpm ou npm
+- Git (opcional, apenas para clonar repositório)
 
 ### Backend (Flask)
+
+#### Instalação Manual
 ```bash
 cd portal_wps_backend
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
+# ou venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 python src/main.py
 ```
 
+#### Scripts PowerShell (Windows)
+```powershell
+.\iniciar_backend.ps1   # Inicia apenas o backend
+```
+
+**Banco de Dados:**
+- O banco de dados SQLite é criado automaticamente na primeira execução em `src/database/app.db`
+- O script `init_data.py` é **opcional** e serve apenas para popular o banco com dados de teste
+- Para criar dados de teste, execute: `python init_data.py` no diretório `portal_wps_backend`
+- **Atenção**: O script `init_data.py` apaga todos os dados existentes e recria dados de teste
+
 ### Frontend (React)
+
+#### Instalação Manual
 ```bash
 cd portal_wps_frontend
-pnpm install
-pnpm run dev
+npm install  # ou pnpm install
+npm run dev  # ou pnpm run dev
+```
+
+#### Scripts PowerShell (Windows)
+```powershell
+.\iniciar_frontend.ps1  # Inicia apenas o frontend
+```
+
+### Iniciar Ambos os Servidores
+
+#### Script PowerShell (Windows)
+```powershell
+.\iniciar_servidores.ps1  # Inicia backend e frontend em janelas separadas
 ```
 
 ### Configuração
 - **Backend**: Porta 5000 (http://localhost:5000)
 - **Frontend**: Porta 5173 (http://localhost:5173) - Vite padrão
-- **Banco**: SQLite (`src/database/app.db`)
+- **Banco**: SQLite (`src/database/app.db`) - criado automaticamente
 - **API Base**: `/api`
 
 ## Dados de Teste
+
+> **Nota:** As credenciais abaixo são válidas apenas se o banco de dados foi inicializado com `init_data.py`. Caso contrário, é necessário criar usuários através da interface administrativa.
 
 ### Usuário Administrador
 - **Email**: admin@wps.com
@@ -456,10 +544,23 @@ pnpm run dev
 1. **Fornecedor ABC Ltda**
    - Email: fornecedor1@abc.com
    - Senha: fornecedor123
+   - CNPJ: 12.345.678/0001-90
 
 2. **Transportadora XYZ S.A.**
    - Email: fornecedor2@xyz.com
    - Senha: fornecedor123
+   - CNPJ: 98.765.432/0001-10
+
+### Plantas Pré-cadastradas
+1. **Planta Central**
+   - Email: portaria.central@wps.com
+   - Senha: portaria123
+   - Código: PLT-001
+
+2. **Planta Norte**
+   - Email: portaria.norte@wps.com
+   - Senha: portaria123
+   - Código: PLT-002
 
 ## Funcionalidades Implementadas Recentemente
 
@@ -468,6 +569,12 @@ pnpm run dev
 - **Motivo obrigatório**: Modal exige motivo ao reagendar
 - **Status automático**: Status muda para "rescheduled" automaticamente
 - **Histórico**: Motivo é armazenado e exibido no agendamento
+
+### Sistema de Números de Agendamento
+- **Geração automática**: Número único gerado automaticamente para cada agendamento
+- **Formato**: AG-YYYYMMDD-XXXX (ex: AG-20260114-0001)
+- **Sequencial**: Números sequenciais por data
+- **Único**: Garantia de unicidade no sistema
 
 ### Gestão de Plantas
 - **Cadastro completo**: Sistema de cadastro de plantas com dados completos
@@ -506,16 +613,25 @@ pnpm run dev
 
 ### Logs do Sistema
 O sistema registra todas as operações importantes:
+- Inicialização do banco de dados
 - Autenticações e tentativas de login
 - Criação e modificação de agendamentos
 - Check-ins e check-outs realizados
 - Erros e exceções do sistema
+
+> **Nota:** O sistema foi otimizado para remover logs desnecessários que expunham informações sensíveis (emails, CNPJs, dados completos de objetos). Apenas logs críticos para debug e monitoramento são mantidos.
 
 ### Monitoramento
 - **Performance**: Tempo de resposta das APIs
 - **Disponibilidade**: Uptime do sistema
 - **Uso**: Estatísticas de utilização
 - **Erros**: Tracking de bugs e falhas
+
+## Referências
+
+Para mais informações sobre instalação e configuração, consulte:
+- **Guia de Instalação**: `docs/GUIA_INSTALACAO.md`
+- **README Principal**: `README.md`
 
 ## Conclusão
 

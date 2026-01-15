@@ -266,49 +266,53 @@ const UserForm = ({ onBack, onSuccess }) => {
                   {formData.role === 'supplier' ? 'Fornecedor' : 'Planta'} *
                 </Label>
                 {formData.role === 'supplier' ? (
-                  <Select
-                    value={formData.supplier_id}
-                    onValueChange={(value) => handleInputChange('supplier_id', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o fornecedor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {suppliers.length > 0 ? (
-                        suppliers.map((supplier) => (
+                  suppliers.length > 0 ? (
+                    <Select
+                      value={formData.supplier_id}
+                      onValueChange={(value) => handleInputChange('supplier_id', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o fornecedor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map((supplier) => (
                           <SelectItem key={supplier.id} value={supplier.id.toString()}>
                             {supplier.description} - {supplier.cnpj}
                           </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="" disabled>
-                          Nenhum fornecedor disponível
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Alert>
+                      <AlertDescription>
+                        Nenhum fornecedor ativo disponível. Por favor, cadastre um fornecedor antes de criar um usuário com perfil de fornecedor.
+                      </AlertDescription>
+                    </Alert>
+                  )
                 ) : (
-                  <Select
-                    value={formData.plant_id}
-                    onValueChange={(value) => handleInputChange('plant_id', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione a planta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {plants.length > 0 ? (
-                        plants.map((plant) => (
+                  plants.length > 0 ? (
+                    <Select
+                      value={formData.plant_id}
+                      onValueChange={(value) => handleInputChange('plant_id', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a planta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {plants.map((plant) => (
                           <SelectItem key={plant.id} value={plant.id.toString()}>
                             {plant.name} - {plant.code}
                           </SelectItem>
-                        ))
-                      ) : (
-                        <SelectItem value="" disabled>
-                          Nenhuma planta disponível
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Alert>
+                      <AlertDescription>
+                        Nenhuma planta ativa disponível. Por favor, cadastre uma planta antes de criar um usuário com perfil de planta.
+                      </AlertDescription>
+                    </Alert>
+                  )
                 )}
               </div>
             )}

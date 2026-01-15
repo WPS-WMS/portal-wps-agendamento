@@ -139,9 +139,16 @@ const SettingsModal = ({ isOpen, onClose, user }) => {
             <h4 className="text-sm font-semibold text-gray-700">Informações da Conta</h4>
             <div className="space-y-1 text-xs text-gray-600">
               <p><strong>Email:</strong> {user?.email}</p>
-              <p><strong>Perfil:</strong> {user?.role === 'admin' ? 'Administrador' : 'Fornecedor'}</p>
+              <p><strong>Perfil:</strong> {
+                user?.role === 'admin' ? 'Administrador' :
+                user?.role === 'supplier' ? 'Fornecedor' :
+                user?.role === 'plant' ? 'Planta' : user?.role
+              }</p>
               {user?.supplier_id && (
                 <p><strong>ID Fornecedor:</strong> {user.supplier_id}</p>
+              )}
+              {user?.plant_id && (
+                <p><strong>ID Planta:</strong> {user.plant_id}</p>
               )}
             </div>
           </div>
