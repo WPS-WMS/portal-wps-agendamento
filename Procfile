@@ -1,1 +1,1 @@
-web: cd portal_wps_backend && python src/main.py
+web: cd portal_wps_backend && python3 src/main.py
