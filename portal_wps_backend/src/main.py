@@ -53,17 +53,33 @@ if allowed_origins != '*':
 
 CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
-# Configurar banco de dados
-database_path = os.path.join(os.path.dirname(__file__), 'database', 'app.db')
-database_dir = os.path.dirname(database_path)
+# Configurar banco de dados (PostgreSQL por padrão)
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Criar diretório do banco de dados se não existir
-if not os.path.exists(database_dir):
-    os.makedirs(database_dir)
-    logger.info(f"Diretório do banco de dados criado: {database_dir}")
+if not DATABASE_URL:
+    pg_user = os.environ.get("POSTGRES_USER", "postgres")
+    pg_password = os.environ.get("POSTGRES_PASSWORD", "")
+    pg_host = os.environ.get("POSTGRES_HOST", "localhost")
+    pg_port = os.environ.get("POSTGRES_PORT", "5432")
+    pg_db = os.environ.get("POSTGRES_DB", "portal_wps")
 
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{database_path}"
+    is_production = os.environ.get('FLASK_ENV') == 'production' or os.environ.get('ENVIRONMENT') == 'production'
+    if not pg_password and is_production:
+        raise ValueError("POSTGRES_PASSWORD deve ser definida em produção para conexão segura ao PostgreSQL.")
+    if not pg_password:
+        logger.warning("⚠️ POSTGRES_PASSWORD não definido; conectando sem senha (apenas recomendado em desenvolvimento).")
+
+    # Monta a URL no formato postgresql+psycopg2://user:pass@host:port/db
+    auth_part = f"{pg_user}:{pg_password}@" if pg_password else f"{pg_user}@"
+    DATABASE_URL = f"postgresql+psycopg2://{auth_part}{pg_host}:{pg_port}/{pg_db}"
+    logger.info(f"SQLALCHEMY_DATABASE_URI montada via variáveis individuais: {DATABASE_URL}")
+else:
+    logger.info("SQLALCHEMY_DATABASE_URI definida via DATABASE_URL.")
+
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Pre-ping evita conexões quebradas em provedores cloud/serverless
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
 
 # Inicializar banco de dados
 try:

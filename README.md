@@ -81,8 +81,23 @@ npm run dev
 
 ## Banco de Dados
 
-O sistema utiliza SQLite por padrão. O arquivo do banco está em:
-- `portal_wps_backend/src/database/app.db`
+O sistema utiliza **PostgreSQL** como banco de dados. A conexão é configurada através de variáveis de ambiente:
+
+### Configuração via DATABASE_URL (recomendado)
+```bash
+export DATABASE_URL="postgresql://usuario:senha@host:5432/portal_wps"
+```
+
+### Configuração via variáveis individuais
+```bash
+export POSTGRES_USER="postgres"
+export POSTGRES_PASSWORD="sua_senha"
+export POSTGRES_HOST="localhost"
+export POSTGRES_PORT="5432"
+export POSTGRES_DB="portal_wps"
+```
+
+Para mais detalhes, consulte `docs/GUIA_INSTALACAO.md`.
 
 ## Documentação Adicional
 

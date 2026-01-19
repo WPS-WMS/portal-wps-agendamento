@@ -1,7 +1,7 @@
 # Modelagem do Banco de Dados - Portal WPS
 
 **Sistema:** Portal WPS - Sistema de Agendamento de Carga  
-**Banco de Dados:** SQLite  
+**Banco de Dados:** PostgreSQL  
 **Data:** Janeiro de 2026  
 **Versão:** 1.0.0
 
@@ -17,7 +17,7 @@
 
 ## Visão Geral
 
-O banco de dados do Portal WPS utiliza SQLite e é composto por **10 tabelas principais** que gerenciam usuários, fornecedores, plantas, agendamentos, permissões, horários de funcionamento e configurações do sistema.
+O banco de dados do Portal WPS utiliza **PostgreSQL** e é composto por **10 tabelas principais** que gerenciam usuários, fornecedores, plantas, agendamentos, permissões, horários de funcionamento e configurações do sistema.
 
 ### Arquitetura Multi-Tenant
 

@@ -17,7 +17,7 @@ O **Portal WPS** é um sistema completo de agendamento logístico desenvolvido p
 | **Backend** | Flask (Python) | 3.1.1 |
 | **Python** | Python | 3.11+ |
 | **Frontend** | React + Vite | 18.2.0 / 6.3.5 |
-| **Banco de Dados** | SQLite | 3.x |
+| **Banco de Dados** | PostgreSQL | 12+ |
 | **Autenticação** | JWT (JSON Web Tokens) | PyJWT 2.10.1 |
 | **UI Framework** | Tailwind CSS + shadcn/ui | 4.1.7 |
 | **Ícones** | Lucide React | 0.510.0 |
@@ -51,8 +51,8 @@ portal-wps-agendamento/
 │   │   │   ├── permissions.py  # Sistema de permissões granulares
 │   │   │   ├── company_filter.py # Filtro multi-tenant por company_id
 │   │   │   └── operating_hours_validator.py # Validação de horários
-│   │   └── database/           # Banco de dados SQLite
-│   │       └── app.db          # Arquivo do banco (criado automaticamente)
+│   │   └── database/           # (Não usado mais - sistema usa PostgreSQL)
+│   │       └── app.db          # (Legado - apenas para migração)
 │   ├── venv/                   # Ambiente virtual Python (criar)
 │   ├── requirements.txt        # Dependências Python
 │   ├── init_data.py           # Script opcional de dados iniciais (dados de teste)
@@ -528,13 +528,16 @@ python src/main.py
 .\iniciar_backend.ps1   # Inicia apenas o backend
 ```
 
-**Banco de Dados:**
-- O banco de dados SQLite é criado **automaticamente** na primeira execução em `src/database/app.db`
+**Banco de Dados (PostgreSQL):**
+- O sistema utiliza **PostgreSQL** como banco de dados
+- Configure a conexão através de variáveis de ambiente (DATABASE_URL ou variáveis individuais)
 - A estrutura completa do banco está definida nos modelos em `src/models/` (user.py, company.py, supplier.py, plant.py, appointment.py, etc.)
 - O `main.py` inicializa o banco chamando `db.create_all()` que cria todas as tabelas baseado nos modelos importados
+- **Pré-requisito**: PostgreSQL instalado e banco de dados criado (`CREATE DATABASE portal_wps;`)
 - O script `init_data.py` é **opcional** e serve apenas para popular o banco com dados de teste
 - Para criar dados de teste, execute: `python init_data.py` no diretório `portal_wps_backend`
 - **Atenção**: O script `init_data.py` apaga todos os dados existentes e recria dados de teste
+- Para migrar dados de SQLite para PostgreSQL, use: `python migrate_sqlite_to_postgres.py`
 
 ### Frontend (React)
 
@@ -565,11 +568,12 @@ npm run dev  # ou pnpm run dev
 - **API Base**: `/api`
 
 #### Banco de Dados
-- **Tipo**: SQLite
-- **Localização**: `portal_wps_backend/src/database/app.db`
-- **Criação**: Automática na primeira execução do `main.py`
+- **Tipo**: PostgreSQL
+- **Configuração**: Via variáveis de ambiente (DATABASE_URL ou POSTGRES_*)
+- **Criação**: As tabelas são criadas automaticamente na primeira execução do `main.py`
 - **Estrutura**: Definida nos modelos em `src/models/` (não no main.py)
 - **Inicialização**: O `main.py` importa todos os modelos e chama `db.create_all()` para criar todas as tabelas
+- **Pré-requisito**: PostgreSQL instalado e banco criado (`CREATE DATABASE portal_wps;`)
 
 #### Variáveis de Ambiente (Desenvolvimento)
 Criar arquivo `.env` no diretório `portal_wps_backend/` baseado em `.env.example`:
@@ -653,7 +657,7 @@ CORS_ORIGINS=*
 
 ### Otimizações Técnicas
 - **Cache**: Redis para performance (planejado)
-- **Banco**: PostgreSQL para produção (recomendado)
+- **Banco**: PostgreSQL já implementado ✅
 - **Deploy**: Containerização com Docker (planejado)
 - **Monitoramento**: Logs estruturados e métricas (parcialmente implementado)
 - **Backup**: Estratégia de backup automatizado (planejado)
@@ -714,7 +718,7 @@ Antes de fazer deploy em produção, certifique-se de:
 2. **CORS**: Configurar `CORS_ORIGINS` com origens específicas
 3. **Ambiente**: Definir `FLASK_ENV=production` ou `ENVIRONMENT=production`
 4. **HTTPS**: Configurar certificado SSL (usar proxy reverso como Nginx)
-5. **Banco de Dados**: Considerar migração para PostgreSQL para produção
+5. **Banco de Dados**: Sistema já utiliza PostgreSQL (configurado via variáveis de ambiente)
 
 > Consulte `docs/SEGURANCA.md` para checklist completo de segurança.
 

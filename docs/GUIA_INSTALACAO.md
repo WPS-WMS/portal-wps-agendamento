@@ -37,12 +37,36 @@ pip install -r requirements.txt
   CORS_ORIGINS=*
   ```
 
-**Banco de Dados:**
-- O banco de dados SQLite é criado **automaticamente** na primeira execução em `src/database/app.db`
+**Banco de Dados (PostgreSQL):**
+- O sistema utiliza **PostgreSQL** como banco de dados
+- Configure a conexão através de variáveis de ambiente (veja abaixo)
 - A estrutura completa do banco está definida nos modelos em `src/models/` (user.py, company.py, supplier.py, plant.py, appointment.py, etc.)
-- O `main.py` importa todos os modelos e chama `db.create_all()` que cria todas as tabelas automaticamente
+- O `main.py` importa todos os modelos e chama `db.create_all()` que cria todas as tabelas automaticamente na primeira execução
 - O script `init_data.py` é **opcional** e serve apenas para popular o banco com dados de teste
 - Para criar dados de teste, execute: `python init_data.py` (apaga todos os dados existentes e recria dados de teste)
+
+**Configuração do PostgreSQL:**
+
+Opção 1 - Via DATABASE_URL (recomendado):
+```bash
+# .env (não commitar no git!)
+DATABASE_URL=postgresql://usuario:senha@host:5432/portal_wps
+```
+
+Opção 2 - Via variáveis individuais:
+```bash
+# .env (não commitar no git!)
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=sua_senha
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=portal_wps
+```
+
+**Importante:** 
+- Certifique-se de que o PostgreSQL está instalado e rodando
+- Crie o banco de dados antes de iniciar o backend: `CREATE DATABASE portal_wps;`
+- Para migrar dados de SQLite para PostgreSQL, use o script: `python migrate_sqlite_to_postgres.py`
 
 ### 4. Configuração do Frontend
 
@@ -139,8 +163,8 @@ portal-wps-agendamento/
 │   │   ├── models/              # Modelos do banco de dados
 │   │   ├── routes/              # Rotas da API
 │   │   ├── utils/               # Utilitários
-│   │   ├── database/            # Banco de dados SQLite (criado automaticamente)
-│   │   │   └── app.db          # Arquivo do banco de dados
+│   │   ├── database/            # (Não usado mais - sistema usa PostgreSQL)
+│   │   │   └── app.db          # (Legado - apenas para migração)
 │   │   └── main.py             # Aplicação principal
 │   ├── venv/                   # Ambiente virtual Python (criar)
 │   ├── requirements.txt        # Dependências Python
@@ -174,14 +198,19 @@ portal-wps-agendamento/
 - **API Base**: `/api`
 
 ### Banco de Dados
-- **Localização**: `portal_wps_backend/src/database/app.db`
-- **Tipo**: SQLite
-- **Criação**: Automática na primeira execução do `main.py`
+- **Tipo**: PostgreSQL
+- **Configuração**: Via variáveis de ambiente (DATABASE_URL ou variáveis individuais)
+- **Criação**: As tabelas são criadas automaticamente na primeira execução do `main.py`
 - **Estrutura**: Definida nos modelos em `src/models/` (não no main.py)
   - O `main.py` importa todos os modelos (User, Company, Supplier, Plant, Appointment, etc.)
   - SQLAlchemy cria todas as tabelas automaticamente com `db.create_all()`
+- **Pré-requisito**: PostgreSQL instalado e banco de dados criado
+  ```sql
+  CREATE DATABASE portal_wps;
+  ```
 - **Dados de Teste**: Execute `python init_data.py` no diretório `portal_wps_backend` (opcional)
   - ⚠️ **Atenção**: Este script apaga todos os dados existentes e recria dados de teste
+- **Migração de SQLite**: Se você tinha dados em SQLite, use `python migrate_sqlite_to_postgres.py`
 
 ## Solução de Problemas
 
@@ -206,14 +235,15 @@ portal-wps-agendamento/
 - Verificar console do navegador para mensagens de erro de rede
 
 ### Banco de dados vazio ou sem dados
-- **O banco é criado automaticamente**: Na primeira execução do `main.py`, todas as tabelas são criadas automaticamente
+- **O banco PostgreSQL deve estar criado**: Execute `CREATE DATABASE portal_wps;` no PostgreSQL antes de iniciar o backend
+- **As tabelas são criadas automaticamente**: Na primeira execução do `main.py`, todas as tabelas são criadas automaticamente
 - **Estrutura do banco**: Definida nos modelos em `src/models/` - não precisa criar manualmente
 - **Dados de teste (opcional)**: 
   - **Opção 1**: Executar `python init_data.py` no diretório `portal_wps_backend` 
     - ⚠️ **Atenção**: Este script apaga **todos os dados existentes** e recria dados de teste
   - **Opção 2**: Criar usuários através da interface administrativa (após login como admin)
-- Verificar se arquivo `src/database/app.db` foi criado em `portal_wps_backend/src/database/`
-- Verificar se o diretório `database` foi criado automaticamente
+- **Verificar conexão**: Confirme que as variáveis de ambiente estão configuradas corretamente (DATABASE_URL ou POSTGRES_*)
+- **Erro de conexão**: Verifique se o PostgreSQL está rodando e se as credenciais estão corretas
 
 ### Erro de permissões
 - Verificar se o usuário tem permissão para criar/editar/excluir conforme configurado em "Perfis de Acesso"
@@ -255,7 +285,8 @@ portal-wps-agendamento/
 - **shadcn/ui** - Componentes UI
 
 ### Banco de Dados
-- **SQLite** 3.x - Banco de dados relacional
+- **PostgreSQL** - Banco de dados relacional (requer instalação separada)
+- **psycopg2-binary** - Driver Python para PostgreSQL
 
 ## Status do Sistema
 
@@ -274,7 +305,7 @@ Antes de fazer deploy em produção:
 - 📋 Consulte `docs/SEGURANCA.md` para checklist completo de segurança
 - 🔑 Configure variáveis de ambiente obrigatórias (SECRET_KEY, CORS_ORIGINS)
 - 🔒 Configure HTTPS e certificado SSL
-- 📊 Considere migração para PostgreSQL (SQLite é adequado apenas para desenvolvimento)
+- 📊 Sistema já utiliza PostgreSQL (configurado via variáveis de ambiente)
 
 ## Suporte
 
@@ -284,5 +315,5 @@ Para dúvidas ou problemas:
 3. Verificar logs do console do navegador (F12)
 4. Verificar logs do terminal do backend
 5. Verificar se todas as dependências estão instaladas corretamente
-6. Verificar se o banco de dados foi criado automaticamente (`src/database/app.db`)
+6. Verificar se o PostgreSQL está rodando e se as variáveis de ambiente estão configuradas
 7. Contatar suporte técnico se necessário
