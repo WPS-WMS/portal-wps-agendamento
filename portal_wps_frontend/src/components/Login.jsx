@@ -250,15 +250,6 @@ const Login = ({ onLogin }) => {
               )}
             </Button>
           </form>
-          
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <p className="text-sm text-gray-600 font-medium mb-2">Dados de teste:</p>
-            <div className="text-xs text-gray-500 space-y-1">
-              <p><strong>Admin:</strong> admin@wps.com / admin123</p>
-              <p><strong>Fornecedor 1:</strong> fornecedor1@abc.com / fornecedor123</p>
-              <p><strong>Fornecedor 2:</strong> fornecedor2@xyz.com / fornecedor123</p>
-            </div>
-          </div>
         </CardContent>
       </Card>
 

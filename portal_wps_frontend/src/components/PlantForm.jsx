@@ -92,11 +92,9 @@ const PlantForm = ({ onSubmit, onCancel }) => {
     }
 
     try {
-      console.log('Dados sendo enviados:', formData)
       const result = await adminAPI.createPlant(formData)
       setSuccess(result)
     } catch (err) {
-      console.error('Erro ao criar planta:', err)
       const errorData = err.response?.data || {}
       const errorMessage = errorData.message || errorData.error || err.message || 'Erro ao salvar planta'
       const errorField = errorData.field
@@ -113,7 +111,6 @@ const PlantForm = ({ onSubmit, onCancel }) => {
         displayMessage = errorMessage || 'Este CNPJ já está cadastrado no sistema. Por favor, verifique o CNPJ informado.'
       }
       
-      console.error('Mensagem de erro:', displayMessage)
       setError(displayMessage)
     } finally {
       setLoading(false)

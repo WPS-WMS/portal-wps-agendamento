@@ -7,7 +7,9 @@ import jwt
 from src.models.user import User
 from src.models.permission import Permission
 
-SECRET_KEY = 'asdf#FGSgvasgf$5$WGT'  # Mesma chave do auth.py
+# SECRET_KEY: usar variável de ambiente em produção
+import os
+SECRET_KEY = os.environ.get('SECRET_KEY') or os.environ.get('JWT_SECRET_KEY') or 'asdf#FGSgvasgf$5$WGT'
 
 def get_current_user_from_token():
     """Extrai o usuário atual do token JWT"""
@@ -63,12 +65,22 @@ def has_permission(function_id, required_permission='editor', current_user=None)
     import logging
     logger = logging.getLogger(__name__)
     
-    # Debug: verificar todas as permissões do role antes de buscar a específica
-    all_perms = Permission.query.filter_by(role=current_user.role).all()
-    logger.info(f"Todas as permissões do role {current_user.role}: {[(p.function_id, p.permission_type) for p in all_perms]}")
+    # Multi-tenant: usar company_id do usuário atual
+    company_id = current_user.company_id
+    if not company_id:
+        logger.warning(f"Usuário {current_user.id} não tem company_id definido")
+        return False
     
-    permission_type = Permission.get_permission(current_user.role, function_id)
-    logger.info(f"Verificando permissão: function_id={function_id}, role={current_user.role}, permission_type={permission_type}, required={required_permission}")
+    # Debug: verificar todas as permissões do role antes de buscar a específica
+    all_perms = Permission.query.filter_by(company_id=company_id, role=current_user.role).all()
+    # Reduzir verbosidade do log em produção (segurança)
+    if os.environ.get('FLASK_ENV') != 'production':
+        logger.info(f"Todas as permissões do role {current_user.role} na company {company_id}: {[(p.function_id, p.permission_type) for p in all_perms]}")
+    else:
+        logger.debug(f"Permissões carregadas para role {current_user.role} na company {company_id}")
+    
+    permission_type = Permission.get_permission(current_user.role, function_id, company_id)
+    logger.info(f"Verificando permissão: function_id={function_id}, role={current_user.role}, company_id={company_id}, permission_type={permission_type}, required={required_permission}")
     
     # REGRA DE NEGÓCIO: Hierarquia de permissões
     # Editor (nível 2) = Admin dentro da funcionalidade (acesso completo)
@@ -114,32 +126,33 @@ def permission_required(function_id, required_permission='editor'):
         def decorated(*args, **kwargs):
             current_user = get_current_user_from_token()
             
-            logger.info(f"[permission_required] {f.__name__} - Usuário obtido: {current_user.email if current_user else 'None'}, Role: {current_user.role if current_user else 'None'}")
+            logger.info(f"[permission_required] {f.__name__} - Usuário ID: {current_user.id if current_user else 'None'}, Role: {current_user.role if current_user else 'None'}")
             
             if not current_user:
                 logger.warning(f"[permission_required] {f.__name__} - Token não fornecido ou inválido")
                 return jsonify({'error': 'Token não fornecido ou inválido'}), 401
             
             if not current_user.is_active:
-                logger.warning(f"[permission_required] {f.__name__} - Usuário inativo: {current_user.email}")
+                logger.warning(f"[permission_required] {f.__name__} - Usuário inativo: ID {current_user.id}")
                 return jsonify({'error': 'Usuário inativo'}), 403
             
             # Verificar permissão específica (antes de chamar a função)
             if current_user.role != 'admin':
-                logger.info(f"[permission_required] {f.__name__} - Verificando permissão para {current_user.email} ({current_user.role}): function_id={function_id}, required={required_permission}")
+                logger.info(f"[permission_required] {f.__name__} - Verificando permissão para usuário ID {current_user.id} (role: {current_user.role}): function_id={function_id}, required={required_permission}")
                 if not has_permission(function_id, required_permission, current_user):
-                    permission_type = Permission.get_permission(current_user.role, function_id)
-                    logger.warning(f"[permission_required] {f.__name__} - Acesso negado para {current_user.email} ({current_user.role}) na funcionalidade {function_id} (requer: {required_permission}, tem: {permission_type})")
+                    # Multi-tenant: usar company_id do usuário
+                    company_id = current_user.company_id if current_user.company_id else None
+                    permission_type = Permission.get_permission(current_user.role, function_id, company_id) if company_id else 'none'
+                    logger.warning(f"[permission_required] {f.__name__} - Acesso negado para usuário ID {current_user.id} (role: {current_user.role}) na funcionalidade {function_id} (requer: {required_permission}, tem: {permission_type})")
                     return jsonify({
                         'error': 'Acesso negado. Permissão insuficiente para esta ação',
                         'function_id': function_id,
                         'required_permission': required_permission,
                         'user_permission': permission_type,
-                        'user_role': current_user.role,
-                        'user_email': current_user.email
+                        'user_role': current_user.role
                     }), 403
                 else:
-                    logger.info(f"[permission_required] {f.__name__} - Permissão concedida para {current_user.email} ({current_user.role})")
+                    logger.info(f"[permission_required] {f.__name__} - Permissão concedida para usuário ID {current_user.id} (role: {current_user.role})")
             
             # Chamar a função com os argumentos corretos baseado na assinatura
             try:
@@ -221,7 +234,12 @@ def can_access_resource(user, resource_owner_id=None, resource_owner_field='supp
     if user.role == 'admin':
         return True
     
-    permission_type = Permission.get_permission(user.role, 'view_appointments')  # Exemplo
+    # Multi-tenant: usar company_id do usuário
+    company_id = user.company_id if user.company_id else None
+    if not company_id:
+        return False
+    
+    permission_type = Permission.get_permission(user.role, 'view_appointments', company_id)
     
     if permission_type == 'editor':
         return True

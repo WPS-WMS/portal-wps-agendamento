@@ -61,7 +61,7 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
       const data = await adminAPI.getSuppliers()
       setSuppliers(Array.isArray(data) ? data.filter(s => s.is_active) : [])
     } catch (err) {
-      console.error('Erro ao carregar fornecedores:', err)
+      // Erro silencioso - dados não carregados
     }
   }
 
@@ -70,7 +70,7 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
       const data = await adminAPI.getPlants()
       setPlants(Array.isArray(data) ? data.filter(p => p.is_active) : [])
     } catch (err) {
-      console.error('Erro ao carregar plantas:', err)
+      // Erro silencioso - dados não carregados
     }
   }
 
@@ -117,10 +117,16 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
 
       // Limpar associações antigas e adicionar novas baseadas no role
       if (formData.role === 'supplier') {
-        updateData.supplier_id = parseInt(formData.supplier_id)
+        const parsed = parseInt(formData.supplier_id, 10)
+        if (!isNaN(parsed)) {
+          updateData.supplier_id = parsed
+        }
         updateData.plant_id = null // Limpar associação com planta
       } else if (formData.role === 'plant') {
-        updateData.plant_id = parseInt(formData.plant_id)
+        const parsed = parseInt(formData.plant_id, 10)
+        if (!isNaN(parsed)) {
+          updateData.plant_id = parsed
+        }
         updateData.supplier_id = null // Limpar associação com fornecedor
       } else if (formData.role === 'admin') {
         // Admin não tem associações
@@ -175,8 +181,7 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
     setSuccess('')
     
     try {
-      const response = await adminAPI.deleteUser(user.id)
-      console.log('Usuário excluído:', response)
+      await adminAPI.deleteUser(user.id)
       
       // Fechar modal de confirmação
       setShowDeleteConfirm(false)
@@ -187,7 +192,6 @@ const UserManagement = ({ user, onBack, onUpdate }) => {
         onUpdate() // Isso vai chamar loadUsers() e fechar o modal
       }, 300)
     } catch (err) {
-      console.error('Erro ao excluir usuário:', err)
       const errorMessage = err.response?.data?.error || err.message || 'Erro ao excluir usuário'
       setError(errorMessage)
       setShowDeleteConfirm(false)

@@ -41,6 +41,15 @@ instance/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.production
+
+# Arquivos sensíveis e tokens
+*.token
+*.key
+.secrets/
+secrets/
+*_secret
+*_token
 
 # Node.js
 node_modules/
@@ -136,18 +145,25 @@ $RECYCLE.BIN/
 portal_wps_backend/src/static/*
 !portal_wps_backend/src/static/.gitkeep
 
-# Scripts de teste e migração (não devem ser commitados)
+# Scripts de teste e migração temporários (não devem ser commitados)
+# Manter regras genéricas mesmo se arquivos não existirem (podem ser recriados)
 portal_wps_backend/test_*.py
 portal_wps_backend/check_*.py
 portal_wps_backend/create_*.py
 portal_wps_backend/fix_*.py
 portal_wps_backend/delete_*.py
 portal_wps_backend/add_*.py
+portal_wps_backend/update_*.py
 portal_wps_backend/migrate_*.py
-portal_wps_backend/init_data.py
 
 # Scripts PowerShell de desenvolvimento
 start-servers.ps1
+
+# Arquivos de projeto de editores de banco de dados
+*.sqbpro
+
+# Pastas vazias ou não utilizadas
+portal_wps_backend/migrations/
 
 # Banco de dados (não commitar)
 portal_wps_backend/database.db

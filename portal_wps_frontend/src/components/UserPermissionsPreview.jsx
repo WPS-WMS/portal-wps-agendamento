@@ -94,7 +94,7 @@ const UserPermissionsPreview = ({ userRole, onNavigateToAccessProfiles }) => {
         }
         setError('')
       } catch (err) {
-        console.error('Erro ao carregar permissões:', err)
+        // Erro ao carregar permissões
         setError('Erro ao carregar permissões')
         setPermissions({})
       } finally {

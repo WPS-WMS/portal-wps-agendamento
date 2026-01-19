@@ -13,6 +13,10 @@ class OperatingHours(db.Model):
     operating_start = db.Column(db.Time, nullable=False)  # Horário de funcionamento inicial
     operating_end = db.Column(db.Time, nullable=False)  # Horário de funcionamento final
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # Multi-tenant: company_id obrigatório
+    company_id = db.Column(db.Integer, ForeignKey('company.id'), nullable=False)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -27,6 +31,7 @@ class OperatingHours(db.Model):
         return {
             'id': self.id,
             'plant_id': self.plant_id,
+            'company_id': self.company_id,
             'schedule_type': self.schedule_type,
             'day_of_week': self.day_of_week,
             'day_name': self.get_day_name(),

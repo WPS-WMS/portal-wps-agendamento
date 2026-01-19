@@ -109,7 +109,7 @@ const AdminDashboard = ({ user, token }) => {
       setAppointments(data)
       setError('')
     } catch (err) {
-      console.error(`[AdminDashboard] Erro ao carregar agendamentos:`, err)
+      // Erro ao carregar agendamentos
       setError('Erro ao carregar agendamentos: ' + (err.response?.data?.error || err.message))
     } finally {
       setLoading(false)
@@ -145,22 +145,47 @@ const AdminDashboard = ({ user, token }) => {
     }
   }, [showPlantsScreen, showPlantManagement, showPlantForm])
 
+  // Carregar fornecedores quando a tela de Fornecedores é aberta
+  useEffect(() => {
+    if (showSuppliersScreen) {
+      loadSuppliers()
+    }
+  }, [showSuppliersScreen])
+  
+  // Recarregar fornecedores quando voltar para a tela de fornecedores
+  useEffect(() => {
+    if (showSuppliersScreen && !showSupplierManagement && !showSupplierForm) {
+      loadSuppliers()
+    }
+  }, [showSuppliersScreen, showSupplierManagement, showSupplierForm])
+
   const handlePreviousDay = () => {
-    const newDate = new Date(currentDate)
-    newDate.setDate(newDate.getDate() - 1)
+    if (!currentDate) return
+    // Criar nova data sem modificar a original
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+    const day = currentDate.getDate()
+    const newDate = new Date(year, month, day - 1)
     setCurrentDate(newDate)
   }
 
   const handleNextDay = () => {
-    const newDate = new Date(currentDate)
-    newDate.setDate(newDate.getDate() + 1)
+    if (!currentDate) return
+    // Criar nova data sem modificar a original
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+    const day = currentDate.getDate()
+    const newDate = new Date(year, month, day + 1)
     setCurrentDate(newDate)
   }
 
-
   const handleDateChange = (dateString) => {
     if (dateString) {
-      setCurrentDate(new Date(dateString))
+      const newDate = new Date(dateString)
+      // Validar se a data é válida
+      if (!isNaN(newDate.getTime())) {
+        setCurrentDate(newDate)
+      }
     }
   }
 
@@ -206,6 +231,7 @@ const AdminDashboard = ({ user, token }) => {
 
   const handleSupplierFormSubmit = async () => {
     setShowSupplierForm(false)
+    // Recarregar fornecedores após criar um novo
     await loadSuppliers()
   }
 
@@ -253,7 +279,7 @@ const AdminDashboard = ({ user, token }) => {
         }
       }
     } catch (err) {
-      console.error('Erro ao atualizar plantas:', err)
+      // Erro ao atualizar plantas
       // Recarregar mesmo em caso de erro
       await loadPlants()
     }
@@ -388,7 +414,7 @@ const AdminDashboard = ({ user, token }) => {
         setPlantCapacities(capacitiesMap)
         setMaxCapacity(capacity)
       } catch (err) {
-        console.error(`[AdminDashboard] Erro ao buscar capacidade da planta ${selectedPlantId}:`, err)
+        // Erro ao buscar capacidade da planta
         setMaxCapacity(1)
         setPlantCapacities(new Map())
       }
@@ -564,6 +590,56 @@ const AdminDashboard = ({ user, token }) => {
       // Mapa para rastrear em qual coluna cada agendamento desta planta foi colocado
       const appointmentColumnMap = new Map()
       
+      // Função auxiliar para verificar se dois agendamentos se sobrepõem
+      const doAppointmentsOverlap = (apt1, apt2) => {
+        const start1 = dateUtils.formatTime(apt1.time)
+        const end1 = apt1.time_end ? dateUtils.formatTime(apt1.time_end) : start1
+        const start2 = dateUtils.formatTime(apt2.time)
+        const end2 = apt2.time_end ? dateUtils.formatTime(apt2.time_end) : start2
+        
+        const [h1, m1] = start1.split(':').map(Number)
+        const [h2, m2] = end1.split(':').map(Number)
+        const [h3, m3] = start2.split(':').map(Number)
+        const [h4, m4] = end2.split(':').map(Number)
+        
+        const start1Min = h1 * 60 + m1
+        const end1Min = h2 * 60 + m2
+        const start2Min = h3 * 60 + m3
+        const end2Min = h4 * 60 + m4
+        
+        // Verificar sobreposição: start1 < end2 && start2 < end1
+        return start1Min < end2Min && start2Min < end1Min
+      }
+      
+      // Função auxiliar para encontrar a melhor coluna para um agendamento
+      const findBestColumn = (appointment) => {
+        // Verificar cada coluna para encontrar uma que não tenha conflitos
+        for (let colIndex = 0; colIndex < plantCapacity; colIndex++) {
+          const columnAppointments = columns[colIndex]
+          let hasConflict = false
+          
+          // Verificar se há conflito com algum agendamento já nesta coluna
+          for (const existingApt of columnAppointments) {
+            // Verificar se o agendamento existente está realmente nesta coluna
+            if (appointmentColumnMap.get(existingApt.id) === colIndex) {
+              // Verificar se há sobreposição de horários
+              if (doAppointmentsOverlap(appointment, existingApt)) {
+                hasConflict = true
+                break
+              }
+            }
+          }
+          
+          if (!hasConflict) {
+            return colIndex
+          }
+        }
+        
+        // Se todas as colunas têm conflito, usar a primeira (não deveria acontecer se capacidade está correta)
+        // Mas isso pode acontecer se a capacidade máxima foi excedida
+        return 0
+      }
+      
       // Processar agendamentos desta planta em ordem cronológica
       sortedAppointments.forEach(appointment => {
         // Se já foi atribuído, pular
@@ -571,28 +647,10 @@ const AdminDashboard = ({ user, token }) => {
           return
         }
         
-        // Encontrar todos os agendamentos desta mesma planta que se sobrepõem com este
-        const overlappingAppointments = sortedAppointments.filter(apt => 
-          apt.id !== appointment.id && 
-          !appointmentColumnMap.has(apt.id) &&
-          appointmentsOverlap(appointment, apt)
-        )
-        
-        // Criar grupo de agendamentos sobrepostos (incluindo o atual)
-        const overlappingGroup = [appointment, ...overlappingAppointments]
-        
-        // Ordenar o grupo por ID para distribuição consistente
-        overlappingGroup.sort((a, b) => a.id - b.id)
-        
-        // Distribuir o grupo lado a lado nas colunas disponíveis
-        // IMPORTANTE: Limitar ao número de colunas da capacidade desta planta específica
-        overlappingGroup.forEach((apt, index) => {
-          // Usar módulo para distribuir circularmente nas colunas (lado a lado)
-          // Mas respeitando a capacidade específica desta planta
-          const colIndex = index % plantCapacity
-          columns[colIndex].push(apt)
-          appointmentColumnMap.set(apt.id, colIndex)
-        })
+        // Encontrar a melhor coluna para este agendamento
+        const colIndex = findBestColumn(appointment)
+        columns[colIndex].push(appointment)
+        appointmentColumnMap.set(appointment.id, colIndex)
       })
     })
     
@@ -1127,7 +1185,7 @@ const AdminDashboard = ({ user, token }) => {
                   <div className="flex-1 flex items-center justify-center gap-3">
                     <Input
                       type="date"
-                      value={dateUtils.toISODate(currentDate)}
+                      value={getDateString(currentDate) || ''}
                       onChange={(e) => handleDateChange(e.target.value)}
                       className="max-w-xs"
                     />
@@ -1278,23 +1336,27 @@ const AdminDashboard = ({ user, token }) => {
                       })}
 
                       {/* Cards de Agendamentos nesta coluna */}
-                      {appointmentsByColumn[colIndex]?.map((appointment) => {
+                      {appointmentsByColumn[colIndex]?.map((appointment, aptIndex) => {
                           const startTime = dateUtils.formatTime(appointment.time)
                           const top = calculateCardTop(startTime)
                           const height = calculateCardHeight(appointment)
                           const contentLevel = getCardContentLevel(height)
                           const supplierName = suppliers.find(s => s.id === appointment.supplier_id)?.description || 'Fornecedor'
+                          
+                          // Calcular z-index baseado na ordem (cards mais recentes ficam acima)
+                          const zIndex = 10 + aptIndex
 
                           return (
                             <div
                               key={appointment.id}
-                              className="absolute z-10"
+                              className="absolute"
                               style={{
                                 top: `${top}px`,
                                 left: '4px',
                                 right: '4px',
                                 width: 'calc(100% - 8px)',
-                                height: `${height}px`
+                                height: `${height}px`,
+                                zIndex: zIndex
                               }}
                             >
                         <TooltipProvider>
@@ -1304,9 +1366,15 @@ const AdminDashboard = ({ user, token }) => {
                                 className={`h-full w-full bg-white border-l-4 ${getStatusBorderColor(appointment.status)} hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group`}
                                 onClick={() => handleCardClick(appointment)}
                               >
-                                <CardContent className="p-2 h-full w-full flex flex-col">
-                                  <div className="flex items-start justify-between gap-1.5 mb-1.5">
+                                <CardContent className="p-2 h-full w-full flex flex-col justify-center">
+                                  <div className="flex items-start justify-between gap-1.5">
                                     <div className="flex-1 min-w-0">
+                                      {/* Número do agendamento no canto superior esquerdo */}
+                                      {appointment.appointment_number && (
+                                        <p className="text-xs font-mono font-semibold text-blue-600 truncate leading-tight mb-0.5">
+                                          {appointment.appointment_number}
+                                        </p>
+                                      )}
                                       {/* Nome do Fornecedor em Negrito (Hierarquia Visual) */}
                                       <CardTitle className="text-sm font-bold text-gray-900 truncate leading-tight">
                                         {supplierName}
@@ -1314,11 +1382,6 @@ const AdminDashboard = ({ user, token }) => {
                                       <p className="text-xs text-gray-500 mt-0.5 leading-tight">
                                         {dateUtils.formatTimeRange(appointment.time, appointment.time_end)}
                                       </p>
-                                      {appointment.appointment_number && (
-                                        <p className="text-xs font-mono text-blue-600 mt-0.5 leading-tight">
-                                          Nº: {appointment.appointment_number}
-                                        </p>
-                                      )}
                                     </div>
                                     <Badge className={`text-[10px] px-1.5 py-0.5 shrink-0 ${statusUtils.getStatusColor(appointment.status)}`}>
                                       {statusUtils.getStatusLabel(appointment.status)}
@@ -1327,22 +1390,11 @@ const AdminDashboard = ({ user, token }) => {
                                   
                                   {/* Conteúdo condicional baseado na altura do card */}
                                   {contentLevel === 'minimal' ? (
-                                    // Apenas número de agendamento se disponível
-                                    appointment.appointment_number ? (
-                                      <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
-                                        <p className="truncate leading-tight font-mono text-blue-600">
-                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
-                                        </p>
-                                      </div>
-                                    ) : null
+                                    // Cards pequenos não mostram conteúdo adicional
+                                    null
                                   ) : contentLevel === 'summary' ? (
                                     // Resumo: PO e Placa
-                                    <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
-                                      {appointment.appointment_number && (
-                                        <p className="truncate leading-tight font-mono text-blue-600">
-                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
-                                        </p>
-                                      )}
+                                    <div className="mt-1.5 space-y-0.5 text-xs text-gray-600 overflow-hidden">
                                       <p className="truncate leading-tight">
                                         <span className="font-medium">PO:</span> {appointment.purchase_order}
                                       </p>
@@ -1357,12 +1409,7 @@ const AdminDashboard = ({ user, token }) => {
                                     </div>
                                   ) : (
                                     // Todos os dados
-                                    <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
-                                      {appointment.appointment_number && (
-                                        <p className="truncate leading-tight font-mono text-blue-600">
-                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
-                                        </p>
-                                      )}
+                                    <div className="mt-1.5 space-y-0.5 text-xs text-gray-600 overflow-hidden">
                                       <p className="truncate leading-tight">
                                         <span className="font-medium">PO:</span> {appointment.purchase_order}
                                       </p>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -50,6 +50,8 @@ const SupplierDashboard = ({ user, token }) => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [currentDate, setCurrentDate] = useState(new Date())
+  // Ref para rastrear a última data carregada e evitar chamadas duplicadas
+  const lastLoadedDateRef = useRef(null)
   const [showSupplierForm, setShowSupplierForm] = useState(false)
   const [showSupplierManagement, setShowSupplierManagement] = useState(false)
   const [managingSupplier, setManagingSupplier] = useState(null)
@@ -127,14 +129,55 @@ const SupplierDashboard = ({ user, token }) => {
   const loadAppointments = async (date, plantId = null) => {
     try {
       setLoading(true)
+      // Garantir que date seja válido
+      if (!date) {
+        date = new Date()
+      }
+      // Converter para Date se for string
+      if (typeof date === 'string') {
+        date = new Date(date)
+      }
+      // Validar se a data é válida
+      if (isNaN(date.getTime())) {
+        date = new Date()
+      }
+      // IMPORTANTE: Criar uma cópia da data antes de chamar getWeekStart
+      // porque getWeekStart pode modificar o objeto Date original
+      const dateCopy = new Date(date.getTime())
       // A API do fornecedor espera o início da semana (week)
-      const weekStart = dateUtils.getWeekStart(date)
+      const weekStart = dateUtils.getWeekStart(dateCopy)
       const weekStartISO = dateUtils.toISODate(weekStart)
-      const data = await supplierAPI.getAppointments(weekStartISO, plantId)
-      setAppointments(data)
+      
+      // Garantir que weekStartISO seja uma string válida
+      if (!weekStartISO || typeof weekStartISO !== 'string') {
+        throw new Error('Data inválida para carregar agendamentos')
+      }
+      
+      // Chamar a API - se plantId for fornecido, adicionar como query parameter
+      let url = `/api/supplier/appointments?week=${weekStartISO}`
+      if (plantId) {
+        url += `&plant_id=${plantId}`
+      }
+      
+      const token = localStorage.getItem('token')
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || 'Erro ao carregar agendamentos')
+      }
+      
+      const data = await response.json()
+      setAppointments(Array.isArray(data) ? data : [])
       setError('')
     } catch (err) {
       setError('Erro ao carregar agendamentos: ' + (err.response?.data?.error || err.message))
+      setAppointments([])
     } finally {
       setLoading(false)
     }
@@ -165,10 +208,29 @@ const SupplierDashboard = ({ user, token }) => {
 
   // Carregar agendamentos quando a data, aba ou planta selecionada mudar
   useEffect(() => {
-    // Carregar agendamentos sempre, mesmo sem planta selecionada
-    // O filtro por planta será aplicado no frontend
-    loadAppointments(currentDate, selectedPlantId || null)
-  }, [currentDate, activeTab, selectedPlantId])
+    if (!currentDate || isNaN(currentDate.getTime())) {
+      return
+    }
+    
+    // Criar uma chave única para a combinação de data, aba e planta
+    const dateKey = currentDate.getTime()
+    const loadKey = `${dateKey}-${activeTab}-${selectedPlantId || 'none'}`
+    
+    // Evitar carregar se já foi carregado com os mesmos parâmetros
+    if (lastLoadedDateRef.current === loadKey) {
+      return
+    }
+    
+    // Atualizar a referência antes de carregar
+    lastLoadedDateRef.current = loadKey
+    
+    // Criar uma cópia da data para garantir que não seja modificada
+    const dateToLoad = new Date(currentDate.getTime())
+    
+    // Carregar agendamentos
+    loadAppointments(dateToLoad, selectedPlantId || null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentDate?.getTime(), activeTab, selectedPlantId])
   
   // Handler para mudança de planta
   const handlePlantChange = (plantId) => {
@@ -213,7 +275,7 @@ const SupplierDashboard = ({ user, token }) => {
     if (showSuppliersScreen && hasPermission('view_suppliers', 'viewer')) {
       loadSuppliers()
     }
-  }, [showSuppliersScreen])
+  }, [showSuppliersScreen, showSupplierForm, showSupplierManagement])
 
   // Carregar plantas quando o formulário de agendamento é aberto (para criar novo agendamento)
   useEffect(() => {
@@ -226,20 +288,32 @@ const SupplierDashboard = ({ user, token }) => {
   }, [showAppointmentForm, editingAppointment, user?.id])
 
   const handlePreviousDay = () => {
-    const newDate = new Date(currentDate)
-    newDate.setDate(newDate.getDate() - 1)
+    if (!currentDate) return
+    // Criar nova data sem modificar a original
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+    const day = currentDate.getDate()
+    const newDate = new Date(year, month, day - 1)
     setCurrentDate(newDate)
   }
 
   const handleNextDay = () => {
-    const newDate = new Date(currentDate)
-    newDate.setDate(newDate.getDate() + 1)
+    if (!currentDate) return
+    // Criar nova data sem modificar a original
+    const year = currentDate.getFullYear()
+    const month = currentDate.getMonth()
+    const day = currentDate.getDate()
+    const newDate = new Date(year, month, day + 1)
     setCurrentDate(newDate)
   }
 
   const handleDateChange = (dateString) => {
     if (dateString) {
-      setCurrentDate(new Date(dateString))
+      const newDate = new Date(dateString)
+      // Validar se a data é válida
+      if (!isNaN(newDate.getTime())) {
+        setCurrentDate(newDate)
+      }
     }
   }
 
@@ -293,8 +367,9 @@ const SupplierDashboard = ({ user, token }) => {
   }
 
   const handleManageSupplier = (supplier) => {
-    if (!hasPermission('edit_supplier', 'editor')) {
-      setError('Você não tem permissão para gerenciar fornecedores')
+    // Permitir abrir para visualização ou edição
+    if (!hasViewPermission('edit_supplier')) {
+      setError('Você não tem permissão para visualizar fornecedores')
       return
     }
     setManagingSupplier(supplier)
@@ -391,26 +466,7 @@ const SupplierDashboard = ({ user, token }) => {
     await loadAppointments(currentDate, selectedPlantId)
   }
 
-  // Função para normalizar datas sem problemas de timezone
-  const getDateString = (date) => {
-    if (!date) return null
-    if (typeof date === 'string') {
-      // Se já é uma string no formato YYYY-MM-DD, retornar diretamente
-      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-        return date
-      }
-      // Se tem timezone, pegar apenas a parte da data
-      return date.split('T')[0]
-    }
-    // Se é um objeto Date, converter para YYYY-MM-DD sem problemas de timezone
-    const d = new Date(date)
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-  
-  const currentDateISO = getDateString(currentDate)
+  const currentDateISO = dateUtils.toISODate(currentDate)
   
   // Filtrar agendamentos do dia selecionado
   // IMPORTANTE: Todos os agendamentos aparecem na data original do agendamento (date),
@@ -421,7 +477,7 @@ const SupplierDashboard = ({ user, token }) => {
     }
     
     // Normalizar ambas as datas para comparação
-    const aptDate = getDateString(apt.date)
+    const aptDate = dateUtils.toISODate(apt.date)
     return aptDate === currentDateISO
   })
   
@@ -451,7 +507,7 @@ const SupplierDashboard = ({ user, token }) => {
   ).filter(appointment => {
     // VALIDAÇÃO FINAL: Garantir que a data do agendamento corresponde à data selecionada
     if (!appointment.date) return false
-    const aptDate = getDateString(appointment.date)
+    const aptDate = dateUtils.toISODate(appointment.date)
     return aptDate === currentDateISO
   })
 
@@ -602,7 +658,7 @@ const SupplierDashboard = ({ user, token }) => {
       if (!apt.date) {
         return false
       }
-      const aptDate = getDateString(apt.date)
+      const aptDate = dateUtils.toISODate(apt.date)
       return aptDate === currentDateISO
     })
     
@@ -647,6 +703,55 @@ const SupplierDashboard = ({ user, token }) => {
       // Mapa para rastrear em qual coluna cada agendamento desta planta foi colocado
       const appointmentColumnMap = new Map()
       
+      // Função auxiliar para verificar se dois agendamentos se sobrepõem
+      const doAppointmentsOverlap = (apt1, apt2) => {
+        const start1 = dateUtils.formatTime(apt1.time)
+        const end1 = apt1.time_end ? dateUtils.formatTime(apt1.time_end) : start1
+        const start2 = dateUtils.formatTime(apt2.time)
+        const end2 = apt2.time_end ? dateUtils.formatTime(apt2.time_end) : start2
+        
+        const [h1, m1] = start1.split(':').map(Number)
+        const [h2, m2] = end1.split(':').map(Number)
+        const [h3, m3] = start2.split(':').map(Number)
+        const [h4, m4] = end2.split(':').map(Number)
+        
+        const start1Min = h1 * 60 + m1
+        const end1Min = h2 * 60 + m2
+        const start2Min = h3 * 60 + m3
+        const end2Min = h4 * 60 + m4
+        
+        // Verificar sobreposição: start1 < end2 && start2 < end1
+        return start1Min < end2Min && start2Min < end1Min
+      }
+      
+      // Função auxiliar para encontrar a melhor coluna para um agendamento
+      const findBestColumn = (appointment) => {
+        // Verificar cada coluna para encontrar uma que não tenha conflitos
+        for (let colIndex = 0; colIndex < plantCapacity; colIndex++) {
+          const columnAppointments = columns[colIndex]
+          let hasConflict = false
+          
+          // Verificar se há conflito com algum agendamento já nesta coluna
+          for (const existingApt of columnAppointments) {
+            // Verificar se o agendamento existente está realmente nesta coluna
+            if (appointmentColumnMap.get(existingApt.id) === colIndex) {
+              // Verificar se há sobreposição de horários
+              if (doAppointmentsOverlap(appointment, existingApt)) {
+                hasConflict = true
+                break
+              }
+            }
+          }
+          
+          if (!hasConflict) {
+            return colIndex
+          }
+        }
+        
+        // Se todas as colunas têm conflito, usar a primeira (não deveria acontecer se capacidade está correta)
+        return 0
+      }
+      
       // Processar agendamentos desta planta em ordem cronológica
       sortedAppointments.forEach(appointment => {
         // Se já foi atribuído, pular
@@ -654,28 +759,10 @@ const SupplierDashboard = ({ user, token }) => {
           return
         }
         
-        // Encontrar todos os agendamentos desta mesma planta que se sobrepõem com este
-        const overlappingAppointments = sortedAppointments.filter(apt => 
-          apt.id !== appointment.id && 
-          !appointmentColumnMap.has(apt.id) &&
-          appointmentsOverlap(appointment, apt)
-        )
-        
-        // Criar grupo de agendamentos sobrepostos (incluindo o atual)
-        const overlappingGroup = [appointment, ...overlappingAppointments]
-        
-        // Ordenar o grupo por ID para distribuição consistente
-        overlappingGroup.sort((a, b) => a.id - b.id)
-        
-        // Distribuir o grupo lado a lado nas colunas disponíveis
-        // IMPORTANTE: Limitar ao número de colunas da capacidade desta planta específica
-        overlappingGroup.forEach((apt, index) => {
-          // Usar módulo para distribuir circularmente nas colunas (lado a lado)
-          // Mas respeitando a capacidade específica desta planta
-          const colIndex = index % plantCapacity
-          columns[colIndex].push(apt)
-          appointmentColumnMap.set(apt.id, colIndex)
-        })
+        // Encontrar a melhor coluna para este agendamento
+        const colIndex = findBestColumn(appointment)
+        columns[colIndex].push(appointment)
+        appointmentColumnMap.set(appointment.id, colIndex)
       })
     })
     
@@ -1004,10 +1091,10 @@ const SupplierDashboard = ({ user, token }) => {
                 <CardContent>
                   <div className="space-y-3">
                     <p className="text-xs text-gray-600">
-                      Agendamentos hoje: {appointments.filter(a => a.supplier_id === supplier.id && getDateString(a.date) === currentDateISO).length}
+                      Agendamentos hoje: {appointments.filter(a => a.supplier_id === supplier.id && dateUtils.toISODate(a.date) === currentDateISO).length}
                     </p>
                     
-                    {hasPermission('edit_supplier', 'editor') && (
+                    {hasViewPermission('edit_supplier') && (
                       <div className="flex gap-2">
                         <Button
                           size="sm"
@@ -1034,7 +1121,7 @@ const SupplierDashboard = ({ user, token }) => {
           />
         )}
 
-        {showSupplierManagement && hasPermission('edit_supplier', 'editor') && (
+        {showSupplierManagement && hasViewPermission('edit_supplier') && (
           <SupplierManagement
             supplier={managingSupplier}
             onBack={() => setShowSupplierManagement(false)}
@@ -1214,7 +1301,7 @@ const SupplierDashboard = ({ user, token }) => {
                   Seleção de Planta
                 </CardTitle>
                 <PlantSelector
-                  plants={plants.filter(p => p.is_active)}
+                  plants={plants}
                   selectedPlantId={selectedPlantId}
                   onPlantChange={handlePlantChange}
                   placeholder="Selecione uma planta para visualizar agendamentos"
@@ -1377,12 +1464,12 @@ const SupplierDashboard = ({ user, token }) => {
                         )
                       })}
 
-                      {appointmentsByColumn[colIndex]?.map((appointment) => {
+                      {appointmentsByColumn[colIndex]?.map((appointment, aptIndex) => {
                           // VALIDAÇÃO FINAL ANTES DE RENDERIZAR: Garantir que o agendamento é do dia correto
                           if (!appointment.date) {
                             return null
                           }
-                          const aptDate = getDateString(appointment.date)
+                          const aptDate = dateUtils.toISODate(appointment.date)
                           if (aptDate !== currentDateISO) {
                             return null // Não renderizar agendamentos de outras datas
                           }
@@ -1392,17 +1479,21 @@ const SupplierDashboard = ({ user, token }) => {
                           const height = calculateCardHeight(appointment)
                           const contentLevel = getCardContentLevel(height)
                           const supplierName = appointment.supplier?.description || suppliers.find(s => s.id === appointment.supplier_id)?.description || 'Fornecedor'
+                          
+                          // Calcular z-index baseado na ordem (cards mais recentes ficam acima)
+                          const zIndex = 10 + aptIndex
 
                           return (
                             <div
                               key={appointment.id}
-                              className="absolute z-10"
+                              className="absolute"
                               style={{
                                 top: `${top}px`,
                                 left: '4px',
                                 right: '4px',
                                 width: 'calc(100% - 8px)',
-                                height: `${height}px`
+                                height: `${height}px`,
+                                zIndex: zIndex
                               }}
                             >
                         <TooltipProvider>
@@ -1412,20 +1503,21 @@ const SupplierDashboard = ({ user, token }) => {
                                 className={`h-full w-full bg-white border-l-4 ${getStatusBorderColor(appointment.status)} hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group`}
                                 onClick={() => handleCardClick(appointment)}
                               >
-                                <CardContent className="p-2 h-full w-full flex flex-col">
-                                  <div className="flex items-start justify-between gap-1.5 mb-1.5">
+                                <CardContent className="p-2 h-full w-full flex flex-col justify-center">
+                                  <div className="flex items-start justify-between gap-1.5">
                                     <div className="flex-1 min-w-0">
+                                      {/* Número do agendamento no canto superior esquerdo */}
+                                      {appointment.appointment_number && (
+                                        <p className="text-xs font-mono font-semibold text-blue-600 truncate leading-tight mb-0.5">
+                                          {appointment.appointment_number}
+                                        </p>
+                                      )}
                                       <CardTitle className="text-sm font-bold text-gray-900 truncate leading-tight">
                                         {supplierName}
                                       </CardTitle>
                                       <p className="text-xs text-gray-500 mt-0.5 leading-tight">
                                         {dateUtils.formatTimeRange(appointment.time, appointment.time_end)}
                                       </p>
-                                      {appointment.appointment_number && (
-                                        <p className="text-xs font-mono text-blue-600 mt-0.5 leading-tight">
-                                          Nº: {appointment.appointment_number}
-                                        </p>
-                                      )}
                                     </div>
                                     <Badge className={`text-[10px] px-1.5 py-0.5 shrink-0 ${statusUtils.getStatusColor(appointment.status)}`}>
                                       {statusUtils.getStatusLabel(appointment.status)}
@@ -1433,21 +1525,10 @@ const SupplierDashboard = ({ user, token }) => {
                                   </div>
                                   
                                   {contentLevel === 'minimal' ? (
-                                    // Apenas número de agendamento se disponível
-                                    appointment.appointment_number ? (
-                                      <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
-                                        <p className="truncate leading-tight font-mono text-blue-600">
-                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
-                                        </p>
-                                      </div>
-                                    ) : null
+                                    // Cards pequenos não mostram conteúdo adicional
+                                    null
                                   ) : contentLevel === 'summary' ? (
-                                    <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
-                                      {appointment.appointment_number && (
-                                        <p className="truncate leading-tight font-mono text-blue-600">
-                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
-                                        </p>
-                                      )}
+                                    <div className="mt-1.5 space-y-0.5 text-xs text-gray-600 overflow-hidden">
                                       <p className="truncate leading-tight">
                                         <span className="font-medium">PO:</span> {appointment.purchase_order}
                                       </p>
@@ -1461,12 +1542,7 @@ const SupplierDashboard = ({ user, token }) => {
                                       )}
                                     </div>
                                   ) : (
-                                    <div className="flex-1 space-y-0.5 text-xs text-gray-600 overflow-hidden">
-                                      {appointment.appointment_number && (
-                                        <p className="truncate leading-tight font-mono text-blue-600">
-                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
-                                        </p>
-                                      )}
+                                    <div className="mt-1.5 space-y-0.5 text-xs text-gray-600 overflow-hidden">
                                       <p className="truncate leading-tight">
                                         <span className="font-medium">PO:</span> {appointment.purchase_order}
                                       </p>

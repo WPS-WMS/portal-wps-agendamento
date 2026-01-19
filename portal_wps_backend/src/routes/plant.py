@@ -45,9 +45,14 @@ def get_plant_appointments(current_user):
         for apt in appointments:
             apt_dict = apt.to_dict()
             # Buscar informações do fornecedor
+            # Validar que o fornecedor pertence à mesma company
             if apt.supplier_id:
                 from src.models.supplier import Supplier
-                supplier = Supplier.query.get(apt.supplier_id)
+                supplier = Supplier.query.filter_by(
+                    id=apt.supplier_id,
+                    is_deleted=False,
+                    company_id=current_user.company_id
+                ).first()
                 if supplier:
                     apt_dict['supplier'] = supplier.to_dict()
             result.append(apt_dict)
@@ -90,11 +95,14 @@ def create_appointment(current_user):
         if appointment_date < datetime.now().date():
             return jsonify({'error': 'Não é possível agendar para datas passadas'}), 400
         
-        # Verificar se o fornecedor existe
+        # Verificar se o fornecedor existe e pertence à mesma company
         from src.models.supplier import Supplier
-        supplier = Supplier.query.get(data['supplier_id'])
+        supplier = Supplier.query.filter_by(
+            id=data['supplier_id'],
+            company_id=current_user.company_id
+        ).first()
         if not supplier:
-            return jsonify({'error': 'Fornecedor não encontrado'}), 404
+            return jsonify({'error': 'Fornecedor não encontrado ou não pertence ao seu domínio'}), 404
         
         if not supplier.is_active:
             return jsonify({'error': 'Fornecedor inativo'}), 400
@@ -126,9 +134,11 @@ def create_appointment(current_user):
             
             for slot in slots:
                 # Contar agendamentos que ocupam este slot para esta planta
+                # Multi-tenant: filtrar por company_id
                 query = Appointment.query.filter(
                     Appointment.date == appointment_date,
-                    Appointment.plant_id == current_user.plant_id
+                    Appointment.plant_id == current_user.plant_id,
+                    Appointment.company_id == current_user.company_id
                 ).filter(
                     or_(
                         and_(
@@ -168,7 +178,8 @@ def create_appointment(current_user):
             truck_plate=data['truck_plate'],
             driver_name=data['driver_name'],
             supplier_id=data['supplier_id'],
-            plant_id=current_user.plant_id  # Preenchido automaticamente com a planta do usuário
+            plant_id=current_user.plant_id,  # Preenchido automaticamente com a planta do usuário
+            company_id=current_user.company_id
         )
         
         db.session.add(appointment)
@@ -307,9 +318,14 @@ def update_appointment(current_user, appointment_id):
         
         if 'supplier_id' in data:
             from src.models.supplier import Supplier
-            supplier = Supplier.query.get(data['supplier_id'])
+            # Verificar se o fornecedor existe, está ativo e pertence à mesma company
+            supplier = Supplier.query.filter_by(
+                id=data['supplier_id'],
+                is_deleted=False,
+                company_id=current_user.company_id
+            ).first()
             if not supplier:
-                return jsonify({'error': 'Fornecedor não encontrado'}), 404
+                return jsonify({'error': 'Fornecedor não encontrado ou não pertence ao seu domínio'}), 404
             if not supplier.is_active:
                 return jsonify({'error': 'Fornecedor inativo'}), 400
             appointment.supplier_id = data['supplier_id']
@@ -524,11 +540,13 @@ def get_plant_operating_hours(current_user):
 @plant_bp.route('/suppliers', methods=['GET'])
 @token_required
 def get_suppliers(current_user):
-    """Lista todos os fornecedores ativos - usuários de planta podem visualizar todos
+    """Lista fornecedores ativos da mesma company da planta
     
     IMPORTANTE: Plantas sempre precisam visualizar fornecedores para criar agendamentos,
     então esta rota não usa @permission_required para garantir acesso mesmo sem permissão configurada.
     A verificação de permissão é feita internamente, mas não bloqueia o acesso se não estiver configurada.
+    
+    Multi-tenant: Filtra apenas fornecedores da mesma company da planta.
     """
     try:
         logger.info(f"[get_suppliers] Chamado por usuário {current_user.id} (role: {current_user.role}, plant_id: {current_user.plant_id})")
@@ -542,7 +560,8 @@ def get_suppliers(current_user):
         from src.utils.permissions import has_permission
         from src.models.permission import Permission
         
-        permission_type = Permission.get_permission(current_user.role, 'view_suppliers')
+        # Multi-tenant: usar company_id do usuário
+        permission_type = Permission.get_permission(current_user.role, 'view_suppliers', current_user.company_id)
         has_view_permission = has_permission('view_suppliers', 'viewer', current_user)
         
         logger.info(f"[get_suppliers] Permissão view_suppliers para plant: {permission_type}, has_permission: {has_view_permission}")
@@ -554,10 +573,16 @@ def get_suppliers(current_user):
             logger.info(f"[get_suppliers] Permissão não configurada (none), mas permitindo acesso para plantas (regra de negócio)")
         
         from src.models.supplier import Supplier
+        from sqlalchemy import and_
         
-        # Usuários de planta podem visualizar todos os fornecedores cadastrados
-        suppliers = Supplier.query.filter_by(is_deleted=False).all()
-        logger.info(f"[get_suppliers] Encontrados {len(suppliers)} fornecedores")
+        # Filtrar apenas fornecedores da mesma company da planta
+        suppliers = Supplier.query.filter(
+            and_(
+                Supplier.is_deleted == False,
+                Supplier.company_id == current_user.company_id
+            )
+        ).all()
+        logger.info(f"[get_suppliers] Usuário {current_user.id} (company_id: {current_user.company_id}) - Encontrados {len(suppliers)} fornecedores")
         
         result = [supplier.to_dict() for supplier in suppliers]
         logger.info(f"[get_suppliers] Retornando {len(result)} fornecedores")

@@ -3,13 +3,6 @@ import { Building2 } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 
 const PlantSelector = ({ plants, selectedPlantId, onPlantChange, placeholder = "Selecione uma planta" }) => {
-  console.log('[PlantSelector] Renderizando com:', {
-    plantsCount: plants?.length || 0,
-    plants: plants,
-    selectedPlantId,
-    isArray: Array.isArray(plants)
-  })
-  
   return (
     <div className="flex flex-col gap-2 w-full">
       <Label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
@@ -27,8 +20,13 @@ const PlantSelector = ({ plants, selectedPlantId, onPlantChange, placeholder = "
             </SelectItem>
           ) : (
             plants.map((plant) => (
-              <SelectItem key={plant.id} value={plant.id.toString()}>
-                {plant.name}
+              <SelectItem 
+                key={plant.id} 
+                value={plant.id.toString()}
+                disabled={!plant.is_active}
+                className={!plant.is_active ? 'opacity-60' : ''}
+              >
+                {plant.name} {!plant.is_active && '(Inativa)'}
               </SelectItem>
             ))
           )}

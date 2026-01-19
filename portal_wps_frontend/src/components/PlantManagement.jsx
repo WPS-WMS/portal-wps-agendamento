@@ -66,8 +66,6 @@ const PlantManagement = ({ plant, onBack, onUpdate, user, permissionType = 'edit
   // Atualizar formData quando o objeto plant mudar
   useEffect(() => {
     if (plant) {
-      console.log('PlantManagement - Objeto plant recebido:', plant)
-      console.log('PlantManagement - CNPJ:', plant.cnpj)
       setFormData({
         name: plant.name || '',
         code: plant.code || '',
@@ -117,19 +115,16 @@ const PlantManagement = ({ plant, onBack, onUpdate, user, permissionType = 'edit
     setMaxCapacitySuccess('')
     
     try {
-      const result = await adminAPI.setPlantMaxCapacity(plant.id, maxCapacity)
-      console.log(`[PlantManagement] Capacidade salva com sucesso:`, result)
+      await adminAPI.setPlantMaxCapacity(plant.id, maxCapacity)
       setMaxCapacitySuccess('Capacidade máxima atualizada com sucesso!')
       setTimeout(() => setMaxCapacitySuccess(''), 3000)
       
       // Recarregar capacidade para garantir sincronização
       const updatedData = await adminAPI.getPlantMaxCapacity(plant.id)
       setMaxCapacity(updatedData.max_capacity || 1)
-      console.log(`[PlantManagement] Capacidade recarregada: ${updatedData.max_capacity}`)
       
       onUpdate() // Recarregar dados da planta
     } catch (err) {
-      console.error(`[PlantManagement] Erro ao salvar capacidade:`, err)
       setMaxCapacityError(err.response?.data?.error || 'Erro ao salvar capacidade máxima')
     } finally {
       setMaxCapacityLoading(false)

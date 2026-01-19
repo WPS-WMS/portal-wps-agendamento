@@ -141,8 +141,13 @@ def get_supplier_appointments(current_user):
                 supplier = appointment.supplier
             except:
                 # Se o relacionamento não estiver carregado, buscar explicitamente
+                # Validar que o fornecedor pertence à mesma company
                 if appointment.supplier_id:
-                    supplier = Supplier.query.get(appointment.supplier_id)
+                    supplier = Supplier.query.filter_by(
+                        id=appointment.supplier_id,
+                        is_deleted=False,
+                        company_id=current_user.company_id
+                    ).first()
             
             if supplier:
                 appointment_dict['supplier'] = supplier.to_dict()
@@ -299,11 +304,15 @@ def create_appointment(current_user):
         if not plant_id:
             return jsonify({'error': 'Planta de entrega é obrigatória'}), 400
         
-        # Verificar se a planta existe e está ativa
+        # Verificar se a planta existe, está ativa e pertence à mesma company
         from src.models.plant import Plant
-        plant = Plant.query.filter_by(id=plant_id, is_active=True).first()
+        plant = Plant.query.filter_by(
+            id=plant_id, 
+            is_active=True,
+            company_id=current_user.company_id
+        ).first()
         if not plant:
-            return jsonify({'error': 'Planta não encontrada ou inativa'}), 404
+            return jsonify({'error': 'Planta não encontrada, inativa ou não pertence ao seu domínio'}), 404
         
         # Validar horários de funcionamento da planta (validação específica da planta)
         # Esta validação já retorna mensagens específicas com os horários corretos da planta
@@ -332,9 +341,11 @@ def create_appointment(current_user):
             
             for slot in slots:
                 # Contar agendamentos que ocupam este slot para esta planta
+                # Multi-tenant: filtrar por company_id
                 count = Appointment.query.filter(
                     Appointment.date == appointment_date,
-                    Appointment.plant_id == plant_id
+                    Appointment.plant_id == plant_id,
+                    Appointment.company_id == current_user.company_id
                 ).filter(
                     or_(
                         # Agendamento antigo que começa neste slot
@@ -361,9 +372,11 @@ def create_appointment(current_user):
             # Contar todos os agendamentos que ocupam este horário específico para esta planta:
             # 1. Agendamentos antigos (sem time_end) que começam neste horário
             # 2. Agendamentos com intervalo que incluem este horário
+            # Multi-tenant: filtrar por company_id
             total_count = Appointment.query.filter(
                 Appointment.date == appointment_date,
-                Appointment.plant_id == plant_id
+                Appointment.plant_id == plant_id,
+                Appointment.company_id == current_user.company_id
             ).filter(
                 or_(
                     # Agendamento antigo que começa neste horário
@@ -399,7 +412,8 @@ def create_appointment(current_user):
             truck_plate=data['truck_plate'],
             driver_name=data['driver_name'],
             supplier_id=current_user.supplier_id,
-            plant_id=plant_id
+            plant_id=plant_id,
+            company_id=current_user.company_id
         )
         
         db.session.add(appointment)
@@ -536,10 +550,14 @@ def update_supplier_appointment(current_user, appointment_id):
                 return jsonify({'error': 'Agendamento sem planta associada. Não é possível validar capacidade.'}), 400
             
             # Buscar a planta e obter sua capacidade máxima
+            # Validar que a planta pertence à mesma company
             from src.models.plant import Plant
-            plant = Plant.query.get(appointment.plant_id)
+            plant = Plant.query.filter_by(
+                id=appointment.plant_id,
+                company_id=current_user.company_id
+            ).first()
             if not plant:
-                return jsonify({'error': 'Planta não encontrada'}), 404
+                return jsonify({'error': 'Planta não encontrada ou não pertence ao seu domínio'}), 404
             
             # Usar capacidade máxima da planta (padrão: 1 se não configurado)
             max_capacity = plant.max_capacity if plant.max_capacity else 1
@@ -689,10 +707,14 @@ def get_plant_schedule_config(current_user, plant_id):
         from src.models.schedule_config import ScheduleConfig
         from src.models.default_schedule import DefaultSchedule
         
-        # Verificar se a planta existe e está ativa
-        plant = Plant.query.filter_by(id=plant_id, is_active=True).first()
+        # Verificar se a planta existe, está ativa e pertence à mesma company
+        plant = Plant.query.filter_by(
+            id=plant_id, 
+            is_active=True,
+            company_id=current_user.company_id
+        ).first()
         if not plant:
-            return jsonify({'error': 'Planta não encontrada'}), 404
+            return jsonify({'error': 'Planta não encontrada, inativa ou não pertence ao seu domínio'}), 404
         
         # Obter data do parâmetro (opcional, se não fornecido, retorna apenas horários de funcionamento)
         date_str = request.args.get('date')
@@ -751,10 +773,15 @@ def get_plant_schedule_config(current_user, plant_id):
                 })
         
         # Buscar horários bloqueados para a data específica (se fornecida)
+        # Multi-tenant: Configurações são aplicadas apenas para a planta selecionada da mesma company
         blocked_times = []
         if target_date:
-            # Buscar configurações específicas da data
-            schedule_configs = ScheduleConfig.query.filter_by(date=target_date).all()
+            # Multi-tenant: Buscar configurações específicas da data apenas para esta planta da mesma company
+            # (a planta já foi validada anteriormente na rota que pertence à company do fornecedor)
+            schedule_configs = ScheduleConfig.query.filter_by(
+                date=target_date,
+                plant_id=plant_id
+            ).all()
             for config in schedule_configs:
                 if not config.is_available:
                     blocked_times.append({
@@ -762,14 +789,16 @@ def get_plant_schedule_config(current_user, plant_id):
                         'reason': config.reason
                     })
             
-            # Buscar configurações padrão para o dia da semana
+            # Multi-tenant: Buscar configurações padrão apenas para esta planta da mesma company
             day_of_week = target_date.weekday()  # 0=Segunda, 6=Domingo
             if day_of_week == 6:
                 day_of_week = 0  # Domingo = 0
             
+            # Filtrar configurações apenas para a planta específica (plant_id obrigatório)
             default_configs = DefaultSchedule.query.filter(
-                (DefaultSchedule.day_of_week == day_of_week) | 
-                (DefaultSchedule.day_of_week.is_(None))
+                DefaultSchedule.plant_id == plant_id,
+                ((DefaultSchedule.day_of_week == day_of_week) | 
+                 (DefaultSchedule.day_of_week.is_(None)))
             ).all()
             
             for config in default_configs:
@@ -802,10 +831,15 @@ def get_plant_max_capacity(current_user, plant_id):
         
         from src.models.plant import Plant
         
-        plant = Plant.query.filter_by(id=plant_id, is_active=True).first()
+        # Verificar se a planta existe, está ativa e pertence à mesma company
+        plant = Plant.query.filter_by(
+            id=plant_id, 
+            is_active=True,
+            company_id=current_user.company_id
+        ).first()
         
         if not plant:
-            return jsonify({'error': 'Planta não encontrada'}), 404
+            return jsonify({'error': 'Planta não encontrada, inativa ou não pertence ao seu domínio'}), 404
         
         # Garantir que max_capacity sempre tenha um valor válido
         max_capacity = plant.max_capacity if plant.max_capacity and plant.max_capacity > 0 else 1
@@ -823,20 +857,34 @@ def get_plant_max_capacity(current_user, plant_id):
 @supplier_bp.route('/plants', methods=['GET'])
 @token_required
 def get_plants(current_user):
-    """Lista todas as plantas ativas - fornecedores podem visualizar todas
+    """Lista plantas (ativas e inativas) da mesma company do fornecedor
     
     IMPORTANTE: Fornecedores sempre precisam visualizar plantas para criar agendamentos,
     então esta rota não usa @permission_required para garantir acesso mesmo sem permissão configurada.
     A verificação de permissão é feita internamente, mas não bloqueia o acesso se não estiver configurada.
+    
+    REGRA DE NEGÓCIO: Retorna TODAS as plantas (ativas e inativas) para que fornecedores possam:
+    - Visualizar plantas inativas
+    - Reativar plantas inativas (se tiverem permissão)
+    - A validação de plantas ativas é feita no momento de criar agendamentos
+    
+    Multi-tenant: Filtra apenas plantas da mesma company do fornecedor.
     """
     try:
         if current_user.role != 'supplier':
             return jsonify({'error': 'Acesso negado. Apenas fornecedores podem acessar'}), 403
         
         from src.models.plant import Plant
+        from sqlalchemy import and_
         
-        # Fornecedores podem visualizar todas as plantas cadastradas
-        plants = Plant.query.filter_by(is_active=True).order_by(Plant.name).all()
+        # Filtrar apenas plantas da mesma company do fornecedor
+        # IMPORTANTE: Retornar TODAS as plantas (ativas e inativas) para que fornecedores possam visualizar e reativar plantas inativas
+        # A validação de plantas ativas será feita no momento de criar agendamentos
+        plants = Plant.query.filter(
+            Plant.company_id == current_user.company_id
+        ).order_by(Plant.name).all()
+        
+        logger.info(f"[get_plants] Fornecedor {current_user.id} (company_id: {current_user.company_id}) - Encontradas {len(plants)} plantas (ativas e inativas)")
         
         result = []
         for plant in plants:

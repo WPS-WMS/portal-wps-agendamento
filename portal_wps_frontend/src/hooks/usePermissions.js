@@ -43,18 +43,8 @@ const usePermissions = (user) => {
           ? await adminAPI.getPermissions()
           : await adminAPI.getMyPermissions()
         
-        console.log('Permissões carregadas:', {
-          userEmail: user?.email,
-          userRole: user?.role,
-          permissionsData: data,
-          permissionsCount: Object.keys(data || {}).length,
-          allKeys: Object.keys(data || {}),
-          samplePermission: data?.['create_appointment']
-        })
-        
         setPermissions(data || {})
       } catch (err) {
-        console.error('Erro ao carregar permissões:', err)
         setPermissions({})
       } finally {
         setLoading(false)
@@ -93,18 +83,6 @@ const usePermissions = (user) => {
       // Não deve haver padrão permissivo - se não está configurado, é "none" (Sem acesso)
       const userPermission = permissions[functionId]?.[user.role] || PERMISSION_TYPES.NONE
 
-      // Debug para portaria@wps.com
-      if (user?.email === 'portaria@wps.com' || user?.email === 'portaria.central@wps.com') {
-        console.log('Verificando permissão:', {
-          functionId,
-          userRole: user.role,
-          permissionsForFunction: permissions[functionId],
-          userPermission,
-          requiredPermission,
-          allPermissions: permissions
-        })
-      }
-
       // REGRA DE NEGÓCIO: Hierarquia de permissões
       // Editor (nível 2) = Admin dentro da funcionalidade (acesso completo)
       // Viewer (nível 1) = apenas visualização
@@ -115,16 +93,6 @@ const usePermissions = (user) => {
       // REGRA DE NEGÓCIO: Editor (nível 2) sempre tem acesso se o nível requerido for <= 2
       // Isso garante que Editor tem os mesmos privilégios que Admin
       const hasAccess = userLevel >= requiredLevel
-      
-      // Debug para portaria@wps.com
-      if (user?.email === 'portaria@wps.com' || user?.email === 'portaria.central@wps.com') {
-        console.log('Resultado da verificação:', {
-          functionId,
-          userLevel,
-          requiredLevel,
-          hasAccess
-        })
-      }
 
       return hasAccess
     }

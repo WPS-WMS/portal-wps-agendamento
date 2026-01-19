@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
 from src.models.user import db
+from src.models.company import Company
 from src.models.supplier import Supplier
 from src.models.appointment import Appointment
 from src.models.schedule_config import ScheduleConfig
@@ -32,10 +33,25 @@ logger = logging.getLogger(__name__)
 
 # Criar aplicação Flask
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
-app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
+
+# SECRET_KEY: usar variável de ambiente em produção, fallback apenas para desenvolvimento
+SECRET_KEY = os.environ.get('SECRET_KEY') or os.environ.get('JWT_SECRET_KEY')
+if not SECRET_KEY:
+    # Apenas para desenvolvimento local - NUNCA usar em produção
+    SECRET_KEY = 'asdf#FGSgvasgf$5$WGT'
+    if os.environ.get('FLASK_ENV') == 'production' or os.environ.get('ENVIRONMENT') == 'production':
+        raise ValueError("SECRET_KEY deve ser definida via variável de ambiente em produção!")
+    logger.warning("⚠️ SECRET_KEY usando valor padrão de desenvolvimento. Defina SECRET_KEY como variável de ambiente em produção!")
+
+app.config['SECRET_KEY'] = SECRET_KEY
 
 # Habilitar CORS para permitir requisições do frontend
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+# IMPORTANTE: Em produção, substituir "*" por origens específicas
+allowed_origins = os.environ.get('CORS_ORIGINS', '*')
+if allowed_origins != '*':
+    allowed_origins = [origin.strip() for origin in allowed_origins.split(',')]
+
+CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
 # Configurar banco de dados
 database_path = os.path.join(os.path.dirname(__file__), 'database', 'app.db')
@@ -150,7 +166,7 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     """Handler para erros internos do servidor"""
-    logger.error(f"Erro interno do servidor: {error}")
+    logger.error("Erro interno do servidor", exc_info=True)
     return jsonify({'error': 'Erro interno do servidor'}), 500
 
 
@@ -163,10 +179,19 @@ if __name__ == '__main__':
         # Configurar logging do Werkzeug para não mostrar avisos
         logging.getLogger('werkzeug').setLevel(logging.ERROR)
         
+        # Verificar se está em modo produção
+        is_production = os.environ.get('FLASK_ENV') == 'production' or os.environ.get('ENVIRONMENT') == 'production'
+        debug_mode = not is_production and os.environ.get('DEBUG', 'False').lower() == 'true'
+        
+        if is_production and debug_mode:
+            logger.warning("⚠️ DEBUG MODE DESABILITADO EM PRODUÇÃO!")
+            debug_mode = False
+        
         logger.info("Iniciando servidor Cargo Flow Backend...")
         logger.info("Servidor rodará em http://0.0.0.0:5000")
         logger.info("API disponível em http://localhost:5000/api")
-        app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+        logger.info(f"Modo: {'DESENVOLVIMENTO' if debug_mode else 'PRODUÇÃO'}")
+        app.run(host='0.0.0.0', port=5000, debug=debug_mode, use_reloader=False)
     except KeyboardInterrupt:
         logger.info("Servidor interrompido pelo usuário")
     except Exception as e:

@@ -320,9 +320,38 @@ const AccessProfilesScreen = ({ onBack, user }) => {
       
       // Remover 'admin' das permissões antes de salvar (admin tem acesso total)
       const permissionsToSave = {}
+      const validRoles = ['supplier', 'plant']
+      const validPermissionTypes = ['editor', 'viewer', 'none']
+      
       Object.keys(permissions).forEach(functionId => {
-        permissionsToSave[functionId] = { ...permissions[functionId] }
-        delete permissionsToSave[functionId].admin
+        const functionPermissions = permissions[functionId]
+        if (!functionPermissions || typeof functionPermissions !== 'object') {
+          return
+        }
+        
+        permissionsToSave[functionId] = {}
+        
+        // Filtrar apenas roles válidos e tipos de permissão válidos
+        Object.keys(functionPermissions).forEach(role => {
+          // Ignorar 'admin' (admin tem acesso total)
+          if (role === 'admin') {
+            return
+          }
+          
+          // Validar role
+          if (!validRoles.includes(role)) {
+            return
+          }
+          
+          const permissionType = functionPermissions[role]
+          
+          // Validar tipo de permissão
+          if (!validPermissionTypes.includes(permissionType)) {
+            return
+          }
+          
+          permissionsToSave[functionId][role] = permissionType
+        })
       })
       
       // Salvar no backend via API
@@ -476,12 +505,11 @@ const AccessProfilesScreen = ({ onBack, user }) => {
               setPermissions(mergedPermissions)
               setOriginalPermissions(JSON.parse(JSON.stringify(mergedPermissions)))
             } catch (e) {
-              console.error('Erro ao carregar permissões do localStorage:', e)
+              // Erro ao carregar permissões do localStorage
             }
           }
         }
       } catch (err) {
-        console.error('Erro ao carregar permissões do backend:', err)
         // Fallback para localStorage
         const saved = localStorage.getItem('access_profiles')
         if (saved) {

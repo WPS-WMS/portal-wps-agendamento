@@ -20,10 +20,16 @@ import usePermissions from '../hooks/usePermissions'
 
 const SupplierManagement = ({ supplier, onBack, onUpdate, user }) => {
   const { hasPermission, getPermissionType } = usePermissions(user)
+  const canEdit = hasPermission('edit_supplier', 'editor')
+  // Verificar permissão específica para inativar/ativar fornecedor (igual ao PlantManagement)
   const canInactivate = hasPermission('inactivate_supplier', 'editor')
   const canDelete = hasPermission('delete_supplier', 'editor')
   const deletePermissionType = getPermissionType('delete_supplier')
   const canViewDelete = deletePermissionType !== 'none'
+  
+  // Verificar tipo de permissão para mostrar botão desabilitado quando for 'viewer'
+  const inactivateSupplierPermission = getPermissionType('inactivate_supplier')
+  const canViewInactivate = inactivateSupplierPermission === 'viewer'
   const [formData, setFormData] = useState({
     description: supplier?.description || '',
     is_active: supplier?.is_active !== false
@@ -68,6 +74,12 @@ const SupplierManagement = ({ supplier, onBack, onUpdate, user }) => {
   }
 
   const handleToggleStatus = async () => {
+    // Verificar permissão antes de executar a ação
+    if (!canInactivate) {
+      setError('Você não tem permissão para inativar/ativar fornecedores. É necessária permissão de Editor para realizar esta ação.')
+      return
+    }
+
     const newStatus = !formData.is_active
     setLoading(true)
     setError('')
@@ -75,8 +87,10 @@ const SupplierManagement = ({ supplier, onBack, onUpdate, user }) => {
     try {
       await adminAPI.updateSupplier(supplier.id, { is_active: newStatus })
       setFormData(prev => ({ ...prev, is_active: newStatus }))
+      // Atualizar a lista de fornecedores no componente pai
+      onUpdate()
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'Erro ao atualizar status do fornecedor')
     } finally {
       setLoading(false)
     }
@@ -199,6 +213,7 @@ const SupplierManagement = ({ supplier, onBack, onUpdate, user }) => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Mensagem quando não tem permissão editor (igual ao PlantManagement) */}
           {!canInactivate && (
             <Alert className="mb-4">
               <AlertDescription>
@@ -207,6 +222,7 @@ const SupplierManagement = ({ supplier, onBack, onUpdate, user }) => {
             </Alert>
           )}
           <div className="flex gap-2">
+            {/* Botão ativo - apenas quando tem permissão editor */}
             {canInactivate && (
               <Button
                 size="sm"
@@ -228,6 +244,29 @@ const SupplierManagement = ({ supplier, onBack, onUpdate, user }) => {
                 )}
               </Button>
             )}
+            {/* Botão desabilitado - quando tem permissão viewer mas não editor */}
+            {!canInactivate && canViewInactivate && (
+              <Button
+                size="sm"
+                variant={formData.is_active ? "destructive" : "default"}
+                disabled
+                className="flex items-center gap-1 opacity-50 cursor-not-allowed"
+                title="É necessária permissão de Editor para realizar esta ação"
+              >
+                {formData.is_active ? (
+                  <>
+                    <Ban className="w-3 h-3" />
+                    Inativar
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-3 h-3" />
+                    Ativar
+                  </>
+                )}
+              </Button>
+            )}
+            {/* Não mostrar botão quando não tem acesso (none) - comportamento igual ao PlantManagement */}
           </div>
         </CardContent>
       </Card>
@@ -267,8 +306,15 @@ const SupplierManagement = ({ supplier, onBack, onUpdate, user }) => {
               id="description"
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
-              disabled={loading}
+              disabled={loading || !canEdit}
+              readOnly={!canEdit}
+              className={!canEdit ? 'bg-gray-50 cursor-not-allowed' : ''}
             />
+            {!canEdit && (
+              <p className="text-xs text-gray-500">
+                Você tem permissão apenas para visualizar. Não é possível editar os campos.
+              </p>
+            )}
           </div>
 
           {/* Botões de Ação */}
@@ -300,7 +346,7 @@ const SupplierManagement = ({ supplier, onBack, onUpdate, user }) => {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={loading || !formData.description.trim()}
+              disabled={loading || !formData.description.trim() || !canEdit}
               className="flex items-center gap-2"
             >
               {loading ? (

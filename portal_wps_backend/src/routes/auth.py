@@ -8,7 +8,9 @@ logger = logging.getLogger(__name__)
 
 auth_bp = Blueprint('auth', __name__)
 
-SECRET_KEY = 'asdf#FGSgvasgf$5$WGT'  # Em produção, usar variável de ambiente
+# SECRET_KEY: usar a mesma do main.py (via variável de ambiente em produção)
+import os
+SECRET_KEY = os.environ.get('SECRET_KEY') or os.environ.get('JWT_SECRET_KEY') or 'asdf#FGSgvasgf$5$WGT'
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
@@ -23,6 +25,8 @@ def login():
             return jsonify({'error': 'Email e senha são obrigatórios'}), 400
         
         email = data.get('email')
+        # Nota: email agora é único por company, mas para login precisamos buscar em todas as companies
+        # Isso é seguro porque o email+company_id é único, então ainda há isolamento
         user = User.query.filter_by(email=email).first()
         
         if not user:
@@ -54,8 +58,9 @@ def login():
         }), 200
         
     except Exception as e:
-        logger.error(f"Erro no login: {e}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        # Não logar detalhes de erro em produção (segurança)
+        logger.error("Erro no login", exc_info=False)
+        return jsonify({'error': 'Erro ao processar login. Tente novamente.'}), 500
 
 @auth_bp.route('/verify', methods=['GET'])
 def verify_token():
@@ -86,7 +91,8 @@ def verify_token():
     except jwt.InvalidTokenError:
         return jsonify({'error': 'Token inválido'}), 401
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error("Erro ao verificar token", exc_info=True)
+        return jsonify({'error': 'Erro ao verificar token'}), 500
 
 def token_required(f):
     """Decorator para proteger rotas que requerem autenticação"""
@@ -214,6 +220,7 @@ def forgot_password():
             # 3. Enviar email com link de recuperação
             # 
             # Por enquanto, não implementado envio de email
+            pass
         
         # RN03 - Sempre mesma mensagem, não informar se email existe
         return jsonify({

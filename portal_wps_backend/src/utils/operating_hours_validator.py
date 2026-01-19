@@ -3,6 +3,8 @@ Utilitário para validar horários de funcionamento das plantas
 """
 from datetime import datetime, timedelta
 from src.models.operating_hours import OperatingHours
+from src.models.default_schedule import DefaultSchedule
+from src.models.schedule_config import ScheduleConfig
 from src.models.user import db
 import logging
 
@@ -39,10 +41,16 @@ def validate_operating_hours(plant_id, appointment_date, appointment_time, appoi
         if plant_id:
             logger.info(f"🔍 [VALIDATE] Buscando configuração específica da planta {plant_id} para schedule_type={'weekend' if is_weekend else 'weekdays'}")
             if is_weekend:
+                # CORREÇÃO: Para weekend, OperatingHours usa day_of_week: 5=Sábado, 6=Domingo
+                # Mas db_day_of_week para Domingo é 0 e para Sábado é 6
+                # Precisamos converter: Domingo (db_day_of_week=0) -> OperatingHours.day_of_week=6
+                #                      Sábado (db_day_of_week=6) -> OperatingHours.day_of_week=5
+                operating_hours_day = 6 if db_day_of_week == 0 else 5  # Domingo=6, Sábado=5
+                
                 operating_hours_config = OperatingHours.query.filter_by(
                     plant_id=plant_id,
                     schedule_type='weekend',
-                    day_of_week=db_day_of_week,
+                    day_of_week=operating_hours_day,
                     is_active=True
                 ).first()
             else:
@@ -66,28 +74,38 @@ def validate_operating_hours(plant_id, appointment_date, appointment_time, appoi
         
         # IMPORTANTE: Não buscar configuração global quando há plant_id
         # Apenas plantas têm configuração de horário de funcionamento
-        # Se não encontrou configuração específica da planta, permitir 24h (padrão)
         
         # Se é final de semana e não encontrou configuração ativa, verificar se há configuração inativa
-        # IMPORTANTE: Apenas verificar configuração específica da planta (não global)
+        # IMPORTANTE: Se não há configuração de final de semana (nem ativa nem inativa), BLOQUEAR por padrão
+        # Mensagens específicas por dia: Sábado ou Domingo
         if is_weekend and not operating_hours_config:
             if plant_id:
-                # Verificar se existe configuração inativa específica da planta
+                # Converter day_of_week para formato do OperatingHours
+                operating_hours_day = 6 if db_day_of_week == 0 else 5  # Domingo=6, Sábado=5
+                day_name_pt = 'Domingo' if db_day_of_week == 0 else 'Sábado'
+                
+                # Verificar se existe configuração inativa específica da planta para este dia
                 inactive_config_plant = OperatingHours.query.filter_by(
                     plant_id=plant_id,
                     schedule_type='weekend',
-                    day_of_week=db_day_of_week,
+                    day_of_week=operating_hours_day,
                     is_active=False
                 ).first()
                 
-                # Se há configuração inativa específica da planta, bloquear
+                # Se há configuração inativa específica da planta, bloquear com mensagem específica do dia
                 if inactive_config_plant:
-                    error_msg = 'Agendamentos não são permitidos em finais de semana para esta planta.'
-                    logger.warning(f"Bloqueando agendamento em final de semana - configuração específica da planta existe mas está inativa")
+                    error_msg = f'Agendamentos não são permitidos aos {day_name_pt}s para esta planta (horários de {day_name_pt} desativados).'
+                    logger.warning(f"❌ [VALIDATE] Bloqueando agendamento em {day_name_pt} - configuração específica da planta existe mas está inativa")
                     return (False, error_msg)
+                
+                # CORREÇÃO: Se não há configuração de final de semana (nem ativa nem inativa), BLOQUEAR por padrão
+                # Mensagem específica por dia
+                error_msg = f'Agendamentos não são permitidos aos {day_name_pt}s para esta planta (horários de {day_name_pt} não configurados).'
+                logger.warning(f"❌ [VALIDATE] Bloqueando agendamento em {day_name_pt} - nenhuma configuração encontrada (padrão: BLOQUEAR)")
+                return (False, error_msg)
             
-            # Se não há configuração (nem ativa nem inativa), permitir 24h
-            logger.info(f"Nenhuma configuração de weekend encontrada para plant_id={plant_id}. Permitindo 24h (padrão).")
+            # Se plant_id é None, não há planta para validar - permitir (fail-open)
+            logger.info(f"Nenhuma configuração de weekend encontrada e plant_id é None. Permitindo 24h (fail-open).")
             return (True, None)
         
         # Se não encontrou configuração específica da planta, permitir 24h (padrão)
@@ -152,6 +170,114 @@ def validate_operating_hours(plant_id, appointment_date, appointment_time, appoi
             current += timedelta(hours=1)
         
         logger.info(f"Validação passou - todos os horários estão dentro do intervalo {start_time_str}-{end_time_str}")
+        
+        # VALIDAR BLOQUEIOS: Verificar se há bloqueios semanais (DefaultSchedule) ou de data específica (ScheduleConfig)
+        # Multi-tenant: buscar company_id da planta para garantir isolamento
+        from src.models.plant import Plant
+        plant = Plant.query.get(plant_id) if plant_id else None
+        company_id = plant.company_id if plant else None
+        
+        if not company_id:
+            logger.warning(f"Planta {plant_id} não encontrada ou sem company_id. Pulando validação de bloqueios.")
+        else:
+            # 1. Verificar bloqueios de data específica (ScheduleConfig) - maior prioridade
+            # LÓGICA: Um horário está bloqueado se o agendamento COMEÇAR DENTRO dele
+            # Se o agendamento começar EXATAMENTE no horário final do bloqueio, é permitido
+            logger.info(f"🔍 [VALIDATE] Verificando bloqueios de data específica para plant_id={plant_id}, data={appointment_date}")
+            
+            # Buscar todos os bloqueios desta data para esta planta
+            all_blocks = ScheduleConfig.query.filter_by(
+                plant_id=plant_id,
+                date=appointment_date,
+                is_available=False
+            ).all()
+            
+            # Converter appointment_time para minutos
+            appointment_start_minutes = appointment_time.hour * 60 + appointment_time.minute
+            
+            for block in all_blocks:
+                block_time_minutes = block.time.hour * 60 + block.time.minute
+                block_time_str = block.time.strftime('%H:%M')
+                
+                # Bloquear apenas se o agendamento começar DENTRO do bloqueio (não igual ao horário do bloqueio)
+                # Exemplo: bloqueio em 12:00 bloqueia agendamentos de 12:00 a 13:00
+                # Mas permite agendamento começando em 13:00 (horário final)
+                if block_time_minutes <= appointment_start_minutes < block_time_minutes + 60:
+                    error_msg = f'O horário {block_time_str} do dia {appointment_date.strftime("%d/%m/%Y")} está bloqueado. Motivo: {block.reason or "Bloqueio de data específica"}'
+                    logger.warning(f"❌ [VALIDATE] Bloqueio de data específica detectado: {block_time_str} em {appointment_date} bloqueia agendamento em {appointment_time.strftime('%H:%M')} - {block.reason}")
+                    return (False, error_msg)
+            
+            # 2. Verificar bloqueios semanais (DefaultSchedule) - segunda prioridade
+            # LÓGICA: Um horário está bloqueado se o agendamento COMEÇAR DENTRO dele
+            # Se o agendamento começar EXATAMENTE no horário final do bloqueio, é permitido
+            logger.info(f"🔍 [VALIDATE] Verificando bloqueios semanais para plant_id={plant_id}, weekday={db_day_of_week}")
+            
+            # Buscar todos os bloqueios semanais para este dia/planta
+            from sqlalchemy import or_, and_
+            all_weekly_blocks = DefaultSchedule.query.filter(
+                and_(
+                    DefaultSchedule.plant_id == plant_id,
+                    or_(
+                        DefaultSchedule.day_of_week == db_day_of_week,
+                        DefaultSchedule.day_of_week.is_(None)
+                    ),
+                    DefaultSchedule.is_available == False
+                )
+            ).all()
+            
+            # Converter appointment_time para minutos
+            appointment_start_minutes = appointment_time.hour * 60 + appointment_time.minute
+            day_name = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][db_day_of_week if db_day_of_week > 0 else 0]
+            
+            for block in all_weekly_blocks:
+                block_time_minutes = block.time.hour * 60 + block.time.minute
+                block_time_str = block.time.strftime('%H:%M')
+                
+                # LÓGICA: Um bloqueio em X bloqueia agendamentos começando de X até X+59 minutos
+                # Mas NÃO bloqueia agendamentos começando em X+1 hora (mesma lógica dos horários de funcionamento)
+                # Exemplo: bloqueio em 12:00 bloqueia agendamentos começando de 12:00 a 12:59
+                # Mas permite agendamento começando em 13:00 (horário final do intervalo)
+                # IMPORTANTE: Se o bloqueio é de 12:00 até 13:00, há bloqueios em 12:00 e 13:00
+                # Mas um agendamento começando em 13:00 deve ser permitido (horário final)
+                
+                # Verificar se o agendamento começa DENTRO do intervalo do bloqueio
+                # LÓGICA: Se começa exatamente no horário de um bloqueio, verificar se há bloqueio no horário anterior
+                # Se houver, significa que este é o horário final de um intervalo, então PERMITIR
+                # Se não houver, bloquear normalmente
+                if block_time_minutes <= appointment_start_minutes < block_time_minutes + 60:
+                    # Agendamento começa dentro do intervalo do bloqueio
+                    
+                    # Se começa exatamente no horário do bloqueio, verificar se é o horário final de um intervalo
+                    if appointment_start_minutes == block_time_minutes:
+                        # Verificar se há bloqueio no horário anterior (isso indicaria que este é o final de um intervalo)
+                        prev_hour_time = block.time.hour - 1
+                        if prev_hour_time < 0:
+                            prev_hour_time = 23
+                        
+                        from datetime import time as time_class
+                        prev_hour_block = DefaultSchedule.query.filter(
+                            and_(
+                                DefaultSchedule.plant_id == plant_id,
+                                or_(
+                                    DefaultSchedule.day_of_week == db_day_of_week,
+                                    DefaultSchedule.day_of_week.is_(None)
+                                ),
+                                DefaultSchedule.time == time_class(prev_hour_time, 0),
+                                DefaultSchedule.is_available == False
+                            )
+                        ).first()
+                        
+                        # Se há bloqueio no horário anterior, este é o horário final do intervalo - PERMITIR
+                        if prev_hour_block:
+                            logger.info(f"✅ [VALIDATE] Agendamento em {appointment_time.strftime('%H:%M')} permitido - horário final do bloqueio (bloqueio anterior em {(prev_hour_time):02d}:00)")
+                            continue  # Este bloqueio não bloqueia porque é o final de um intervalo
+                    
+                    # Caso contrário, bloquear
+                    error_msg = f'O horário {block_time_str} de {day_name} está bloqueado semanalmente. Motivo: {block.reason or "Bloqueio semanal"}'
+                    logger.warning(f"❌ [VALIDATE] Bloqueio semanal detectado: {block_time_str} em {day_name} bloqueia agendamento em {appointment_time.strftime('%H:%M')} - {block.reason}")
+                    return (False, error_msg)
+        
+        logger.info(f"✅ [VALIDATE] Validação completa passou - nenhum bloqueio detectado")
         return (True, None)
         
     except Exception as e:

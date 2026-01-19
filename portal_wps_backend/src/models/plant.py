@@ -14,6 +14,11 @@ class Plant(db.Model):
     is_active = db.Column(db.Boolean, default=True, nullable=False)  # Status ativo/inativo
     max_capacity = db.Column(db.Integer, default=1, nullable=False)  # Capacidade máxima de recebimentos por horário
     
+    # Multi-tenant: company_id obrigatório
+    company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=False)
+    
+    created_by_admin_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Admin que criou a planta
+    
     # Informações de localização
     cep = db.Column(db.String(10), nullable=True)  # CEP
     street = db.Column(db.String(200), nullable=True)  # Rua
@@ -35,6 +40,7 @@ class Plant(db.Model):
             'cnpj': self.cnpj if self.cnpj else '',  # Garantir que sempre retorne string, nunca None
             'email': self.email,
             'phone': self.phone,
+            'company_id': self.company_id,
             'is_active': self.is_active,
             'max_capacity': self.max_capacity,
             'cep': self.cep,

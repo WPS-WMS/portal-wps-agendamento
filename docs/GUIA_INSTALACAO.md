@@ -24,10 +24,25 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
+**Variáveis de Ambiente (Opcional para Desenvolvimento):**
+- Para desenvolvimento local, não é obrigatório configurar variáveis de ambiente
+- O sistema usa valores padrão seguros apenas para desenvolvimento
+- **Para produção**: Consulte `docs/SEGURANCA.md` para configuração obrigatória
+- Criar arquivo `.env` baseado em `.env.example` (opcional em desenvolvimento):
+  ```bash
+  # .env (não commitar no git!)
+  SECRET_KEY=sua-chave-secreta-para-desenvolvimento
+  FLASK_ENV=development
+  DEBUG=True
+  CORS_ORIGINS=*
+  ```
+
 **Banco de Dados:**
-- O banco de dados SQLite é criado automaticamente na primeira execução em `src/database/app.db`
+- O banco de dados SQLite é criado **automaticamente** na primeira execução em `src/database/app.db`
+- A estrutura completa do banco está definida nos modelos em `src/models/` (user.py, company.py, supplier.py, plant.py, appointment.py, etc.)
+- O `main.py` importa todos os modelos e chama `db.create_all()` que cria todas as tabelas automaticamente
 - O script `init_data.py` é **opcional** e serve apenas para popular o banco com dados de teste
-- Para criar dados de teste, execute: `python init_data.py` (apaga todos os dados existentes e recria)
+- Para criar dados de teste, execute: `python init_data.py` (apaga todos os dados existentes e recria dados de teste)
 
 ### 4. Configuração do Frontend
 
@@ -129,7 +144,8 @@ portal-wps-agendamento/
 │   │   └── main.py             # Aplicação principal
 │   ├── venv/                   # Ambiente virtual Python (criar)
 │   ├── requirements.txt        # Dependências Python
-│   └── init_data.py            # Script opcional de dados iniciais (não versionado)
+│   ├── init_data.py            # Script opcional de dados iniciais (dados de teste)
+│   └── .env.example           # Template de variáveis de ambiente
 ├── portal_wps_frontend/        # Interface React
 │   ├── src/
 │   │   ├── components/         # Componentes React
@@ -140,6 +156,9 @@ portal-wps-agendamento/
 ├── docs/                       # Documentação do projeto
 │   ├── GUIA_INSTALACAO.md     # Este arquivo
 │   ├── DOCUMENTACAO_PORTAL_WPS.md  # Documentação completa
+│   ├── SEGURANCA.md            # Guia de segurança e configuração
+│   ├── MODELAGEM_BANCO_DE_DADOS.md # Modelagem do banco de dados
+│   ├── MULTI_TENANT_IMPLEMENTATION.md # Implementação multi-tenant
 │   └── README.md               # README da documentação
 ├── iniciar_servidores.ps1      # Script PowerShell para iniciar ambos os servidores
 ├── iniciar_backend.ps1         # Script PowerShell para iniciar backend
@@ -158,7 +177,11 @@ portal-wps-agendamento/
 - **Localização**: `portal_wps_backend/src/database/app.db`
 - **Tipo**: SQLite
 - **Criação**: Automática na primeira execução do `main.py`
+- **Estrutura**: Definida nos modelos em `src/models/` (não no main.py)
+  - O `main.py` importa todos os modelos (User, Company, Supplier, Plant, Appointment, etc.)
+  - SQLAlchemy cria todas as tabelas automaticamente com `db.create_all()`
 - **Dados de Teste**: Execute `python init_data.py` no diretório `portal_wps_backend` (opcional)
+  - ⚠️ **Atenção**: Este script apaga todos os dados existentes e recria dados de teste
 
 ## Solução de Problemas
 
@@ -183,10 +206,14 @@ portal-wps-agendamento/
 - Verificar console do navegador para mensagens de erro de rede
 
 ### Banco de dados vazio ou sem dados
-- **Opção 1**: Executar `python init_data.py` no diretório `portal_wps_backend` (apaga todos os dados e recria dados de teste)
-- **Opção 2**: Criar usuários através da interface administrativa (após login como admin)
-- Verificar se arquivo `src/database/app.db` foi criado
-- **Atenção**: O script `init_data.py` apaga **todos os dados existentes** e recria dados de teste
+- **O banco é criado automaticamente**: Na primeira execução do `main.py`, todas as tabelas são criadas automaticamente
+- **Estrutura do banco**: Definida nos modelos em `src/models/` - não precisa criar manualmente
+- **Dados de teste (opcional)**: 
+  - **Opção 1**: Executar `python init_data.py` no diretório `portal_wps_backend` 
+    - ⚠️ **Atenção**: Este script apaga **todos os dados existentes** e recria dados de teste
+  - **Opção 2**: Criar usuários através da interface administrativa (após login como admin)
+- Verificar se arquivo `src/database/app.db` foi criado em `portal_wps_backend/src/database/`
+- Verificar se o diretório `database` foi criado automaticamente
 
 ### Erro de permissões
 - Verificar se o usuário tem permissão para criar/editar/excluir conforme configurado em "Perfis de Acesso"
@@ -230,11 +257,32 @@ portal-wps-agendamento/
 ### Banco de Dados
 - **SQLite** 3.x - Banco de dados relacional
 
+## Status do Sistema
+
+### ✅ Sistema Pronto e Funcional
+
+O **Portal WPS** está **100% funcional** e pronto para uso:
+- ✅ Todas as funcionalidades implementadas e testadas
+- ✅ Banco de dados criado automaticamente
+- ✅ Sistema de segurança configurado
+- ✅ Navegação temporal corrigida (calendário diário)
+- ✅ Documentação completa disponível
+
+### Para Produção
+
+Antes de fazer deploy em produção:
+- 📋 Consulte `docs/SEGURANCA.md` para checklist completo de segurança
+- 🔑 Configure variáveis de ambiente obrigatórias (SECRET_KEY, CORS_ORIGINS)
+- 🔒 Configure HTTPS e certificado SSL
+- 📊 Considere migração para PostgreSQL (SQLite é adequado apenas para desenvolvimento)
+
 ## Suporte
 
 Para dúvidas ou problemas:
 1. Consultar a documentação completa em `docs/DOCUMENTACAO_PORTAL_WPS.md`
-2. Verificar logs do console do navegador (F12)
-3. Verificar logs do terminal do backend
-4. Verificar se todas as dependências estão instaladas corretamente
-5. Contatar suporte técnico se necessário
+2. Consultar guia de segurança em `docs/SEGURANCA.md` (para produção)
+3. Verificar logs do console do navegador (F12)
+4. Verificar logs do terminal do backend
+5. Verificar se todas as dependências estão instaladas corretamente
+6. Verificar se o banco de dados foi criado automaticamente (`src/database/app.db`)
+7. Contatar suporte técnico se necessário

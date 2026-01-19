@@ -112,6 +112,10 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
         setLoadingScheduleConfig(true)
         try {
           const plantId = parseInt(formData.plant_id, 10)
+          if (isNaN(plantId)) {
+            setLoadingScheduleConfig(false)
+            return
+          }
           const date = formData.date || null
           
           const config = await supplierAPI.getPlantScheduleConfig(plantId, date)
@@ -144,7 +148,7 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
             }
           }
         } catch (err) {
-          console.error('Erro ao carregar configurações da planta:', err)
+          // Erro silencioso ao carregar configurações
           // Não mostrar erro ao usuário, apenas logar
         } finally {
           setLoadingScheduleConfig(false)
@@ -175,7 +179,7 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
           const config = await supplierAPI.getPlantScheduleConfig(parseInt(value, 10))
           setPlantScheduleConfig(config)
         } catch (err) {
-          console.error('Erro ao carregar configurações da planta:', err)
+          // Erro silencioso ao carregar configurações
         } finally {
           setLoadingScheduleConfig(false)
         }
@@ -297,12 +301,18 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
       
       // Garantir que supplier_id seja inteiro
       if (submitData.supplier_id) {
-        submitData.supplier_id = parseInt(submitData.supplier_id, 10)
+        const parsed = parseInt(submitData.supplier_id, 10)
+        if (!isNaN(parsed)) {
+          submitData.supplier_id = parsed
+        }
       }
       
       // Garantir que plant_id seja inteiro
       if (submitData.plant_id) {
-        submitData.plant_id = parseInt(submitData.plant_id, 10)
+        const parsed = parseInt(submitData.plant_id, 10)
+        if (!isNaN(parsed)) {
+          submitData.plant_id = parsed
+        }
       }
       
       // Sempre incluir o motivo se foi fornecido
@@ -366,12 +376,18 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
       
       // Garantir que supplier_id seja inteiro
       if (submitData.supplier_id) {
-        submitData.supplier_id = parseInt(submitData.supplier_id, 10)
+        const parsed = parseInt(submitData.supplier_id, 10)
+        if (!isNaN(parsed)) {
+          submitData.supplier_id = parsed
+        }
       }
       
       // Garantir que plant_id seja inteiro
       if (submitData.plant_id) {
-        submitData.plant_id = parseInt(submitData.plant_id, 10)
+        const parsed = parseInt(submitData.plant_id, 10)
+        if (!isNaN(parsed)) {
+          submitData.plant_id = parsed
+        }
       }
       
       // Se é reagendamento, incluir o motivo

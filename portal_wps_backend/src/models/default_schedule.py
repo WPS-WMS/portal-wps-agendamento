@@ -5,6 +5,7 @@ class DefaultSchedule(db.Model):
     __tablename__ = 'default_schedules'
     
     id = db.Column(db.Integer, primary_key=True)
+    plant_id = db.Column(db.Integer, db.ForeignKey('plants.id'), nullable=True)  # Planta específica (NULL = todas as plantas)
     day_of_week = db.Column(db.Integer, nullable=True)  # 0=Domingo, 1=Segunda, ..., 6=Sábado (NULL = todos os dias)
     time = db.Column(db.Time, nullable=False)  # Horário específico
     is_available = db.Column(db.Boolean, default=True, nullable=False)  # Se está disponível
@@ -15,6 +16,7 @@ class DefaultSchedule(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'plant_id': self.plant_id,
             'day_of_week': self.day_of_week,
             'day_name': self.get_day_name(),
             'time': self.time.strftime('%H:%M:%S') if self.time else None,

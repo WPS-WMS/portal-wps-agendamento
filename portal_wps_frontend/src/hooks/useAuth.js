@@ -38,7 +38,6 @@ const useAuth = () => {
             clearAuth()
           }
         } catch (error) {
-          console.error('Erro ao verificar token:', error)
           clearAuth()
         }
       }

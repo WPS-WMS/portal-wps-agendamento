@@ -4,7 +4,7 @@ from src.models.user import db
 
 class Appointment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    appointment_number = db.Column(db.String(50), unique=True, nullable=True)  # Número único do agendamento
+    appointment_number = db.Column(db.String(50), nullable=True)  # Removido unique=True - será único por company
     date = db.Column(db.Date, nullable=False)
     time = db.Column(db.Time, nullable=False)
     time_end = db.Column(db.Time, nullable=True)  # Horário final (opcional para compatibilidade com agendamentos antigos)
@@ -16,6 +16,9 @@ class Appointment(db.Model):
     check_in_time = db.Column(db.DateTime, nullable=True)
     check_out_time = db.Column(db.DateTime, nullable=True)
     
+    # Multi-tenant: company_id obrigatório
+    company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=False)
+    
     # Chave estrangeira para Supplier
     supplier_id = db.Column(db.Integer, db.ForeignKey('supplier.id'), nullable=False)
     
@@ -25,6 +28,9 @@ class Appointment(db.Model):
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Constraint único: appointment_number deve ser único por company (se não for NULL)
+    __table_args__ = (db.UniqueConstraint('appointment_number', 'company_id', name='uq_appointment_number_company'),)
 
     def __repr__(self):
         return f'<Appointment {self.purchase_order} - {self.date} {self.time}>'
@@ -43,6 +49,7 @@ class Appointment(db.Model):
             'motivo_reagendamento': self.motivo_reagendamento,
             'check_in_time': self.check_in_time.isoformat() if self.check_in_time else None,
             'check_out_time': self.check_out_time.isoformat() if self.check_out_time else None,
+            'company_id': self.company_id,
             'supplier_id': self.supplier_id,
             'plant_id': self.plant_id,
             'created_at': self.created_at.isoformat() if self.created_at else None,

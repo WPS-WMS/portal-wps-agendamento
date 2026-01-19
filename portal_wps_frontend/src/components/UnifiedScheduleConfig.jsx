@@ -218,9 +218,13 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
 
   // Carregar configurações semanais
   const loadWeeklyConfigs = async () => {
+    if (!plantId) {
+      setError('Planta não selecionada')
+      return
+    }
     try {
       setLoadingWeekly(true)
-      const data = await adminAPI.getDefaultSchedule()
+      const data = await adminAPI.getDefaultSchedule(plantId)
       // Agrupar por dia da semana e motivo para mostrar intervalos
       const grouped = {}
       data.forEach(config => {
@@ -250,11 +254,15 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
 
   // Carregar horários disponíveis para data específica
   const loadAvailableTimes = async (date) => {
+    if (!plantId) {
+      setError('Planta não selecionada')
+      return
+    }
     setLoadingSpecific(true)
     setError('')
 
     try {
-      const times = await adminAPI.getAvailableTimes(date)
+      const times = await adminAPI.getAvailableTimes(date, plantId)
       // Garantir que todos os horários de 00:00 até 23:00 sejam exibidos (intervalos de 1 hora)
       // Se o backend não retornar todos, criar a lista completa
       const allTimeSlots = []
@@ -322,7 +330,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
         }))
       }
     } catch (err) {
-      console.error('Erro ao carregar horários de funcionamento:', err)
+      // Erro ao carregar horários de funcionamento
       // Não mostrar erro, apenas usar valores padrão
     }
   }
@@ -412,6 +420,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
       const timeRange = generateTimeRange(newWeeklyConfig.time_start, newWeeklyConfig.time_end)
       const savePromises = timeRange.map(time =>
         adminAPI.createDefaultSchedule({
+          plant_id: plantId,
           day_of_week: newWeeklyConfig.day_of_week,
           time: time,
           is_available: false,
@@ -480,6 +489,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
     try {
       const savePromises = Object.entries(localChanges).map(([time, isAvailable]) =>
         adminAPI.createScheduleConfig({
+          plant_id: plantId,
           date: selectedDate,
           time: time,
           is_available: isAvailable,

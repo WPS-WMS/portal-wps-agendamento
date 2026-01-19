@@ -54,14 +54,7 @@ const SupplierForm = ({ onSubmit, onCancel }) => {
       const result = await adminAPI.createSupplier(formData)
       setSuccess(result)
     } catch (err) {
-      console.error('Erro ao criar fornecedor:', err)
-      console.error('Detalhes do erro:', {
-        message: err.message,
-        response: err.response,
-        status: err.response?.status,
-        data: err.response?.data
-      })
-      const errorMessage = err.response?.data?.error || err.message || 'Erro desconhecido ao criar fornecedor'
+      const errorMessage = err.response?.data?.error || err.message || 'Erro ao criar fornecedor'
       setError(errorMessage)
       
       // Se for erro de permissão, mostrar mensagem mais detalhada

@@ -28,32 +28,35 @@ O **Portal WPS** é um sistema completo de agendamento logístico desenvolvido p
 portal-wps-agendamento/
 ├── portal_wps_backend/          # Aplicação Flask
 │   ├── src/
-│   │   ├── main.py             # Aplicação principal
-│   │   ├── models/             # Modelos de dados
-│   │   │   ├── user.py         # Modelo de usuário
-│   │   │   ├── supplier.py     # Modelo de fornecedor
-│   │   │   ├── appointment.py  # Modelo de agendamento
-│   │   │   ├── plant.py        # Modelo de planta
-│   │   │   ├── system_config.py # Configurações do sistema
-│   │   │   ├── schedule_config.py # Configurações de horários
-│   │   │   ├── default_schedule.py # Horários padrão
-│   │   │   ├── operating_hours.py # Horários de funcionamento
-│   │   │   └── permission.py   # Modelo de permissões
+│   │   ├── main.py             # Aplicação principal (cria banco automaticamente)
+│   │   ├── models/             # Modelos de dados (estrutura do banco)
+│   │   │   ├── user.py         # Modelo de usuário (tabela users)
+│   │   │   ├── company.py      # Modelo de empresa (tabela company) - Multi-tenant
+│   │   │   ├── supplier.py     # Modelo de fornecedor (tabela supplier)
+│   │   │   ├── appointment.py  # Modelo de agendamento (tabela appointments)
+│   │   │   ├── plant.py        # Modelo de planta (tabela plants)
+│   │   │   ├── system_config.py # Configurações do sistema (tabela system_config)
+│   │   │   ├── schedule_config.py # Configurações de horários (tabela schedule_configs)
+│   │   │   ├── default_schedule.py # Horários padrão (tabela default_schedules)
+│   │   │   ├── operating_hours.py # Horários de funcionamento (tabela operating_hours)
+│   │   │   └── permission.py   # Modelo de permissões (tabela permissions)
 │   │   ├── routes/             # Rotas da API
-│   │   │   ├── auth.py         # Autenticação
+│   │   │   ├── auth.py         # Autenticação (JWT)
 │   │   │   ├── admin.py        # Rotas administrativas
 │   │   │   ├── supplier.py     # Rotas do fornecedor
 │   │   │   ├── plant.py        # Rotas da planta
 │   │   │   └── user.py         # Rotas de usuário
 │   │   ├── utils/              # Utilitários
 │   │   │   ├── helpers.py      # Funções auxiliares
-│   │   │   ├── permissions.py  # Sistema de permissões
+│   │   │   ├── permissions.py  # Sistema de permissões granulares
+│   │   │   ├── company_filter.py # Filtro multi-tenant por company_id
 │   │   │   └── operating_hours_validator.py # Validação de horários
 │   │   └── database/           # Banco de dados SQLite
 │   │       └── app.db          # Arquivo do banco (criado automaticamente)
 │   ├── venv/                   # Ambiente virtual Python (criar)
 │   ├── requirements.txt        # Dependências Python
-│   └── init_data.py           # Script opcional de dados iniciais
+│   ├── init_data.py           # Script opcional de dados iniciais (dados de teste)
+│   └── .env.example           # Template de variáveis de ambiente
 ├── portal_wps_frontend/         # Aplicação React
 │   ├── src/
 │   │   ├── components/         # Componentes React
@@ -75,6 +78,9 @@ portal-wps-agendamento/
 ├── docs/                        # Documentação do projeto
 │   ├── GUIA_INSTALACAO.md      # Guia de instalação
 │   ├── DOCUMENTACAO_PORTAL_WPS.md # Este arquivo
+│   ├── SEGURANCA.md            # Guia de segurança e configuração
+│   ├── MODELAGEM_BANCO_DE_DADOS.md # Modelagem do banco de dados
+│   ├── MULTI_TENANT_IMPLEMENTATION.md # Implementação multi-tenant
 │   └── README.md               # README da documentação
 ├── iniciar_servidores.ps1      # Script PowerShell para iniciar ambos os servidores
 ├── iniciar_backend.ps1         # Script PowerShell para iniciar backend
@@ -445,6 +451,29 @@ O sistema implementa um controle de acesso granular por funcionalidade através 
 - **Validação de entrada**: Sanitização de todos os inputs
 - **Senhas criptografadas**: Hash bcrypt para senhas
 - **Permissões granulares**: Sistema de permissões por funcionalidade
+- **Multi-tenant**: Isolamento completo de dados por company_id
+
+### Configurações de Segurança
+
+#### Variáveis de Ambiente Obrigatórias (Produção)
+- **SECRET_KEY** ou **JWT_SECRET_KEY**: Chave secreta para JWT (OBRIGATÓRIO em produção)
+  - Mínimo 32 caracteres, gerar com `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+  - O sistema bloqueia inicialização se não definida em produção
+  
+#### Configurações Recomendadas
+- **CORS_ORIGINS**: Origens permitidas para CORS (em produção, use origens específicas)
+  - Exemplo: `CORS_ORIGINS=https://portal.example.com,https://www.example.com`
+- **FLASK_ENV** ou **ENVIRONMENT**: Definir como `production` em produção
+- **DEBUG**: Deve ser `False` ou não definido em produção (sistema detecta automaticamente)
+
+> **Importante**: Consulte `docs/SEGURANCA.md` para guia completo de configuração de segurança.
+
+### Proteções Implementadas
+- **Debug mode**: Desabilitado automaticamente em produção
+- **CORS**: Configurável via variável de ambiente (padrão: `*` apenas em desenvolvimento)
+- **Logs seguros**: Redução de logs que expõem informações sensíveis em produção
+- **Mensagens genéricas**: Erros de login não expõem se email existe ou não
+- **SQL Injection**: Protegido via SQLAlchemy ORM
 
 ### Validações
 - **CNPJ**: Validação de formato e dígitos verificadores
@@ -500,7 +529,9 @@ python src/main.py
 ```
 
 **Banco de Dados:**
-- O banco de dados SQLite é criado automaticamente na primeira execução em `src/database/app.db`
+- O banco de dados SQLite é criado **automaticamente** na primeira execução em `src/database/app.db`
+- A estrutura completa do banco está definida nos modelos em `src/models/` (user.py, company.py, supplier.py, plant.py, appointment.py, etc.)
+- O `main.py` inicializa o banco chamando `db.create_all()` que cria todas as tabelas baseado nos modelos importados
 - O script `init_data.py` é **opcional** e serve apenas para popular o banco com dados de teste
 - Para criar dados de teste, execute: `python init_data.py` no diretório `portal_wps_backend`
 - **Atenção**: O script `init_data.py` apaga todos os dados existentes e recria dados de teste
@@ -527,10 +558,30 @@ npm run dev  # ou pnpm run dev
 ```
 
 ### Configuração
+
+#### Portas Padrão
 - **Backend**: Porta 5000 (http://localhost:5000)
 - **Frontend**: Porta 5173 (http://localhost:5173) - Vite padrão
-- **Banco**: SQLite (`src/database/app.db`) - criado automaticamente
 - **API Base**: `/api`
+
+#### Banco de Dados
+- **Tipo**: SQLite
+- **Localização**: `portal_wps_backend/src/database/app.db`
+- **Criação**: Automática na primeira execução do `main.py`
+- **Estrutura**: Definida nos modelos em `src/models/` (não no main.py)
+- **Inicialização**: O `main.py` importa todos os modelos e chama `db.create_all()` para criar todas as tabelas
+
+#### Variáveis de Ambiente (Desenvolvimento)
+Criar arquivo `.env` no diretório `portal_wps_backend/` baseado em `.env.example`:
+```bash
+# .env (não commitar no git!)
+SECRET_KEY=sua-chave-secreta-para-desenvolvimento
+FLASK_ENV=development
+DEBUG=True
+CORS_ORIGINS=*
+```
+
+> **Para Produção**: Consulte `docs/SEGURANCA.md` para configuração completa e obrigatória.
 
 ## Dados de Teste
 
@@ -614,12 +665,12 @@ npm run dev  # ou pnpm run dev
 ### Logs do Sistema
 O sistema registra todas as operações importantes:
 - Inicialização do banco de dados
-- Autenticações e tentativas de login
+- Autenticações e tentativas de login (sem expor detalhes sensíveis)
 - Criação e modificação de agendamentos
 - Check-ins e check-outs realizados
 - Erros e exceções do sistema
 
-> **Nota:** O sistema foi otimizado para remover logs desnecessários que expunham informações sensíveis (emails, CNPJs, dados completos de objetos). Apenas logs críticos para debug e monitoramento são mantidos.
+> **Nota de Segurança:** O sistema foi otimizado para remover logs desnecessários que expunham informações sensíveis (emails, CNPJs, senhas, tokens, dados completos de objetos). Em produção, logs são reduzidos e apenas informações críticas para debug e monitoramento são mantidos. Logs detalhados de permissões e operações sensíveis são exibidos apenas em modo desenvolvimento.
 
 ### Monitoramento
 - **Performance**: Tempo de resposta das APIs
@@ -629,9 +680,43 @@ O sistema registra todas as operações importantes:
 
 ## Referências
 
-Para mais informações sobre instalação e configuração, consulte:
-- **Guia de Instalação**: `docs/GUIA_INSTALACAO.md`
+Para mais informações, consulte:
+- **Guia de Instalação**: `docs/GUIA_INSTALACAO.md` - Passo a passo de instalação
+- **Guia de Segurança**: `docs/SEGURANCA.md` - Configurações de segurança e variáveis de ambiente
+- **Modelagem do Banco**: `docs/MODELAGEM_BANCO_DE_DADOS.md` - Estrutura completa do banco
+- **Multi-tenant**: `docs/MULTI_TENANT_IMPLEMENTATION.md` - Implementação multi-tenant
 - **README Principal**: `README.md`
+
+## Status do Sistema
+
+### ✅ Sistema Pronto e Funcional
+
+O **Portal WPS** está **100% funcional** e pronto para uso em produção, com todas as funcionalidades implementadas e testadas:
+
+- ✅ Sistema de autenticação JWT completo e seguro
+- ✅ Gestão completa de fornecedores, plantas e agendamentos
+- ✅ Sistema de check-in/check-out integrado
+- ✅ Validações de horários e capacidade
+- ✅ Sistema de permissões granulares por perfil
+- ✅ Multi-tenant com isolamento completo por company_id
+- ✅ Interface responsiva e intuitiva
+- ✅ Banco de dados criado automaticamente
+- ✅ Configurações de segurança implementadas
+- ✅ Logs otimizados para não expor informações sensíveis
+- ✅ Navegação temporal corrigida (calendário diário)
+- ✅ Documentação completa
+
+### Requisitos para Deploy em Produção
+
+Antes de fazer deploy em produção, certifique-se de:
+
+1. **Variável de Ambiente Obrigatória**: Definir `SECRET_KEY` ou `JWT_SECRET_KEY`
+2. **CORS**: Configurar `CORS_ORIGINS` com origens específicas
+3. **Ambiente**: Definir `FLASK_ENV=production` ou `ENVIRONMENT=production`
+4. **HTTPS**: Configurar certificado SSL (usar proxy reverso como Nginx)
+5. **Banco de Dados**: Considerar migração para PostgreSQL para produção
+
+> Consulte `docs/SEGURANCA.md` para checklist completo de segurança.
 
 ## Conclusão
 
@@ -639,11 +724,13 @@ O **Portal WPS** representa uma solução completa e moderna para gestão de age
 
 - **Eficiência operacional** através da automação de processos
 - **Controle total** sobre agendamentos e movimentação de veículos
-- **Integração seamless** com sistemas ERP existentes
-- **Experiência de usuário** otimizada para diferentes perfis
+- **Integração seamless** com sistemas ERP existentes (payload JSON no check-in)
+- **Experiência de usuário** otimizada para diferentes perfis (admin, fornecedor, planta)
 - **Segurança** e confiabilidade em todas as operações
+- **Multi-tenant** com isolamento completo de dados por empresa
+- **Extensibilidade** facilitada pela arquitetura modular
 
-O sistema está pronto para uso em ambiente de produção e pode ser facilmente expandido conforme as necessidades futuras da organização.
+O sistema está **pronto para uso em ambiente de produção** e pode ser facilmente expandido conforme as necessidades futuras da organização.
 
 ---
 

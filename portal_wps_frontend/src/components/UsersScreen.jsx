@@ -22,12 +22,10 @@ const UsersScreen = ({ onBack, onNavigateToAccessProfiles }) => {
     try {
       setLoading(true)
       const data = await adminAPI.getUsers()
-      console.log('Usuários carregados:', data)
       setUsers(Array.isArray(data) ? data : [])
       setError('')
     } catch (err) {
-      console.error('Erro ao carregar usuários:', err)
-      setError('Erro ao carregar usuários: ' + err.message)
+      setError('Erro ao carregar usuários')
       setUsers([])
     } finally {
       setLoading(false)
@@ -170,26 +168,31 @@ const UsersScreen = ({ onBack, onNavigateToAccessProfiles }) => {
           {filteredUsers.map((user) => (
             <Card 
               key={user.id}
-              className={`transition-all hover:shadow-lg ${
+              className={`transition-all hover:shadow-lg overflow-hidden ${
                 !user.is_active ? 'opacity-60' : ''
               }`}
             >
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Shield className="w-5 h-5" />
+              <CardHeader className="pb-3">
+                {/* Header com status no topo direito - sempre visível usando Grid */}
+                <div className="grid grid-cols-[1fr_auto] items-center gap-3 mb-3 w-full">
+                  <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                    <Shield className="w-4 h-4 flex-shrink-0 text-gray-500" />
+                    <CardTitle 
+                      className="text-base font-semibold" 
+                      title={user.email}
+                      style={{ 
+                        minWidth: 0, 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis', 
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
                       {user.email}
                     </CardTitle>
-                    <CardDescription className="mt-2">
-                      <Badge className={getRoleColor(user.role)}>
-                        {getRoleLabel(user.role)}
-                      </Badge>
-                    </CardDescription>
                   </div>
                   <Badge 
                     variant={user.is_active ? 'default' : 'secondary'}
-                    className={user.is_active ? 'bg-green-500' : 'bg-gray-400'}
+                    className={`flex-shrink-0 whitespace-nowrap ${user.is_active ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400'}`}
                   >
                     {user.is_active ? (
                       <><UserCheck className="w-3 h-3 mr-1" /> Ativo</>
@@ -198,29 +201,39 @@ const UsersScreen = ({ onBack, onNavigateToAccessProfiles }) => {
                     )}
                   </Badge>
                 </div>
+                {/* Badge de role em linha separada */}
+                <div className="flex items-center gap-2">
+                  <Badge className={getRoleColor(user.role)}>
+                    {getRoleLabel(user.role)}
+                  </Badge>
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm">
+              <CardContent className="pt-0">
+                <div className="space-y-2.5 text-sm mb-4">
                   {user.supplier && (
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Users className="w-4 h-4" />
-                      <span>Fornecedor: {user.supplier.description}</span>
+                    <div className="flex items-center gap-2 text-gray-600 min-w-0">
+                      <Users className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate" title={`Fornecedor: ${user.supplier.description}`}>
+                        Fornecedor: {user.supplier.description}
+                      </span>
                     </div>
                   )}
                   {user.plant && (
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Building2 className="w-4 h-4" />
-                      <span>Planta: {user.plant.name}</span>
+                    <div className="flex items-center gap-2 text-gray-600 min-w-0">
+                      <Building2 className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate" title={`Planta: ${user.plant.name}`}>
+                        Planta: {user.plant.name}
+                      </span>
                     </div>
                   )}
                   {!user.supplier && !user.plant && user.role === 'admin' && (
                     <div className="flex items-center gap-2 text-gray-600">
-                      <Shield className="w-4 h-4" />
+                      <Shield className="w-4 h-4 flex-shrink-0" />
                       <span>Administrador do sistema</span>
                     </div>
                   )}
                 </div>
-                <div className="mt-4 flex gap-2">
+                <div className="flex gap-2 pt-2 border-t">
                   <Button
                     variant="outline"
                     size="sm"

@@ -35,7 +35,7 @@ const UserForm = ({ onBack, onSuccess }) => {
       const data = await adminAPI.getSuppliers()
       setSuppliers(Array.isArray(data) ? data.filter(s => s.is_active) : [])
     } catch (err) {
-      console.error('Erro ao carregar fornecedores:', err)
+      // Erro silencioso - dados não carregados
     }
   }
 
@@ -44,7 +44,7 @@ const UserForm = ({ onBack, onSuccess }) => {
       const data = await adminAPI.getPlants()
       setPlants(Array.isArray(data) ? data.filter(p => p.is_active) : [])
     } catch (err) {
-      console.error('Erro ao carregar plantas:', err)
+      // Erro silencioso - dados não carregados
     }
   }
 
@@ -113,11 +113,17 @@ const UserForm = ({ onBack, onSuccess }) => {
       }
 
       if (formData.role === 'supplier') {
-        submitData.supplier_id = parseInt(formData.supplier_id)
+        const parsed = parseInt(formData.supplier_id, 10)
+        if (!isNaN(parsed)) {
+          submitData.supplier_id = parsed
+        }
       }
 
       if (formData.role === 'plant') {
-        submitData.plant_id = parseInt(formData.plant_id)
+        const parsed = parseInt(formData.plant_id, 10)
+        if (!isNaN(parsed)) {
+          submitData.plant_id = parsed
+        }
       }
 
       const result = await adminAPI.createUser(submitData)
