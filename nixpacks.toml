@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["python311"]
+
+[phases.install]
+cmds = [
+  "pip install --upgrade pip",
+  "pip install -r portal_wps_backend/requirements.txt"
+]
+
+[start]
+cmd = "python3 portal_wps_backend/src/main.py"
