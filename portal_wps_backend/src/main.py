@@ -265,21 +265,83 @@ except Exception as e:
     
     # Diagnóstico específico para erros de conexão
     error_str = str(e).lower()
-    if 'operationalerror' in error_str or 'connection' in error_str:
+    error_type_str = str(type(e)).lower()
+    
+    logger.error("\n" + "=" * 80)
+    logger.error("🔍 DIAGNÓSTICO DETALHADO DO ERRO")
+    logger.error("=" * 80)
+    
+    # Mostrar informações da URL (sem senha)
+    try:
+        parsed_diag = urlparse(DATABASE_URL)
+        logger.error(f"Host tentado: {parsed_diag.hostname}")
+        logger.error(f"Porta tentada: {parsed_diag.port or '5432'}")
+        logger.error(f"Database tentado: {parsed_diag.path.lstrip('/')}")
+        logger.error(f"Usuário: {parsed_diag.username}")
+        logger.error(f"Senha configurada: {'SIM' if parsed_diag.password else 'NÃO'}")
+    except:
+        logger.error(f"URL completa (primeiros 80 chars): {DATABASE_URL[:80]}...")
+    
+    if 'operationalerror' in error_str or 'operationalerror' in error_type_str or 'connection' in error_str:
         logger.error("\n" + "=" * 80)
-        logger.error("🔍 DIAGNÓSTICO DE ERRO DE CONEXÃO")
+        logger.error("🔍 ERRO DE CONEXÃO COM BANCO DE DADOS")
         logger.error("=" * 80)
-        logger.error("O erro indica problema de conexão com o banco de dados.")
-        logger.error("\nVerifique:")
+        logger.error("O erro indica problema ao conectar com o PostgreSQL.")
+        logger.error(f"\nMensagem completa do erro:")
+        logger.error(f"   {str(e)}")
+        
+        logger.error("\n" + "-" * 80)
+        logger.error("CHECKLIST DE VERIFICAÇÃO:")
+        logger.error("-" * 80)
         logger.error("1. ✅ DATABASE_URL está configurada no Railway → Variables?")
-        logger.error("2. ✅ A URL está correta? (formato: postgresql://user:pass@host:port/db)")
+        logger.error("2. ✅ A URL está no formato correto?")
+        logger.error("   Formato esperado: postgresql://user:password@host:port/database")
         logger.error("3. ✅ A senha está correta? (sem colchetes [])")
-        logger.error("4. ✅ O host está acessível? (teste com ping ou telnet)")
+        logger.error("4. ✅ O host está acessível do Railway?")
         logger.error("5. ✅ O firewall do Supabase permite conexões do Railway?")
+        logger.error("   → Verifique em Supabase → Settings → Database → Network Restrictions")
         logger.error("6. ✅ O banco de dados existe no Supabase?")
-        logger.error("\nDATABASE_URL atual (primeiros 50 chars):")
-        logger.error(f"   {DATABASE_URL[:50]}...")
+        logger.error("7. ✅ Está usando Direct connection ou Session Pooler?")
+        logger.error("   → Se IPv4, use Session Pooler (porta 6543)")
+        
+        # Verificar se é erro de SSL
+        if 'ssl' in error_str or 'certificate' in error_str:
+            logger.error("\n⚠️ ERRO RELACIONADO A SSL:")
+            logger.error("   O Supabase requer SSL. Verifique se 'sslmode: require' está configurado.")
+        
+        # Verificar se é erro de autenticação
+        if 'password' in error_str or 'authentication' in error_str:
+            logger.error("\n⚠️ ERRO DE AUTENTICAÇÃO:")
+            logger.error("   A senha pode estar incorreta ou com caracteres especiais não codificados.")
+            logger.error("   Verifique a senha no Supabase → Settings → Database")
+        
+        # Verificar se é erro de host não encontrado
+        if 'could not resolve' in error_str or 'name or service not known' in error_str:
+            logger.error("\n⚠️ ERRO DE RESOLUÇÃO DE HOST:")
+            logger.error("   O hostname não pode ser resolvido.")
+            logger.error("   Verifique se o hostname está correto na URL.")
+        
+        logger.error("\n" + "=" * 80)
+        logger.error("💡 SOLUÇÕES SUGERIDAS:")
         logger.error("=" * 80)
+        logger.error("1. Verifique os logs acima para ver qual host está sendo usado")
+        logger.error("2. Teste a conexão manualmente:")
+        logger.error("   psql 'postgresql://postgres:senha@db.xxx.supabase.co:5432/postgres'")
+        logger.error("3. Se usar IPv4, mude para Session Pooler no Supabase")
+        logger.error("4. Verifique Network Restrictions no Supabase")
+        logger.error("=" * 80)
+    else:
+        logger.error(f"\nTipo de erro não relacionado a conexão: {type(e).__name__}")
+        logger.error(f"Mensagem: {str(e)}")
+    
+    logger.error("\nDATABASE_URL atual (primeiros 80 chars, sem senha):")
+    try:
+        parsed_display = urlparse(DATABASE_URL)
+        safe_display = f"{parsed_display.scheme}://{parsed_display.username}:***@{parsed_display.hostname}:{parsed_display.port or '5432'}{parsed_display.path}"
+        logger.error(f"   {safe_display}")
+    except:
+        logger.error(f"   {DATABASE_URL[:80]}...")
+    logger.error("=" * 80)
     
     raise
 
