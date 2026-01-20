@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 from datetime import datetime
+from urllib.parse import quote_plus, urlparse, urlunparse
 
 # DON'T CHANGE THIS !!!
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -74,6 +75,28 @@ if not DATABASE_URL:
     DATABASE_URL = f"postgresql+psycopg2://{auth_part}{pg_host}:{pg_port}/{pg_db}"
     logger.info(f"SQLALCHEMY_DATABASE_URI montada via variáveis individuais: {DATABASE_URL}")
 else:
+    # Converter postgresql:// para postgresql+psycopg2:// se necessário (Supabase usa postgresql://)
+    if DATABASE_URL.startswith("postgresql://") and "+psycopg2" not in DATABASE_URL:
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+        logger.info("DATABASE_URL convertida para formato postgresql+psycopg2://")
+    
+    # Se a URL contém caracteres especiais não codificados na senha, tentar codificar
+    # Isso ajuda quando a senha tem caracteres como $, [, ], etc.
+    try:
+        parsed = urlparse(DATABASE_URL)
+        if parsed.password and any(char in parsed.password for char in ['$', '[', ']', '@', ':', '/', '?', '#']):
+            # Se a senha não está codificada e tem caracteres especiais, codificar
+            encoded_password = quote_plus(parsed.password)
+            if encoded_password != parsed.password:
+                # Reconstruir URL com senha codificada
+                netloc = f"{parsed.username}:{encoded_password}@{parsed.hostname}"
+                if parsed.port:
+                    netloc += f":{parsed.port}"
+                DATABASE_URL = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+                logger.info("Senha na DATABASE_URL foi codificada automaticamente (caracteres especiais detectados)")
+    except Exception as e:
+        logger.warning(f"Não foi possível processar DATABASE_URL para codificação: {e}")
+    
     logger.info("SQLALCHEMY_DATABASE_URI definida via DATABASE_URL.")
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
