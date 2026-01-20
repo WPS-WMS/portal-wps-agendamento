@@ -203,11 +203,14 @@ if __name__ == '__main__':
             logger.warning("⚠️ DEBUG MODE DESABILITADO EM PRODUÇÃO!")
             debug_mode = False
         
+        # Porta do Railway ou padrão 5000 para desenvolvimento
+        port = int(os.environ.get('PORT', 5000))
+        
         logger.info("Iniciando servidor Cargo Flow Backend...")
-        logger.info("Servidor rodará em http://0.0.0.0:5000")
-        logger.info("API disponível em http://localhost:5000/api")
+        logger.info(f"Servidor rodará em http://0.0.0.0:{port}")
+        logger.info(f"API disponível em http://localhost:{port}/api")
         logger.info(f"Modo: {'DESENVOLVIMENTO' if debug_mode else 'PRODUÇÃO'}")
-        app.run(host='0.0.0.0', port=5000, debug=debug_mode, use_reloader=False)
+        app.run(host='0.0.0.0', port=port, debug=debug_mode, use_reloader=False)
     except KeyboardInterrupt:
         logger.info("Servidor interrompido pelo usuário")
     except Exception as e:
