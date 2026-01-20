@@ -54,103 +54,204 @@ if allowed_origins != '*':
 
 CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
-# Configurar banco de dados (PostgreSQL) - EXIGE DATABASE_URL
-# NÃO há fallback para localhost - DATABASE_URL é obrigatória
+# ============================================================================
+# CONFIGURAÇÃO DE BANCO DE DADOS - PostgreSQL
+# ============================================================================
+# Esta seção configura a conexão com o banco de dados PostgreSQL.
+# A variável DATABASE_URL é OBRIGATÓRIA e deve ser fornecida via variável de ambiente.
+# Em produção (Railway), configure em: Railway → Variables → DATABASE_URL
+# ============================================================================
+
+logger.info("=" * 80)
+logger.info("🔍 INICIANDO CONFIGURAÇÃO DO BANCO DE DADOS")
+logger.info("=" * 80)
+
+# Ler DATABASE_URL da variável de ambiente - ÚNICA FONTE DE CONFIGURAÇÃO
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Verificar se DATABASE_URL está definida - OBRIGATÓRIA em produção
+# Log detalhado para debug
+logger.info(f"Lendo DATABASE_URL do ambiente...")
+logger.info(f"  os.environ.get('DATABASE_URL'): {'DEFINIDO' if DATABASE_URL else 'NÃO DEFINIDO'}")
+if DATABASE_URL:
+    logger.info(f"  Tamanho da string: {len(DATABASE_URL)} caracteres")
+    logger.info(f"  Primeiros 30 chars: {DATABASE_URL[:30]}...")
+else:
+    logger.error("  ❌ DATABASE_URL está None ou vazia!")
+
+# Validação 1: DATABASE_URL deve existir
 if not DATABASE_URL:
-    is_production = os.environ.get('FLASK_ENV') == 'production' or os.environ.get('ENVIRONMENT') == 'production'
+    is_production = os.environ.get('FLASK_ENV') == 'production' or os.environ.get('ENVIRONMENT') == 'production' or os.environ.get('RAILWAY_ENVIRONMENT')
+    
     error_msg = (
-        "❌ ERRO CRÍTICO: DATABASE_URL não está definida!\n"
-        "Configure a variável DATABASE_URL no Railway → Variables\n"
-        "Formato esperado: postgresql://user:password@host:port/database\n"
-        "Exemplo: postgresql://postgres:senha@db.xxx.supabase.co:5432/postgres"
+        "\n" + "=" * 80 + "\n"
+        "❌ ERRO CRÍTICO: DATABASE_URL não está definida!\n\n"
+        "A variável DATABASE_URL é OBRIGATÓRIA e deve ser configurada.\n\n"
     )
-    logger.error(error_msg)
+    
     if is_production:
-        raise ValueError(error_msg)
-    else:
-        # Em desenvolvimento, ainda lança erro mas com mensagem mais amigável
-        raise ValueError(
-            "DATABASE_URL deve ser definida mesmo em desenvolvimento.\n"
-            "Configure no arquivo .env ou como variável de ambiente.\n"
-            "Para desenvolvimento local, você pode usar:\n"
-            "DATABASE_URL=postgresql://postgres:senha@localhost:5432/portal_wps"
+        error_msg += (
+            "📍 Você está em PRODUÇÃO (Railway).\n"
+            "Configure a variável DATABASE_URL em:\n"
+            "  Railway → Seu Projeto → Variables → + New Variable\n\n"
+            "Nome: DATABASE_URL\n"
+            "Valor: postgresql://postgres:senha@db.xxx.supabase.co:5432/postgres\n\n"
+            "Formato esperado: postgresql://user:password@host:port/database\n"
         )
+    else:
+        error_msg += (
+            "📍 Você está em DESENVOLVIMENTO.\n"
+            "Configure DATABASE_URL como variável de ambiente:\n\n"
+            "Windows PowerShell:\n"
+            "  $env:DATABASE_URL='postgresql://postgres:senha@localhost:5432/portal_wps'\n\n"
+            "Linux/Mac:\n"
+            "  export DATABASE_URL='postgresql://postgres:senha@localhost:5432/portal_wps'\n\n"
+        )
+    
+    error_msg += "=" * 80
+    
+    logger.error(error_msg)
+    raise ValueError(error_msg)
 
-# Log de confirmação
-logger.info(f"✅ DATABASE_URL encontrada no ambiente (primeiros 50 chars): {DATABASE_URL[:50]}...")
+# Validação 2: DATABASE_URL não pode estar vazia
+DATABASE_URL = DATABASE_URL.strip()
+if not DATABASE_URL:
+    error_msg = "❌ ERRO: DATABASE_URL está vazia (apenas espaços em branco)!"
+    logger.error(error_msg)
+    raise ValueError(error_msg)
 
-# Processar DATABASE_URL: converter formato e codificar caracteres especiais
-# Converter postgresql:// para postgresql+psycopg2:// se necessário (Supabase usa postgresql://)
-if DATABASE_URL.startswith("postgresql://") and "+psycopg2" not in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
-    logger.info("DATABASE_URL convertida para formato postgresql+psycopg2://")
+logger.info(f"✅ DATABASE_URL encontrada: {DATABASE_URL[:50]}...")
 
-# Se a URL contém caracteres especiais não codificados na senha, codificar automaticamente
-# Isso ajuda quando a senha tem caracteres como $, [, ], etc.
+# Processar e validar DATABASE_URL
 try:
+    # Converter postgresql:// para postgresql+psycopg2:// se necessário
+    original_url = DATABASE_URL
+    if DATABASE_URL.startswith("postgresql://") and "+psycopg2" not in DATABASE_URL:
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+        logger.info("✅ Formato convertido: postgresql:// → postgresql+psycopg2://")
+    
+    # Parsear URL para validação e processamento
     parsed = urlparse(DATABASE_URL)
+    
+    # Validação 3: Verificar componentes essenciais
+    if not parsed.scheme:
+        raise ValueError("DATABASE_URL não contém scheme (postgresql:// ou postgresql+psycopg2://)")
+    if not parsed.hostname:
+        raise ValueError("DATABASE_URL não contém hostname")
+    if not parsed.path or parsed.path == '/':
+        raise ValueError("DATABASE_URL não contém nome do banco de dados")
+    
+    # Validação 4: Em produção, não permitir localhost
+    is_production = os.environ.get('FLASK_ENV') == 'production' or os.environ.get('ENVIRONMENT') == 'production' or os.environ.get('RAILWAY_ENVIRONMENT')
+    if is_production and parsed.hostname in ['localhost', '127.0.0.1', '0.0.0.0']:
+        error_msg = (
+            f"❌ ERRO CRÍTICO: DATABASE_URL aponta para localhost em PRODUÇÃO!\n"
+            f"Host detectado: {parsed.hostname}\n"
+            f"Isso não é permitido em produção. Use um banco remoto (ex: Supabase)."
+        )
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
+    # Codificar caracteres especiais na senha se necessário
     if parsed.password and any(char in parsed.password for char in ['$', '[', ']', '@', ':', '/', '?', '#']):
-        # Se a senha não está codificada e tem caracteres especiais, codificar
         encoded_password = quote_plus(parsed.password)
         if encoded_password != parsed.password:
-            # Reconstruir URL com senha codificada
             netloc = f"{parsed.username}:{encoded_password}@{parsed.hostname}"
             if parsed.port:
                 netloc += f":{parsed.port}"
             DATABASE_URL = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-            logger.info("Senha na DATABASE_URL foi codificada automaticamente (caracteres especiais detectados)")
+            logger.info("✅ Senha codificada automaticamente (caracteres especiais detectados)")
+    
+    # Log da URL final (sem senha) para debug
+    port_display = parsed.port if parsed.port else "5432"
+    safe_url = f"{parsed.scheme}://{parsed.username}:***@{parsed.hostname}:{port_display}{parsed.path}"
+    logger.info(f"✅ URL de conexão processada: {safe_url}")
+    logger.info(f"   Host: {parsed.hostname}")
+    logger.info(f"   Porta: {parsed.port or '5432'}")
+    logger.info(f"   Database: {parsed.path.lstrip('/')}")
+    
 except Exception as e:
-    logger.warning(f"Não foi possível processar DATABASE_URL para codificação: {e}")
-    # Não lança erro aqui - pode ser que a URL já esteja correta
+    error_msg = f"❌ ERRO ao processar DATABASE_URL: {e}\nURL fornecida: {DATABASE_URL[:50]}..."
+    logger.error(error_msg)
+    raise ValueError(error_msg) from e
 
-logger.info("SQLALCHEMY_DATABASE_URI será configurada usando DATABASE_URL.")
+logger.info("=" * 80)
+logger.info("✅ CONFIGURAÇÃO DO BANCO DE DADOS VALIDADA COM SUCESSO")
+logger.info("=" * 80)
 
-# Log da URL final (sem senha completa para segurança)
-try:
-    parsed_final = urlparse(DATABASE_URL)
-    port_display = parsed_final.port if parsed_final.port else "5432"
-    safe_url = f"{parsed_final.scheme}://{parsed_final.username}:***@{parsed_final.hostname}:{port_display}{parsed_final.path}"
-    logger.info(f"URL de conexão final (sem senha): {safe_url}")
-except Exception as e:
-    logger.warning(f"Não foi possível parsear URL para log: {e}")
-
+# Configurar SQLAlchemy com DATABASE_URL processada
+# Esta é a ÚNICA configuração de banco de dados - não há outras
+logger.info("Configurando SQLAlchemy...")
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-# Pre-ping evita conexões quebradas em provedores cloud/serverless
-# Adicionar timeout e configurações de pool
+
+# Configurações otimizadas para ambiente cloud (Railway + Supabase)
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_pre_ping': True,
-    'pool_recycle': 300,  # Reciclar conexões a cada 5 minutos
+    'pool_pre_ping': True,  # Verifica conexão antes de usar (evita conexões quebradas)
+    'pool_recycle': 300,     # Recicla conexões a cada 5 minutos
+    'pool_size': 5,          # Tamanho do pool de conexões
+    'max_overflow': 10,      # Máximo de conexões extras
     'connect_args': {
-        'connect_timeout': 10,  # Timeout de 10 segundos
-        'sslmode': 'require'  # Requerer SSL para Supabase
+        'connect_timeout': 10,      # Timeout de conexão: 10 segundos
+        'sslmode': 'require',       # SSL obrigatório (Supabase requer)
+        'application_name': 'portal_wps_backend'  # Identificação da aplicação
     }
 }
 
+logger.info("✅ SQLAlchemy configurado com sucesso")
+logger.info(f"   URI configurada: {safe_url}")
+
 # Inicializar banco de dados
+# Esta é a ÚNICA inicialização - db.init_app() cria o engine do SQLAlchemy
+logger.info("=" * 80)
+logger.info("🔌 INICIALIZANDO CONEXÃO COM BANCO DE DADOS")
+logger.info("=" * 80)
+
 try:
-    logger.info("Inicializando conexão com banco de dados...")
+    logger.info("Inicializando SQLAlchemy...")
     db.init_app(app)
-    with app.app_context():
-        logger.info("Criando tabelas (se não existirem)...")
-        db.create_all()
-        logger.info("✅ Banco de dados inicializado com sucesso")
-except Exception as e:
-    logger.error(f"❌ Erro ao inicializar banco de dados: {e}")
-    logger.error(f"Tipo do erro: {type(e).__name__}")
-    import traceback
-    logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+    logger.info("✅ SQLAlchemy inicializado")
     
-    # Tentar mostrar mais detalhes sobre o erro
-    if 'OperationalError' in str(type(e)):
-        logger.error("Erro operacional - verifique:")
-        logger.error("1. DATABASE_URL está correta?")
-        logger.error("2. Senha está correta?")
-        logger.error("3. Host está acessível?")
-        logger.error("4. Firewall do Supabase permite conexões do Railway?")
+    logger.info("Testando conexão com banco de dados...")
+    with app.app_context():
+        # Teste de conexão antes de criar tabelas
+        db.session.execute(db.text('SELECT 1'))
+        logger.info("✅ Conexão com banco de dados estabelecida com sucesso")
+        
+        logger.info("Criando/verificando tabelas...")
+        db.create_all()
+        logger.info("✅ Tabelas verificadas/criadas com sucesso")
+    
+    logger.info("=" * 80)
+    logger.info("✅ BANCO DE DADOS INICIALIZADO COM SUCESSO")
+    logger.info("=" * 80)
+    
+except Exception as e:
+    logger.error("=" * 80)
+    logger.error("❌ ERRO AO INICIALIZAR BANCO DE DADOS")
+    logger.error("=" * 80)
+    logger.error(f"Tipo do erro: {type(e).__name__}")
+    logger.error(f"Mensagem: {str(e)}")
+    
+    import traceback
+    logger.error(f"\nTraceback completo:\n{traceback.format_exc()}")
+    
+    # Diagnóstico específico para erros de conexão
+    error_str = str(e).lower()
+    if 'operationalerror' in error_str or 'connection' in error_str:
+        logger.error("\n" + "=" * 80)
+        logger.error("🔍 DIAGNÓSTICO DE ERRO DE CONEXÃO")
+        logger.error("=" * 80)
+        logger.error("O erro indica problema de conexão com o banco de dados.")
+        logger.error("\nVerifique:")
+        logger.error("1. ✅ DATABASE_URL está configurada no Railway → Variables?")
+        logger.error("2. ✅ A URL está correta? (formato: postgresql://user:pass@host:port/db)")
+        logger.error("3. ✅ A senha está correta? (sem colchetes [])")
+        logger.error("4. ✅ O host está acessível? (teste com ping ou telnet)")
+        logger.error("5. ✅ O firewall do Supabase permite conexões do Railway?")
+        logger.error("6. ✅ O banco de dados existe no Supabase?")
+        logger.error("\nDATABASE_URL atual (primeiros 50 chars):")
+        logger.error(f"   {DATABASE_URL[:50]}...")
+        logger.error("=" * 80)
     
     raise
 
