@@ -67,16 +67,44 @@ logger.info("🔍 INICIANDO CONFIGURAÇÃO DO BANCO DE DADOS")
 logger.info("=" * 80)
 
 # Ler DATABASE_URL da variável de ambiente - ÚNICA FONTE DE CONFIGURAÇÃO
+# DEBUG: Verificar TODAS as variáveis de ambiente relacionadas
+logger.info("=" * 80)
+logger.info("🔍 DEBUG: Verificando variáveis de ambiente...")
+logger.info("=" * 80)
+
+# Listar todas as variáveis que começam com DATABASE ou POSTGRES
+env_vars_db = {k: v for k, v in os.environ.items() if 'DATABASE' in k.upper() or 'POSTGRES' in k.upper()}
+if env_vars_db:
+    logger.info("Variáveis de ambiente relacionadas a banco encontradas:")
+    for key, value in env_vars_db.items():
+        # Mostrar valor parcialmente (sem senha completa)
+        if 'PASSWORD' in key.upper() or 'URL' in key.upper():
+            display_value = value[:30] + "..." if len(value) > 30 else value
+            logger.info(f"  {key} = {display_value} (tamanho: {len(value)} chars)")
+        else:
+            logger.info(f"  {key} = {value}")
+else:
+    logger.warning("⚠️ Nenhuma variável de ambiente relacionada a banco encontrada!")
+
+# Verificar especificamente DATABASE_URL
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Log detalhado para debug
-logger.info(f"Lendo DATABASE_URL do ambiente...")
+logger.info("-" * 80)
+logger.info(f"Lendo DATABASE_URL especificamente...")
 logger.info(f"  os.environ.get('DATABASE_URL'): {'DEFINIDO' if DATABASE_URL else 'NÃO DEFINIDO'}")
+logger.info(f"  Tipo: {type(DATABASE_URL)}")
 if DATABASE_URL:
     logger.info(f"  Tamanho da string: {len(DATABASE_URL)} caracteres")
-    logger.info(f"  Primeiros 30 chars: {DATABASE_URL[:30]}...")
+    logger.info(f"  Primeiros 50 chars: {DATABASE_URL[:50]}...")
+    logger.info(f"  Últimos 30 chars: ...{DATABASE_URL[-30:]}")
+    logger.info(f"  É string vazia? {DATABASE_URL == ''}")
+    logger.info(f"  Após strip(): '{DATABASE_URL.strip()}' (tamanho: {len(DATABASE_URL.strip())})")
 else:
-    logger.error("  ❌ DATABASE_URL está None ou vazia!")
+    logger.error("  ❌ DATABASE_URL está None ou não existe!")
+    logger.error("  Verifique se a variável está configurada em Railway → Variables")
+    logger.error("  Nome deve ser exatamente: DATABASE_URL (maiúsculas)")
+    
+logger.info("=" * 80)
 
 # Validação 1: DATABASE_URL deve existir
 if not DATABASE_URL:
