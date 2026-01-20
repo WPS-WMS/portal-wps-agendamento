@@ -54,63 +54,66 @@ if allowed_origins != '*':
 
 CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 
-# Configurar banco de dados (PostgreSQL por padrão)
+# Configurar banco de dados (PostgreSQL) - EXIGE DATABASE_URL
+# NÃO há fallback para localhost - DATABASE_URL é obrigatória
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# Log para debug - verificar se a variável está sendo lida
-if DATABASE_URL:
-    logger.info(f"✅ DATABASE_URL encontrada no ambiente (primeiros 50 chars): {DATABASE_URL[:50]}...")
-else:
-    logger.warning("⚠️ DATABASE_URL não encontrada no ambiente! Usando valores padrão (localhost).")
-    logger.warning("⚠️ Configure a variável DATABASE_URL no Railway → Variables")
-
+# Verificar se DATABASE_URL está definida - OBRIGATÓRIA em produção
 if not DATABASE_URL:
-    pg_user = os.environ.get("POSTGRES_USER", "postgres")
-    pg_password = os.environ.get("POSTGRES_PASSWORD", "")
-    pg_host = os.environ.get("POSTGRES_HOST", "localhost")
-    pg_port = os.environ.get("POSTGRES_PORT", "5432")
-    pg_db = os.environ.get("POSTGRES_DB", "portal_wps")
-
     is_production = os.environ.get('FLASK_ENV') == 'production' or os.environ.get('ENVIRONMENT') == 'production'
-    if not pg_password and is_production:
-        raise ValueError("POSTGRES_PASSWORD deve ser definida em produção para conexão segura ao PostgreSQL.")
-    if not pg_password:
-        logger.warning("⚠️ POSTGRES_PASSWORD não definido; conectando sem senha (apenas recomendado em desenvolvimento).")
+    error_msg = (
+        "❌ ERRO CRÍTICO: DATABASE_URL não está definida!\n"
+        "Configure a variável DATABASE_URL no Railway → Variables\n"
+        "Formato esperado: postgresql://user:password@host:port/database\n"
+        "Exemplo: postgresql://postgres:senha@db.xxx.supabase.co:5432/postgres"
+    )
+    logger.error(error_msg)
+    if is_production:
+        raise ValueError(error_msg)
+    else:
+        # Em desenvolvimento, ainda lança erro mas com mensagem mais amigável
+        raise ValueError(
+            "DATABASE_URL deve ser definida mesmo em desenvolvimento.\n"
+            "Configure no arquivo .env ou como variável de ambiente.\n"
+            "Para desenvolvimento local, você pode usar:\n"
+            "DATABASE_URL=postgresql://postgres:senha@localhost:5432/portal_wps"
+        )
 
-    # Monta a URL no formato postgresql+psycopg2://user:pass@host:port/db
-    auth_part = f"{pg_user}:{pg_password}@" if pg_password else f"{pg_user}@"
-    DATABASE_URL = f"postgresql+psycopg2://{auth_part}{pg_host}:{pg_port}/{pg_db}"
-    logger.info(f"SQLALCHEMY_DATABASE_URI montada via variáveis individuais: {DATABASE_URL}")
-else:
-    # Converter postgresql:// para postgresql+psycopg2:// se necessário (Supabase usa postgresql://)
-    if DATABASE_URL.startswith("postgresql://") and "+psycopg2" not in DATABASE_URL:
-        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
-        logger.info("DATABASE_URL convertida para formato postgresql+psycopg2://")
-    
-    # Se a URL contém caracteres especiais não codificados na senha, tentar codificar
-    # Isso ajuda quando a senha tem caracteres como $, [, ], etc.
-    try:
-        parsed = urlparse(DATABASE_URL)
-        if parsed.password and any(char in parsed.password for char in ['$', '[', ']', '@', ':', '/', '?', '#']):
-            # Se a senha não está codificada e tem caracteres especiais, codificar
-            encoded_password = quote_plus(parsed.password)
-            if encoded_password != parsed.password:
-                # Reconstruir URL com senha codificada
-                netloc = f"{parsed.username}:{encoded_password}@{parsed.hostname}"
-                if parsed.port:
-                    netloc += f":{parsed.port}"
-                DATABASE_URL = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
-                logger.info("Senha na DATABASE_URL foi codificada automaticamente (caracteres especiais detectados)")
-    except Exception as e:
-        logger.warning(f"Não foi possível processar DATABASE_URL para codificação: {e}")
-    
-    logger.info("SQLALCHEMY_DATABASE_URI definida via DATABASE_URL.")
+# Log de confirmação
+logger.info(f"✅ DATABASE_URL encontrada no ambiente (primeiros 50 chars): {DATABASE_URL[:50]}...")
+
+# Processar DATABASE_URL: converter formato e codificar caracteres especiais
+# Converter postgresql:// para postgresql+psycopg2:// se necessário (Supabase usa postgresql://)
+if DATABASE_URL.startswith("postgresql://") and "+psycopg2" not in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+    logger.info("DATABASE_URL convertida para formato postgresql+psycopg2://")
+
+# Se a URL contém caracteres especiais não codificados na senha, codificar automaticamente
+# Isso ajuda quando a senha tem caracteres como $, [, ], etc.
+try:
+    parsed = urlparse(DATABASE_URL)
+    if parsed.password and any(char in parsed.password for char in ['$', '[', ']', '@', ':', '/', '?', '#']):
+        # Se a senha não está codificada e tem caracteres especiais, codificar
+        encoded_password = quote_plus(parsed.password)
+        if encoded_password != parsed.password:
+            # Reconstruir URL com senha codificada
+            netloc = f"{parsed.username}:{encoded_password}@{parsed.hostname}"
+            if parsed.port:
+                netloc += f":{parsed.port}"
+            DATABASE_URL = urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+            logger.info("Senha na DATABASE_URL foi codificada automaticamente (caracteres especiais detectados)")
+except Exception as e:
+    logger.warning(f"Não foi possível processar DATABASE_URL para codificação: {e}")
+    # Não lança erro aqui - pode ser que a URL já esteja correta
+
+logger.info("SQLALCHEMY_DATABASE_URI será configurada usando DATABASE_URL.")
 
 # Log da URL final (sem senha completa para segurança)
 try:
     parsed_final = urlparse(DATABASE_URL)
-    safe_url = f"{parsed_final.scheme}://{parsed_final.username}:***@{parsed_final.hostname}:{parsed_final.port or 5432}{parsed_final.path}"
-    logger.info(f"URL de conexão final: {safe_url}")
+    port_display = parsed_final.port if parsed_final.port else "5432"
+    safe_url = f"{parsed_final.scheme}://{parsed_final.username}:***@{parsed_final.hostname}:{port_display}{parsed_final.path}"
+    logger.info(f"URL de conexão final (sem senha): {safe_url}")
 except Exception as e:
     logger.warning(f"Não foi possível parsear URL para log: {e}")
 
