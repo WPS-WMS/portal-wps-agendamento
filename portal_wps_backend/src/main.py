@@ -57,6 +57,13 @@ CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
 # Configurar banco de dados (PostgreSQL por padrão)
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
+# Log para debug - verificar se a variável está sendo lida
+if DATABASE_URL:
+    logger.info(f"✅ DATABASE_URL encontrada no ambiente (primeiros 50 chars): {DATABASE_URL[:50]}...")
+else:
+    logger.warning("⚠️ DATABASE_URL não encontrada no ambiente! Usando valores padrão (localhost).")
+    logger.warning("⚠️ Configure a variável DATABASE_URL no Railway → Variables")
+
 if not DATABASE_URL:
     pg_user = os.environ.get("POSTGRES_USER", "postgres")
     pg_password = os.environ.get("POSTGRES_PASSWORD", "")
@@ -99,19 +106,49 @@ else:
     
     logger.info("SQLALCHEMY_DATABASE_URI definida via DATABASE_URL.")
 
+# Log da URL final (sem senha completa para segurança)
+try:
+    parsed_final = urlparse(DATABASE_URL)
+    safe_url = f"{parsed_final.scheme}://{parsed_final.username}:***@{parsed_final.hostname}:{parsed_final.port or 5432}{parsed_final.path}"
+    logger.info(f"URL de conexão final: {safe_url}")
+except Exception as e:
+    logger.warning(f"Não foi possível parsear URL para log: {e}")
+
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Pre-ping evita conexões quebradas em provedores cloud/serverless
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
+# Adicionar timeout e configurações de pool
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,  # Reciclar conexões a cada 5 minutos
+    'connect_args': {
+        'connect_timeout': 10,  # Timeout de 10 segundos
+        'sslmode': 'require'  # Requerer SSL para Supabase
+    }
+}
 
 # Inicializar banco de dados
 try:
+    logger.info("Inicializando conexão com banco de dados...")
     db.init_app(app)
     with app.app_context():
+        logger.info("Criando tabelas (se não existirem)...")
         db.create_all()
-        logger.info("Banco de dados inicializado com sucesso")
+        logger.info("✅ Banco de dados inicializado com sucesso")
 except Exception as e:
-    logger.error(f"Erro ao inicializar banco de dados: {e}")
+    logger.error(f"❌ Erro ao inicializar banco de dados: {e}")
+    logger.error(f"Tipo do erro: {type(e).__name__}")
+    import traceback
+    logger.error(f"Traceback completo:\n{traceback.format_exc()}")
+    
+    # Tentar mostrar mais detalhes sobre o erro
+    if 'OperationalError' in str(type(e)):
+        logger.error("Erro operacional - verifique:")
+        logger.error("1. DATABASE_URL está correta?")
+        logger.error("2. Senha está correta?")
+        logger.error("3. Host está acessível?")
+        logger.error("4. Firewall do Supabase permite conexões do Railway?")
+    
     raise
 
 # Registrar blueprints
