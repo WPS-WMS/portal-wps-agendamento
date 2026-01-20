@@ -20,12 +20,15 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY portal_wps_backend /app/portal_wps_backend
 
+# Copy start script
+COPY portal_wps_backend/start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Set Python path
 ENV PYTHONPATH=/app/portal_wps_backend
 
 # Expose port (Railway will set PORT env var)
 EXPOSE 5000
 
-# Start command - use shell form para garantir que funciona
-WORKDIR /app/portal_wps_backend
-CMD ["sh", "-c", "python3 src/main.py"]
+# Start command - use script que já está no diretório correto
+CMD ["/app/start.sh"]
