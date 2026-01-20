@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { authAPI } from '@/lib/api'
 
 const useAuth = () => {
   const [user, setUser] = useState(null)
@@ -22,22 +23,12 @@ const useAuth = () => {
 
       if (storedToken && storedUser) {
         try {
-          // Verificar se o token ainda é válido
-          const response = await fetch('/api/verify', {
-            headers: {
-              'Authorization': `Bearer ${storedToken}`
-            }
-          })
-
-          if (response.ok) {
-            const data = await response.json()
-            setUser(data.user)
-            setToken(storedToken)
-          } else {
-            // Token inválido, limpar storage
-            clearAuth()
-          }
+          // Verificar se o token ainda é válido usando a API configurada
+          const data = await authAPI.verify()
+          setUser(data.user)
+          setToken(storedToken)
         } catch (error) {
+          // Token inválido, limpar storage
           clearAuth()
         }
       }
@@ -54,18 +45,10 @@ const useAuth = () => {
 
     const intervalId = setInterval(async () => {
       try {
-        const response = await fetch('/api/verify', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-
-        if (!response.ok) {
-          // Token expirou ou é inválido
-          clearAuth()
-        }
+        await authAPI.verify()
       } catch (error) {
-        console.error('Erro ao verificar token:', error)
+        // Token expirou ou é inválido
+        clearAuth()
       }
     }, 5 * 60 * 1000) // 5 minutos
 

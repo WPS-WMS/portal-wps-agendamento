@@ -5,6 +5,9 @@ from datetime import datetime
 db = SQLAlchemy()
 
 class User(db.Model):
+    """Modelo para representar um usuário do sistema"""
+    __tablename__ = 'users'  # Evita conflito com palavra reservada 'user' em PostgreSQL
+    
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), nullable=False)  # Removido unique=True - será único por company
     password_hash = db.Column(db.String(255), nullable=False)
@@ -19,7 +22,7 @@ class User(db.Model):
     # Chave estrangeira para Plant (apenas para usuários de plantas)
     plant_id = db.Column(db.Integer, db.ForeignKey('plants.id'), nullable=True)
     # Admin que criou este usuário (para rastrear qual admin criou qual usuário admin)
-    created_by_admin_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_by_admin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

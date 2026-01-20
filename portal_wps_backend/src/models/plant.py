@@ -17,7 +17,7 @@ class Plant(db.Model):
     # Multi-tenant: company_id obrigatório
     company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=False)
     
-    created_by_admin_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Admin que criou a planta
+    created_by_admin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Admin que criou a planta
     
     # Informações de localização
     cep = db.Column(db.String(10), nullable=True)  # CEP

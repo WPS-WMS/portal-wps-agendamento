@@ -47,12 +47,19 @@ if not SECRET_KEY:
 app.config['SECRET_KEY'] = SECRET_KEY
 
 # Habilitar CORS para permitir requisições do frontend
-# IMPORTANTE: Em produção, substituir "*" por origens específicas
+# Em produção, aceitar origens específicas do Firebase Hosting
 allowed_origins = os.environ.get('CORS_ORIGINS', '*')
 if allowed_origins != '*':
     allowed_origins = [origin.strip() for origin in allowed_origins.split(',')]
 
-CORS(app, resources={r"/api/*": {"origins": allowed_origins}})
+# Configuração completa de CORS com suporte a credenciais e métodos
+CORS(app, 
+     resources={r"/api/*": {
+         "origins": allowed_origins,
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+         "allow_headers": ["Content-Type", "Authorization"],
+         "supports_credentials": True
+     }})
 
 # Configurar banco de dados PostgreSQL
 DATABASE_URL = os.environ.get("DATABASE_URL")

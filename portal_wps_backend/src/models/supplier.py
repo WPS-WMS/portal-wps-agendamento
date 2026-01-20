@@ -12,7 +12,7 @@ class Supplier(db.Model):
     # Multi-tenant: company_id obrigatório
     company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=False)
     
-    created_by_admin_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Admin que criou o fornecedor
+    created_by_admin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Admin que criou o fornecedor
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
