@@ -26,5 +26,5 @@ WORKDIR /app/portal_wps_backend
 # Expose port (Railway will set PORT env var)
 EXPOSE 5000
 
-# Start command - use python3 diretamente, sem cd
-CMD ["python3", "src/main.py"]
+# Start command - use caminho absoluto para garantir que funciona
+CMD ["python3", "/app/portal_wps_backend/src/main.py"]
