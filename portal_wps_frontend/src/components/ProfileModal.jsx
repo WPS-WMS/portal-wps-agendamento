@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, User, Mail, Lock } from 'lucide-react'
+import { apiClient } from '../lib/api'
 
 const ProfileModal = ({ isOpen, onClose, user, onUpdateSuccess }) => {
   const [formData, setFormData] = useState({
@@ -48,25 +49,36 @@ const ProfileModal = ({ isOpen, onClose, user, onUpdateSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    e.stopPropagation()
     setLoading(true)
     setError('')
     setSuccess('')
 
-    // Validações
+    // Validações no frontend antes de enviar
+    // 1. Se há nova senha, senha atual é obrigatória
+    if (formData.newPassword && !formData.currentPassword) {
+      setError('Digite a senha atual para alterar a senha')
+      setLoading(false)
+      return
+    }
+
+    // 2. Validar se nova senha e confirmação são iguais
     if (formData.newPassword && formData.newPassword !== formData.confirmPassword) {
       setError('As senhas não coincidem')
       setLoading(false)
       return
     }
 
+    // 3. Validar tamanho mínimo da nova senha
     if (formData.newPassword && formData.newPassword.length < 6) {
       setError('A nova senha deve ter no mínimo 6 caracteres')
       setLoading(false)
       return
     }
 
-    if (formData.newPassword && !formData.currentPassword) {
-      setError('Digite a senha atual para alterar a senha')
+    // 4. Se não há nova senha, não há nada para atualizar
+    if (!formData.newPassword) {
+      setError('Preencha os campos de senha para realizar a alteração')
       setLoading(false)
       return
     }
@@ -88,42 +100,46 @@ const ProfileModal = ({ isOpen, onClose, user, onUpdateSuccess }) => {
         return
       }
 
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/user/profile', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updateData)
-      })
+      // Usar apiClient em vez de fetch direto para funcionar em produção
+      const response = await apiClient.put('/user/profile', updateData)
+      const data = response.data
 
-      const data = await response.json()
-
-      if (response.ok) {
-        setSuccess('Perfil atualizado com sucesso!')
-        // Limpar campos de senha
-        setFormData(prev => ({
-          ...prev,
-          currentPassword: '',
-          newPassword: '',
-          confirmPassword: ''
-        }))
-        
-        // Chamar callback de sucesso
-        if (onUpdateSuccess) {
-          onUpdateSuccess(data.user)
-        }
-
-        // Fechar modal após 1.5 segundos
-        setTimeout(() => {
-          onClose()
-        }, 1500)
-      } else {
-        setError(data.error || 'Erro ao atualizar perfil')
+      setSuccess('Perfil atualizado com sucesso!')
+      // Limpar campos de senha
+      setFormData(prev => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }))
+      
+      // Chamar callback de sucesso
+      if (onUpdateSuccess) {
+        onUpdateSuccess(data.user)
       }
+
+      // Fechar modal após 1.5 segundos
+      setTimeout(() => {
+        onClose()
+      }, 1500)
     } catch (err) {
-      setError('Erro de conexão. Tente novamente.')
+      // Tratar erros da API
+      if (err.response) {
+        const status = err.response.status
+        const errorMessage = err.response.data?.error || 'Erro ao atualizar perfil'
+        
+        if (status === 401) {
+          setError('Senha atual incorreta')
+        } else if (status === 400) {
+          setError(errorMessage)
+        } else {
+          setError(errorMessage || 'Erro ao atualizar perfil')
+        }
+      } else if (err.request) {
+        setError('Servidor não está respondendo. Verifique se o backend está rodando.')
+      } else {
+        setError('Erro de conexão. Tente novamente.')
+      }
     } finally {
       setLoading(false)
     }
