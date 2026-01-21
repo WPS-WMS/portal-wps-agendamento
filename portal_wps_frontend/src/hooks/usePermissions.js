@@ -79,9 +79,9 @@ const usePermissions = (user) => {
         return false
       }
 
-      // REGRA DE NEGÓCIO: Sem acesso é o padrão quando não há permissão configurada
-      // Não deve haver padrão permissivo - se não está configurado, é "none" (Sem acesso)
-      const userPermission = permissions[functionId]?.[user.role] || PERMISSION_TYPES.NONE
+      // REGRA DE NEGÓCIO: Editor é o padrão quando não há permissão configurada
+      // Isso garante que todas as funcionalidades vêm liberadas por padrão (alinhado com o backend)
+      const userPermission = permissions[functionId]?.[user.role] || PERMISSION_TYPES.EDITOR
 
       // REGRA DE NEGÓCIO: Hierarquia de permissões
       // Editor (nível 2) = Admin dentro da funcionalidade (acesso completo)
@@ -116,7 +116,8 @@ const usePermissions = (user) => {
         return false
       }
 
-      const userPermission = permissions[functionId]?.[user.role] || PERMISSION_TYPES.NONE
+      // REGRA DE NEGÓCIO: Editor é o padrão quando não há permissão configurada
+      const userPermission = permissions[functionId]?.[user.role] || PERMISSION_TYPES.EDITOR
 
       if (userPermission === PERMISSION_TYPES.EDITOR) {
         return true
@@ -150,11 +151,11 @@ const usePermissions = (user) => {
       // Verificar se há permissão configurada para esta função e role
       const functionPermissions = permissions[functionId]
       if (!functionPermissions) {
-        // Se não há permissão configurada, retornar false (sem acesso)
-        return false
+        // Se não há permissão configurada, retornar true (editor como padrão)
+        return true
       }
 
-      const userPermission = functionPermissions[user.role] || PERMISSION_TYPES.NONE
+      const userPermission = functionPermissions[user.role] || PERMISSION_TYPES.EDITOR
       const hasAccess = userPermission !== PERMISSION_TYPES.NONE
       
       return hasAccess
@@ -176,7 +177,9 @@ const usePermissions = (user) => {
         return PERMISSION_TYPES.NONE
       }
 
-      return permissions[functionId]?.[user.role] || PERMISSION_TYPES.NONE
+      // REGRA DE NEGÓCIO: Editor é o padrão quando não há permissão configurada
+      // Isso garante que todas as funcionalidades vêm liberadas por padrão (alinhado com o backend)
+      return permissions[functionId]?.[user.role] || PERMISSION_TYPES.EDITOR
     }
   }, [permissions, user])
 

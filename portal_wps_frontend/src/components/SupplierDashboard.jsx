@@ -833,7 +833,26 @@ const SupplierDashboard = ({ user, token }) => {
   }
 
   // Tela de Configurar Horários
-  if (showUnifiedScheduleConfig && hasViewPermission('configure_plant_hours')) {
+  if (showUnifiedScheduleConfig) {
+    // Se não tiver permissão, mostrar mensagem em vez de tela em branco
+    if (!hasViewPermission('configure_plant_hours')) {
+      return (
+        <div className="max-w-7xl mx-auto space-y-6 p-6">
+          <Alert variant="destructive">
+            <AlertDescription>
+              Você não possui permissão para acessar esta funcionalidade.
+            </AlertDescription>
+          </Alert>
+          <Button onClick={() => {
+            setShowUnifiedScheduleConfig(false)
+            setSelectedPlantForSchedule(null)
+          }} variant="outline">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Voltar
+          </Button>
+        </div>
+      )
+    }
     return (
       <UnifiedScheduleConfig
         plantId={selectedPlantForSchedule?.id}
