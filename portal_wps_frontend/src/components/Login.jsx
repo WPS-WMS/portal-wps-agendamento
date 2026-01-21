@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,6 +20,8 @@ const Login = ({ onLogin }) => {
   const [resetLoading, setResetLoading] = useState(false)
   const [resetMessage, setResetMessage] = useState('')
   const [resetError, setResetError] = useState('')
+  const formRef = useRef(null)
+  const isSubmittingRef = useRef(false)
 
   // Memoizar o ícone de senha para evitar renderizações duplicadas
   const passwordIcon = useMemo(() => {
@@ -68,15 +70,27 @@ const Login = ({ onLogin }) => {
   }
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    e.stopPropagation() // Prevenir propagação do evento
+    // Prevenir comportamento padrão do formulário
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+      e.stopImmediatePropagation()
+    }
+    
+    // Prevenir múltiplos submits simultâneos
+    if (isSubmittingRef.current || loading) {
+      return false
+    }
+    
+    isSubmittingRef.current = true
     
     setError('')
     setFieldErrors({ email: false, password: false })
     
     // RN02 - Validar antes de enviar
     if (!validateFields()) {
-      return // Retornar early se validação falhar
+      isSubmittingRef.current = false
+      return false
     }
 
     setLoading(true)
@@ -84,6 +98,7 @@ const Login = ({ onLogin }) => {
     try {
       const data = await authAPI.login({ email, password })
       
+      // Só fazer login se a requisição foi bem-sucedida
       localStorage.setItem('token', data.token)
       localStorage.setItem('user', JSON.stringify(data.user))
       onLogin(data.user, data.token)
@@ -136,7 +151,10 @@ const Login = ({ onLogin }) => {
       })
     } finally {
       setLoading(false)
+      isSubmittingRef.current = false
     }
+    
+    return false
   }
 
   // RN03 - Recuperação de senha
@@ -189,7 +207,23 @@ const Login = ({ onLogin }) => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          <form 
+            ref={formRef}
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              handleSubmit(e)
+            }}
+            className="space-y-4" 
+            noValidate
+            onKeyDown={(e) => {
+              // Prevenir submit ao pressionar Enter se já estiver submetendo
+              if (e.key === 'Enter' && (loading || isSubmittingRef.current)) {
+                e.preventDefault()
+                e.stopPropagation()
+              }
+            }}
+          >
             {error && (
               <Alert 
                 variant="destructive" 
@@ -272,9 +306,16 @@ const Login = ({ onLogin }) => {
             </div>
             
             <Button 
-              type="submit" 
+              type="button" 
               className="w-full" 
-              disabled={loading}
+              disabled={loading || isSubmittingRef.current}
+              onClick={(e) => {
+                // Prevenir comportamento padrão
+                e.preventDefault()
+                e.stopPropagation()
+                // Chamar handleSubmit manualmente
+                handleSubmit(e)
+              }}
             >
               {loading ? (
                 <>
