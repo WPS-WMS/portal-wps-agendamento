@@ -201,7 +201,17 @@ const PlantDashboard = ({ user, token }) => {
 
   const handleDateChange = (dateString) => {
     if (dateString) {
-      setCurrentDate(new Date(dateString))
+      // IMPORTANTE: Criar data usando setHours(12,0,0,0) para evitar problemas de fuso horário
+      // Quando criamos new Date('YYYY-MM-DD'), o JavaScript interpreta como UTC 00:00:00
+      // que pode ser convertido para o dia anterior no fuso horário local
+      // Usando setHours(12,0,0,0) garantimos que a data seja interpretada corretamente
+      const newDate = new Date(dateString + 'T12:00:00')
+      // Validar se a data é válida
+      if (!isNaN(newDate.getTime())) {
+        // Normalizar para meia-noite local para manter consistência
+        newDate.setHours(0, 0, 0, 0)
+        setCurrentDate(newDate)
+      }
     }
   }
 

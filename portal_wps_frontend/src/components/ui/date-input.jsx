@@ -129,7 +129,11 @@ const DateInput = ({ value, onChange, onBlur, disabled, className, placeholder =
     // Se não há value e não há displayValue, inicializar com data atual
     if (!value && !displayValue) {
       const today = new Date()
-      const todayStr = today.toISOString().split('T')[0] // YYYY-MM-DD
+      // IMPORTANTE: Usar métodos locais para evitar problemas de fuso horário
+      const year = today.getFullYear()
+      const month = String(today.getMonth() + 1).padStart(2, '0')
+      const day = String(today.getDate()).padStart(2, '0')
+      const todayStr = `${year}-${month}-${day}` // YYYY-MM-DD
       const todayDisplay = formatDateForDisplay(todayStr)
       setDisplayValue(todayDisplay)
       setSelectedDate(todayStr)
@@ -224,7 +228,12 @@ const DateInput = ({ value, onChange, onBlur, disabled, className, placeholder =
 
   const handleCalendarSelect = (date) => {
     if (date) {
-      const isoDate = date.toISOString().split('T')[0] // YYYY-MM-DD
+      // IMPORTANTE: Usar métodos locais para evitar problemas de fuso horário
+      // Não usar toISOString() pois converte para UTC e pode causar deslocamento de 1 dia
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const isoDate = `${year}-${month}-${day}` // YYYY-MM-DD
       const formatted = formatDateForDisplay(isoDate)
       setDisplayValue(formatted)
       setSelectedDate(isoDate)
