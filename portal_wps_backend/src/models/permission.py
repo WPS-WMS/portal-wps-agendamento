@@ -34,6 +34,10 @@ class Permission(db.Model):
     def get_permission(role, function_id, company_id):
         """Retorna a permissão de um role para uma funcionalidade na company especificada
         Multi-tenant: isola permissões por company
+        
+        REGRA DE NEGÓCIO: Quando não há permissão configurada explicitamente,
+        retorna 'editor' como padrão para permitir acesso completo (compatível com
+        o comportamento esperado de "todas as funcionalidades liberadas por padrão")
         """
         permission = Permission.query.filter_by(
             company_id=company_id,
@@ -43,10 +47,14 @@ class Permission(db.Model):
         if permission:
             return permission.permission_type
         
-        # REGRA DE NEGÓCIO: Sem acesso é o padrão quando não há permissão configurada
-        # Não deve haver padrão permissivo - se não está configurado explicitamente,
-        # o usuário não tem acesso (regra de "Sem acesso")
-        return 'none'
+        # REGRA DE NEGÓCIO: Editor é o padrão quando não há permissão configurada
+        # Isso garante que todas as funcionalidades vêm liberadas por padrão
+        # Admin sempre tem acesso completo (bypass), então não precisa de permissão
+        if role == 'admin':
+            return 'editor'  # Admin sempre tem acesso completo
+        
+        # Para supplier e plant, retornar 'editor' como padrão quando não configurado
+        return 'editor'
     
     @staticmethod
     def set_permission(role, function_id, permission_type, company_id):

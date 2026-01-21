@@ -548,6 +548,21 @@ npm install  # ou pnpm install
 npm run dev  # ou pnpm run dev
 ```
 
+#### Produção (Firebase Hosting)
+
+- Garanta o arquivo `portal_wps_frontend/.env.production` com a URL do backend (Railway).
+- **Importante**: neste projeto, o `VITE_API_URL` já deve incluir `/api`.
+
+Exemplo:
+```bash
+VITE_API_URL=https://web-production-76a65.up.railway.app/api
+```
+
+- O Firebase Hosting publica a pasta `portal_wps_frontend/dist` (ver `firebase.json`).
+- Se o Firebase servir código fonte (ex: `/src/main.jsx`) em vez do build do Vite, o navegador pode mostrar:
+  - **"Uncaught SyntaxError: Unexpected token 'export'"**
+  - Solução: `npm run build` e `firebase deploy --only hosting`.
+
 #### Scripts PowerShell (Windows)
 ```powershell
 .\iniciar_frontend.ps1  # Inicia apenas o frontend

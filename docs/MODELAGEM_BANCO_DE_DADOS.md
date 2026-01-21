@@ -28,7 +28,7 @@ O sistema implementa **multi-tenancy** através da tabela `company`, garantindo 
 | Tabela | Descrição | Multi-Tenant |
 |--------|-----------|--------------|
 | `company` | Empresas (multi-tenant - raiz da hierarquia) | N/A |
-| `user` | Usuários do sistema (admin, supplier, plant) | ✅ `company_id` obrigatório |
+| `users` | Usuários do sistema (admin, supplier, plant) | ✅ `company_id` obrigatório |
 | `supplier` | Fornecedores cadastrados | ✅ `company_id` obrigatório |
 | `plants` | Plantas (locais físicos de entrega) | ✅ `company_id` obrigatório |
 | `appointment` | Agendamentos de carga | ✅ `company_id` obrigatório |
@@ -261,7 +261,7 @@ O sistema implementa **multi-tenancy** através da tabela `company`, garantindo 
 - UNIQUE: `cnpj`
 
 **Relacionamentos:**
-- 1:N com `user` (uma empresa pode ter múltiplos usuários)
+- 1:N com `users` (uma empresa pode ter múltiplos usuários)
 - 1:N com `supplier` (uma empresa pode ter múltiplos fornecedores)
 - 1:N com `plants` (uma empresa pode ter múltiplas plantas)
 - 1:N com `appointment` (uma empresa pode ter múltiplos agendamentos)
@@ -271,7 +271,7 @@ O sistema implementa **multi-tenancy** através da tabela `company`, garantindo 
 
 ---
 
-### 2. Tabela: `user`
+### 2. Tabela: `users`
 
 **Descrição:** Armazena os usuários do sistema com diferentes perfis (administrador, fornecedor, planta).
 
@@ -295,7 +295,7 @@ O sistema implementa **multi-tenancy** através da tabela `company`, garantindo 
 - FOREIGN KEY: `company_id` → `company.id`
 - FOREIGN KEY: `supplier_id` → `supplier.id`
 - FOREIGN KEY: `plant_id` → `plants.id`
-- FOREIGN KEY: `created_by_admin_id` → `user.id`
+- FOREIGN KEY: `created_by_admin_id` → `users.id`
 
 ---
 
@@ -319,10 +319,10 @@ O sistema implementa **multi-tenancy** através da tabela `company`, garantindo 
 - PRIMARY KEY: `id`
 - UNIQUE: `(cnpj, company_id)` - Constraint composta para garantir CNPJ único por empresa
 - FOREIGN KEY: `company_id` → `company.id`
-- FOREIGN KEY: `created_by_admin_id` → `user.id`
+- FOREIGN KEY: `created_by_admin_id` → `users.id`
 
 **Relacionamentos:**
-- 1:N com `user` (um fornecedor pode ter múltiplos usuários)
+- 1:N com `users` (um fornecedor pode ter múltiplos usuários)
 - 1:N com `appointment` (um fornecedor pode ter múltiplos agendamentos)
 
 ---
@@ -355,7 +355,7 @@ O sistema implementa **multi-tenancy** através da tabela `company`, garantindo 
 - FOREIGN KEY: `company_id` → `company.id`
 
 **Relacionamentos:**
-- 1:N com `user` (uma planta pode ter múltiplos usuários)
+- 1:N com `users` (uma planta pode ter múltiplos usuários)
 - 1:N com `appointment` (uma planta pode ter múltiplos agendamentos)
 - 1:N com `operating_hours` (uma planta pode ter múltiplos horários de funcionamento)
 

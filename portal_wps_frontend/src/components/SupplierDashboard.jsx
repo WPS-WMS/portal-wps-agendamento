@@ -153,26 +153,9 @@ const SupplierDashboard = ({ user, token }) => {
         throw new Error('Data inválida para carregar agendamentos')
       }
       
-      // Chamar a API - se plantId for fornecido, adicionar como query parameter
-      let url = `/api/supplier/appointments?week=${weekStartISO}`
-      if (plantId) {
-        url += `&plant_id=${plantId}`
-      }
-      
-      const token = localStorage.getItem('token')
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Erro ao carregar agendamentos')
-      }
-      
-      const data = await response.json()
+      // Usar supplierAPI.getAppointments() que já está configurado com apiClient
+      // Passar weekStartISO como primeiro parâmetro (a API vai converter para 'week')
+      const data = await supplierAPI.getAppointments(weekStartISO, plantId)
       setAppointments(Array.isArray(data) ? data : [])
       setError('')
     } catch (err) {

@@ -75,6 +75,20 @@ cd portal_wps_frontend
 npm install  # ou pnpm install
 ```
 
+#### Produção (Firebase Hosting)
+
+- Crie/garanta o arquivo `portal_wps_frontend/.env.production` com a URL do backend do Railway.
+- **Importante**: neste projeto, o `VITE_API_URL` já deve incluir `/api` (porque o frontend chama rotas como `/login`, `/admin/...`).
+
+Exemplo:
+```bash
+VITE_API_URL=https://web-production-76a65.up.railway.app/api
+```
+
+- O Firebase deve publicar o build em `portal_wps_frontend/dist` (configurado em `firebase.json`).
+- Se publicar sem build (ou apontar o hosting para a pasta errada), pode ocorrer o erro no navegador: **"Uncaught SyntaxError: Unexpected token 'export'"**.
+  - Solução: rode `npm run build` e faça `firebase deploy --only hosting`.
+
 ### 5. Iniciar os Servidores
 
 #### Opção 1: Scripts PowerShell (Windows)
