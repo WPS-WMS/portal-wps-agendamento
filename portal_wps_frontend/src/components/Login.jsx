@@ -74,7 +74,6 @@ const Login = ({ onLogin }) => {
     if (e) {
       e.preventDefault()
       e.stopPropagation()
-      e.stopImmediatePropagation()
     }
     
     // Prevenir múltiplos submits simultâneos
