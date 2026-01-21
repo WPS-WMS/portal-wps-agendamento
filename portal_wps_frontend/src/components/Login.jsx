@@ -83,6 +83,7 @@ const Login = ({ onLogin }) => {
     
     isSubmittingRef.current = true
     
+    // Limpar apenas erros anteriores, mas manter os valores dos campos
     setError('')
     setFieldErrors({ email: false, password: false })
     
@@ -103,12 +104,14 @@ const Login = ({ onLogin }) => {
       onLogin(data.user, data.token)
     } catch (err) {
       // RN01 - Mensagem genérica, não expor qual campo está incorreto
+      // IMPORTANTE: Não limpar os campos email e password - mantê-los preenchidos
       let errorMessage = 'Dados inválidos'
       
       if (err.response) {
         const status = err.response.status
         
         if (status === 401 || status === 403) {
+          // Email ou senha incorretos - manter valores nos campos
           errorMessage = 'Dados inválidos'
           setFieldErrors({ email: true, password: true })
         } else if (status === 500) {

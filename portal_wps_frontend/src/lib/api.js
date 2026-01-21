@@ -30,14 +30,18 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Não redirecionar em erro 401 se for erro de senha incorreta no perfil
-    // (o erro de senha incorreta retorna 401 mas não deve fazer logout)
-    if (error.response?.status === 401 && error.config?.url?.includes('/user/profile')) {
-      // Deixar o erro passar para ser tratado pelo componente
-      return Promise.reject(error)
-    }
+    // Não redirecionar em erro 401 se for:
+    // 1. Erro de senha incorreta no perfil
+    // 2. Erro de login (email/senha incorretos)
     if (error.response?.status === 401) {
-      // Token inválido ou expirado
+      const url = error.config?.url || ''
+      
+      // Deixar o erro passar para ser tratado pelo componente nestes casos:
+      if (url.includes('/user/profile') || url.includes('/login')) {
+        return Promise.reject(error)
+      }
+      
+      // Para outros casos de 401, fazer logout e redirecionar
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       window.location.href = '/'
