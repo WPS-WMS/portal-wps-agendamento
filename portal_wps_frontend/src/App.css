@@ -117,4 +117,19 @@
   body {
     @apply bg-background text-foreground;
   }
+  
+  /* Ocultar ícone padrão de mostrar senha do navegador */
+  input[type="password"]::-webkit-credentials-auto-fill-button,
+  input[type="password"]::-webkit-strong-password-auto-fill-button {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+  
+  /* Ocultar ícone padrão do Chrome/Edge para campos password */
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none !important;
+  }
 }
