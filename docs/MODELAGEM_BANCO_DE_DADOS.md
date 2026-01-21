@@ -735,7 +735,7 @@ SCHEDULE_CONFIGS (tabela independente - não multi-tenant)
 - `plants.is_active`: TRUE
 - `plants.max_capacity`: 1
 - `appointment.status`: 'scheduled'
-- `permissions.permission_type`: 'none' (padrão quando não configurado)
+- `permissions.permission_type`: 'editor' (padrão quando não configurado - todas as funcionalidades liberadas por padrão)
 - `operating_hours.is_active`: TRUE
 - `default_schedules.is_available`: TRUE
 - `schedule_configs.is_available`: TRUE

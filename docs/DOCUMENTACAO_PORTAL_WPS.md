@@ -219,6 +219,7 @@ O sistema implementa um controle de acesso granular por funcionalidade através 
 - **Configurações de Horários**: Horário padrão, bloqueio semanal, bloqueio por data
 
 #### Regras de Negócio
+- **Permissões padrão**: Quando não há permissão configurada explicitamente, o sistema retorna `'editor'` como padrão (todas as funcionalidades liberadas por padrão)
 - Permissões são configuradas por perfil (Fornecedor ou Planta)
 - Alterações não salvas são perdidas ao sair da tela
 - Apenas Administradores podem configurar permissões
