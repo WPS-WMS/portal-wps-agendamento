@@ -69,12 +69,14 @@ const Login = ({ onLogin }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    e.stopPropagation() // Prevenir propagação do evento
+    
     setError('')
     setFieldErrors({ email: false, password: false })
     
     // RN02 - Validar antes de enviar
     if (!validateFields()) {
-      return
+      return // Retornar early se validação falhar
     }
 
     setLoading(true)
@@ -87,28 +89,51 @@ const Login = ({ onLogin }) => {
       onLogin(data.user, data.token)
     } catch (err) {
       // RN01 - Mensagem genérica, não expor qual campo está incorreto
+      let errorMessage = 'Dados inválidos'
+      
       if (err.response) {
         const status = err.response.status
         
         if (status === 401 || status === 403) {
-          setError('Dados inválidos')
+          errorMessage = 'Dados inválidos'
           setFieldErrors({ email: true, password: true })
         } else if (status === 500) {
-          setError('Erro no servidor. Tente novamente mais tarde.')
+          errorMessage = 'Erro no servidor. Tente novamente mais tarde.'
           setFieldErrors({ email: false, password: false })
         } else {
-          setError('Erro ao fazer login. Tente novamente.')
+          errorMessage = 'Erro ao fazer login. Tente novamente.'
           setFieldErrors({ email: false, password: false })
         }
       } else if (err.request) {
         // Requisição foi feita mas não houve resposta
-        setError('Servidor não está respondendo. Verifique se o backend está rodando.')
+        errorMessage = 'Servidor não está respondendo. Verifique se o backend está rodando.'
         setFieldErrors({ email: false, password: false })
       } else {
         // Erro ao configurar a requisição
-        setError('Erro de conexão. Tente novamente.')
+        errorMessage = 'Erro de conexão. Tente novamente.'
         setFieldErrors({ email: false, password: false })
       }
+      
+      // Definir erro e fazer scroll para a mensagem
+      setError(errorMessage)
+      
+      // Fazer scroll suave para a mensagem de erro após um pequeno delay
+      // Usar requestAnimationFrame para garantir que o DOM foi atualizado
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          const errorElement = document.querySelector('[role="alert"]')
+          if (errorElement) {
+            errorElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+            // Adicionar foco visual temporário
+            errorElement.style.outline = '2px solid rgb(239 68 68)'
+            errorElement.style.outlineOffset = '2px'
+            setTimeout(() => {
+              errorElement.style.outline = ''
+              errorElement.style.outlineOffset = ''
+            }, 2000)
+          }
+        }, 100)
+      })
     } finally {
       setLoading(false)
     }
@@ -166,8 +191,13 @@ const Login = ({ onLogin }) => {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {error && (
-              <Alert variant="destructive">
-                <AlertDescription>{error}</AlertDescription>
+              <Alert 
+                variant="destructive" 
+                className="animate-in fade-in slide-in-from-top-2 duration-300"
+                role="alert"
+                aria-live="assertive"
+              >
+                <AlertDescription className="font-medium">{error}</AlertDescription>
               </Alert>
             )}
             
@@ -180,8 +210,11 @@ const Login = ({ onLogin }) => {
                 value={email}
                 onChange={(e) => {
                   setEmail(e.target.value)
-                  setFieldErrors(prev => ({ ...prev, email: false }))
-                  setError('')
+                  // Limpar erro apenas quando o usuário começar a digitar
+                  if (error) {
+                    setFieldErrors(prev => ({ ...prev, email: false }))
+                    setError('')
+                  }
                 }}
                 onInvalid={(e) => {
                   e.preventDefault()
@@ -201,8 +234,11 @@ const Login = ({ onLogin }) => {
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value)
-                    setFieldErrors(prev => ({ ...prev, password: false }))
-                    setError('')
+                    // Limpar erro apenas quando o usuário começar a digitar
+                    if (error) {
+                      setFieldErrors(prev => ({ ...prev, password: false }))
+                      setError('')
+                    }
                   }}
                   disabled={loading}
                   className={`pr-10 ${fieldErrors.password ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
