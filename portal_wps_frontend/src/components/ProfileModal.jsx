@@ -101,7 +101,7 @@ const ProfileModal = ({ isOpen, onClose, user, onUpdateSuccess }) => {
       }
 
       // Usar apiClient em vez de fetch direto para funcionar em produção
-      const response = await apiClient.put('/user/profile', updateData)
+      const response = await apiClient.put('/profile', updateData)
       const data = response.data
 
       setSuccess('Perfil atualizado com sucesso!')

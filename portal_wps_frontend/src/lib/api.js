@@ -37,7 +37,7 @@ apiClient.interceptors.response.use(
       const url = error.config?.url || ''
       
       // Deixar o erro passar para ser tratado pelo componente nestes casos:
-      if (url.includes('/user/profile') || url.includes('/login')) {
+      if (url.includes('/profile') || url.includes('/login')) {
         return Promise.reject(error)
       }
       
