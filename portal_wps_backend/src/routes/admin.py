@@ -175,6 +175,15 @@ def create_supplier(current_user):
         if existing_supplier:
             return jsonify({'error': 'CNPJ já cadastrado nesta empresa'}), 400
         
+        # Verificar se nome (description) já existe na mesma company
+        existing_supplier_by_name = Supplier.query.filter_by(
+            description=data['description'].strip(),
+            company_id=current_user.company_id,
+            is_deleted=False
+        ).first()
+        if existing_supplier_by_name:
+            return jsonify({'error': 'Já existe um fornecedor com este nome nesta empresa'}), 400
+        
         # Verificar se email já existe na mesma company
         existing_user = User.query.filter_by(
             email=data['email'],
@@ -838,7 +847,22 @@ def update_supplier(current_user, supplier_id):
                     'permission_required': 'edit_supplier',
                     'permission_level': 'editor'
                 }), 403
-            supplier.description = data['description']
+            
+            # Verificar se o novo nome já existe em outro fornecedor na mesma company
+            new_description = data['description'].strip()
+            from sqlalchemy import and_
+            existing_supplier_by_name = Supplier.query.filter(
+                and_(
+                    Supplier.description == new_description,
+                    Supplier.company_id == current_user.company_id,
+                    Supplier.id != supplier_id,
+                    Supplier.is_deleted == False
+                )
+            ).first()
+            if existing_supplier_by_name:
+                return jsonify({'error': 'Já existe um fornecedor com este nome nesta empresa'}), 400
+            
+            supplier.description = new_description
         
         if 'is_active' in data:
             old_status = bool(supplier.is_active)  # Garantir que seja boolean
