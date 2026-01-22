@@ -455,6 +455,26 @@ const SupplierDashboard = ({ user, token }) => {
     await loadAppointments(currentDate, selectedPlantId)
   }
 
+  // Função para normalizar datas sem problemas de timezone
+  // IMPORTANTE: Tratar strings diretamente sem converter para Date primeiro
+  const getDateString = (date) => {
+    if (!date) return null
+    if (typeof date === 'string') {
+      // Se já é uma string no formato YYYY-MM-DD, retornar diretamente
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return date
+      }
+      // Se tem timezone (ex: "2026-01-28T00:00:00" ou "2026-01-28T00:00:00Z"), pegar apenas a parte da data
+      return date.split('T')[0]
+    }
+    // Se é um objeto Date, converter para YYYY-MM-DD usando métodos locais
+    const d = new Date(date)
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  
   const currentDateISO = dateUtils.toISODate(currentDate)
   
   // Filtrar agendamentos do dia selecionado
@@ -465,8 +485,8 @@ const SupplierDashboard = ({ user, token }) => {
       return false
     }
     
-    // Normalizar ambas as datas para comparação
-    const aptDate = dateUtils.toISODate(apt.date)
+    // Normalizar ambas as datas para comparação usando getDateString para evitar problemas de timezone
+    const aptDate = getDateString(apt.date)
     return aptDate === currentDateISO
   })
   
@@ -496,7 +516,7 @@ const SupplierDashboard = ({ user, token }) => {
   ).filter(appointment => {
     // VALIDAÇÃO FINAL: Garantir que a data do agendamento corresponde à data selecionada
     if (!appointment.date) return false
-    const aptDate = dateUtils.toISODate(appointment.date)
+    const aptDate = getDateString(appointment.date)
     return aptDate === currentDateISO
   })
 
@@ -647,7 +667,7 @@ const SupplierDashboard = ({ user, token }) => {
       if (!apt.date) {
         return false
       }
-      const aptDate = dateUtils.toISODate(apt.date)
+      const aptDate = getDateString(apt.date)
       return aptDate === currentDateISO
     })
     
@@ -792,7 +812,8 @@ const SupplierDashboard = ({ user, token }) => {
       checkedIn: dayApps.filter(a => {
         if (a.status !== 'checked_in') return false
         if (!a.check_in_time) return false
-        const checkInDate = new Date(a.check_in_time).toISOString().split('T')[0]
+        // Usar getDateString para evitar problemas de timezone
+        const checkInDate = getDateString(a.check_in_time)
         return checkInDate === currentDateISO
       }).length,
       checkedOut: dayApps.filter(a => {
@@ -1099,7 +1120,7 @@ const SupplierDashboard = ({ user, token }) => {
                 <CardContent>
                   <div className="space-y-3">
                     <p className="text-xs text-gray-600">
-                      Agendamentos hoje: {appointments.filter(a => a.supplier_id === supplier.id && dateUtils.toISODate(a.date) === currentDateISO).length}
+                      Agendamentos hoje: {appointments.filter(a => a.supplier_id === supplier.id && getDateString(a.date) === currentDateISO).length}
                     </p>
                     
                     {hasViewPermission('edit_supplier') && (
@@ -1477,7 +1498,7 @@ const SupplierDashboard = ({ user, token }) => {
                           if (!appointment.date) {
                             return null
                           }
-                          const aptDate = dateUtils.toISODate(appointment.date)
+                          const aptDate = getDateString(appointment.date)
                           if (aptDate !== currentDateISO) {
                             return null // Não renderizar agendamentos de outras datas
                           }
