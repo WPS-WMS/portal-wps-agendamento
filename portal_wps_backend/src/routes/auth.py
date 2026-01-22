@@ -38,7 +38,7 @@ def login():
             return jsonify({'error': 'Credenciais inválidas'}), 401
         
         if not user.is_active:
-            return jsonify({'error': 'Usuário inativo. Entre em contato com o administrador'}), 403
+            return jsonify({'error': 'Usuário inativo'}), 403
         
         # Gerar JWT token
         payload = {

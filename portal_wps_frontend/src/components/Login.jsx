@@ -103,14 +103,18 @@ const Login = ({ onLogin }) => {
       localStorage.setItem('user', JSON.stringify(data.user))
       onLogin(data.user, data.token)
     } catch (err) {
-      // RN01 - Mensagem genérica, não expor qual campo está incorreto
       // IMPORTANTE: Não limpar os campos email e password - mantê-los preenchidos
       let errorMessage = 'Dados inválidos'
       
       if (err.response) {
         const status = err.response.status
+        const errorData = err.response.data
         
-        if (status === 401 || status === 403) {
+        // Verificar se é erro de usuário inativo (status 403 com mensagem específica)
+        if (status === 403 && errorData?.error && errorData.error.includes('inativo')) {
+          errorMessage = errorData.error // Usar mensagem do backend: "Usuário inativo"
+          setFieldErrors({ email: false, password: false })
+        } else if (status === 401 || status === 403) {
           // Email ou senha incorretos - manter valores nos campos
           errorMessage = 'Dados inválidos'
           setFieldErrors({ email: true, password: true })
