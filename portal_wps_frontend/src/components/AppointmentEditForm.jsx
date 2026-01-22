@@ -665,16 +665,6 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
                           : 'Não configurado'}
                       </p>
                     ))}
-                    {plantScheduleConfig.blocked_times && plantScheduleConfig.blocked_times.length > 0 && (
-                      <div className="mt-2">
-                        <p className="text-xs font-medium text-orange-800">Horários bloqueados:</p>
-                        {plantScheduleConfig.blocked_times.map((bt, idx) => (
-                          <p key={idx} className="text-xs text-orange-700">
-                            {bt.time} {bt.reason ? `- ${bt.reason}` : ''}
-                          </p>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 )}
                 {loadingScheduleConfig && (
