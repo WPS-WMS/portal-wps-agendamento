@@ -66,6 +66,14 @@ export const authAPI = {
   verify: async () => {
     const response = await apiClient.get('/verify')
     return response.data
+  },
+  verifyResetToken: async (token) => {
+    const response = await apiClient.post('/verify-reset-token', { token })
+    return response.data
+  },
+  resetPassword: async (token, password) => {
+    const response = await apiClient.post('/reset-password', { token, password })
+    return response.data
   }
 }
 

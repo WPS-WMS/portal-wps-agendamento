@@ -19,6 +19,7 @@ from src.models.system_config import SystemConfig
 from src.models.plant import Plant
 from src.models.operating_hours import OperatingHours
 from src.models.permission import Permission
+from src.models.password_reset_token import PasswordResetToken
 from src.routes.user import user_bp
 from src.routes.auth import auth_bp
 from src.routes.admin import admin_bp
