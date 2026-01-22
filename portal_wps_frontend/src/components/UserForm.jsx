@@ -63,6 +63,39 @@ const UserForm = ({ onBack, onSuccess }) => {
     setError('')
   }
 
+  const isFormValid = () => {
+    // Validar email obrigatório e formato válido
+    if (!formData.email.trim() || !validation.isValidEmail(formData.email)) {
+      return false
+    }
+    
+    // Validar perfil obrigatório
+    if (!formData.role) {
+      return false
+    }
+    
+    // Validar associações baseadas no role
+    if (formData.role === 'supplier' && !formData.supplier_id) {
+      return false
+    }
+    
+    if (formData.role === 'plant' && !formData.plant_id) {
+      return false
+    }
+    
+    return true
+  }
+
+  const getEmailError = () => {
+    if (!formData.email.trim()) {
+      return true // Campo vazio
+    }
+    if (!validation.isValidEmail(formData.email)) {
+      return true // Email inválido
+    }
+    return false
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -244,7 +277,7 @@ const UserForm = ({ onBack, onSuccess }) => {
                 value={formData.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
                 placeholder="usuario@exemplo.com"
-                required
+                className={getEmailError() ? 'border-red-500' : ''}
               />
             </div>
 
@@ -348,7 +381,7 @@ const UserForm = ({ onBack, onSuccess }) => {
               </Button>
               <Button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !isFormValid()}
                 className="flex-1"
               >
                 {loading ? (
