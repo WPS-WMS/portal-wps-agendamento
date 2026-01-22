@@ -492,8 +492,10 @@ const AdminDashboard = ({ user, token }) => {
     const durationHours = Math.max((endMinutes - startMinutes) / 60, 0.25) // Mínimo 15 minutos (0.25h)
     const height = durationHours * HOUR_HEIGHT
     
+    // Quando há 5 ou mais colunas, manter altura mínima fixa de 100px para melhor visualização
+    const minHeight = maxCapacity >= 5 ? 100 : 80
     // Altura mínima para legibilidade
-    return Math.max(height, 80)
+    return Math.max(height, minHeight)
   }
 
   // Função para calcular posição vertical do card (proporcional)
@@ -1299,9 +1301,10 @@ const AdminDashboard = ({ user, token }) => {
                   style={{ 
                     minHeight: `${timelineHeight}px`,
                     display: 'grid',
-                    gridTemplateColumns: `repeat(${Math.max(1, maxCapacity)}, 1fr)`,
+                    gridTemplateColumns: `repeat(${Math.max(1, maxCapacity)}, ${maxCapacity >= 5 ? '200px' : '1fr'})`,
                     gap: '4px',
-                    padding: '4px'
+                    padding: '4px',
+                    minWidth: maxCapacity >= 5 ? `${maxCapacity * 200}px` : 'auto'
                   }}
                 >
                   {/* Criar colunas baseadas na capacidade máxima */}

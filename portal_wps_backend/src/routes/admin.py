@@ -1555,6 +1555,9 @@ def set_plant_max_capacity(current_user, plant_id):
         if max_capacity < 1:
             return jsonify({'error': 'Capacidade máxima deve ser no mínimo 1'}), 400
         
+        if max_capacity > 50:
+            return jsonify({'error': 'Capacidade máxima não pode ser maior que 50'}), 400
+        
         # Atualizar capacidade da planta
         plant.max_capacity = max_capacity
         plant.updated_at = datetime.utcnow()

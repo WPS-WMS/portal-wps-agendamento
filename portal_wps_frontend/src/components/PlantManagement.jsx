@@ -593,11 +593,18 @@ const PlantManagement = ({ plant, onBack, onUpdate, user, permissionType = 'edit
                   id="max_capacity"
                   type="number"
                   min="1"
+                  max="50"
                   value={maxCapacity}
                   onChange={(e) => {
                     const value = parseInt(e.target.value) || 1
-                    setMaxCapacity(value)
-                    setMaxCapacityError('')
+                    // Limitar ao máximo de 50
+                    const limitedValue = Math.min(Math.max(value, 1), 50)
+                    setMaxCapacity(limitedValue)
+                    if (value > 50) {
+                      setMaxCapacityError('O máximo permitido é 50 agendamentos por horário')
+                    } else {
+                      setMaxCapacityError('')
+                    }
                     setMaxCapacitySuccess('')
                   }}
                   disabled={maxCapacityLoading || isViewOnly}
@@ -620,7 +627,7 @@ const PlantManagement = ({ plant, onBack, onUpdate, user, permissionType = 'edit
                 {!isViewOnly && (
                   <Button
                     onClick={handleSaveMaxCapacity}
-                    disabled={maxCapacityLoading || maxCapacity < 1}
+                    disabled={maxCapacityLoading || maxCapacity < 1 || maxCapacity > 50}
                     className="flex items-center gap-2"
                   >
                   {maxCapacityLoading ? (

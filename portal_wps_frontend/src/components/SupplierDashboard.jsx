@@ -618,7 +618,9 @@ const SupplierDashboard = ({ user, token }) => {
     const durationHours = Math.max((endMinutes - startMinutes) / 60, 0.25)
     const height = durationHours * HOUR_HEIGHT
     
-    return Math.max(height, 80)
+    // Quando há 5 ou mais colunas, manter altura mínima fixa de 100px para melhor visualização
+    const minHeight = maxCapacity >= 5 ? 100 : 80
+    return Math.max(height, minHeight)
   }
 
   const calculateCardTop = (timeString) => {
@@ -1427,10 +1429,10 @@ const SupplierDashboard = ({ user, token }) => {
           {/* Visualização Tipo Agenda Diária - Layout Estilo Agenda Visual */}
           {selectedPlantId && (
           <Card className="overflow-hidden">
-            <div className="h-[calc(100vh-400px)] min-h-[600px] overflow-y-auto">
-              <div className="hidden md:flex relative" style={{ minHeight: `${timelineHeight}px` }}>
+            <div className="h-[calc(100vh-400px)] min-h-[600px] overflow-y-auto overflow-x-auto">
+              <div className="hidden md:flex relative" style={{ minHeight: `${timelineHeight}px`, minWidth: maxCapacity >= 5 ? `${maxCapacity * 200}px` : '100%' }}>
                 {/* Coluna de Horários - Fixa à Esquerda */}
-                <div className="w-24 flex-shrink-0 bg-gray-50 border-r border-gray-200 relative" style={{ minHeight: `${timelineHeight}px` }}>
+                <div className="w-24 flex-shrink-0 bg-gray-50 border-r border-gray-200 relative sticky left-0 z-10" style={{ minHeight: `${timelineHeight}px` }}>
                   {Array.from({ length: 24 }, (_, i) => {
                     const hour = i
                     const top = i * HOUR_HEIGHT
@@ -1474,9 +1476,10 @@ const SupplierDashboard = ({ user, token }) => {
                   style={{ 
                     minHeight: `${timelineHeight}px`,
                     display: 'grid',
-                    gridTemplateColumns: `repeat(${Math.max(1, maxCapacity)}, 1fr)`,
+                    gridTemplateColumns: `repeat(${Math.max(1, maxCapacity)}, ${maxCapacity >= 5 ? '200px' : '1fr'})`,
                     gap: '4px',
-                    padding: '4px'
+                    padding: '4px',
+                    minWidth: maxCapacity >= 5 ? `${maxCapacity * 200}px` : 'auto'
                   }}
                 >
                   {Array.from({ length: Math.max(1, maxCapacity) }, (_, colIndex) => (
