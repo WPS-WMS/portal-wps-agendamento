@@ -1246,9 +1246,9 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
               )}
 
               {!isWeeklyBlockViewOnly && (
-              <Button 
+                <Button
                 onClick={handleSaveWeeklyConfig} 
-                disabled={savingWeekly || !newWeeklyConfig.day_of_week || !newWeeklyConfig.time_start || !newWeeklyConfig.time_end || !newWeeklyConfig.reason.trim()} 
+                disabled={savingWeekly || isWeeklyBlockViewOnly || !newWeeklyConfig.day_of_week || !newWeeklyConfig.time_start || !newWeeklyConfig.time_end || !newWeeklyConfig.reason.trim()} 
                 className="w-full"
               >
                 {savingWeekly ? (
