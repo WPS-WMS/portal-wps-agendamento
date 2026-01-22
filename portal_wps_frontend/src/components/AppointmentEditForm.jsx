@@ -328,16 +328,20 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
       if (isCreating) {
         response = await api.createAppointment(submitData)
         // Mostrar mensagem de sucesso
+        const dateStr = dateUtils.formatDate(submitData.date)
+        const timeStr = dateUtils.formatTime(submitData.time)
         toast.success('Agendamento criado com sucesso!', {
-          description: `Agendamento para ${dateUtils.formatDate(submitData.date)} às ${dateUtils.formatTime(submitData.time)} foi criado.`,
-          duration: 4000
+          description: `Agendamento para ${dateStr} às ${timeStr} foi criado.`,
+          duration: 5000
         })
       } else {
         response = await api.updateAppointment(appointment.id, submitData)
         // Mostrar mensagem de sucesso
+        const dateStr = dateUtils.formatDate(submitData.date)
+        const timeStr = dateUtils.formatTime(submitData.time)
         toast.success('Agendamento atualizado com sucesso!', {
-          description: `Agendamento para ${dateUtils.formatDate(submitData.date)} às ${dateUtils.formatTime(submitData.time)} foi atualizado.`,
-          duration: 4000
+          description: `Agendamento para ${dateStr} às ${timeStr} foi atualizado.`,
+          duration: 5000
         })
       }
       
@@ -347,7 +351,10 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
       setPendingSubmit(null)
       setIsRescheduling(false)
       
-      onSubmit()
+      // Aguardar um pouco antes de fechar o formulário para garantir que o toast apareça
+      setTimeout(() => {
+        onSubmit()
+      }, 100)
     } catch (err) {
       // Fechar modal de reagendamento em caso de erro
       setShowRescheduleModal(false)
@@ -413,16 +420,20 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
       if (isCreating) {
         response = await api.createAppointment(submitData)
         // Mostrar mensagem de sucesso
+        const dateStr = dateUtils.formatDate(submitData.date)
+        const timeStr = dateUtils.formatTime(submitData.time)
         toast.success('Agendamento criado com sucesso!', {
-          description: `Agendamento para ${dateUtils.formatDate(submitData.date)} às ${dateUtils.formatTime(submitData.time)} foi criado.`,
-          duration: 4000
+          description: `Agendamento para ${dateStr} às ${timeStr} foi criado.`,
+          duration: 5000
         })
       } else {
         response = await api.updateAppointment(appointment.id, submitData)
         // Mostrar mensagem de sucesso
+        const dateStr = dateUtils.formatDate(submitData.date)
+        const timeStr = dateUtils.formatTime(submitData.time)
         toast.success('Agendamento atualizado com sucesso!', {
-          description: `Agendamento para ${dateUtils.formatDate(submitData.date)} às ${dateUtils.formatTime(submitData.time)} foi atualizado.`,
-          duration: 4000
+          description: `Agendamento para ${dateStr} às ${timeStr} foi atualizado.`,
+          duration: 5000
         })
       }
       
@@ -432,7 +443,10 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
       setPendingSubmit(null)
       setIsRescheduling(false)
       
-      onSubmit()
+      // Aguardar um pouco antes de fechar o formulário para garantir que o toast apareça
+      setTimeout(() => {
+        onSubmit()
+      }, 100)
     } catch (err) {
       // Tratar erro de conflito de horário ou capacidade máxima
       if (err.response?.status === 409) {
