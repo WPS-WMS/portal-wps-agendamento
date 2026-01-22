@@ -2178,7 +2178,8 @@ def delete_plant(current_user, plant_id):
                     user_to_delete = user
                     break
         
-        # Buscar todos os outros usuários vinculados à planta pelo plant_id
+        # Buscar TODOS os usuários vinculados à planta pelo plant_id
+        # IMPORTANTE: Precisamos remover o vínculo de TODOS antes de deletar a planta
         users_linked_to_plant = User.query.filter_by(plant_id=plant_id).all()
         
         # Separar usuários para inativação (excluir o que já será deletado da lista)
@@ -2189,16 +2190,27 @@ def delete_plant(current_user, plant_id):
                 continue
             users_to_inactivate.append(user)
         
+        # IMPORTANTE: Remover o vínculo plant_id de TODOS os usuários vinculados ANTES de deletar a planta
+        # Isso evita erro de foreign key constraint
+        for user in users_linked_to_plant:
+            # Não remover vínculo do usuário que será deletado (será deletado junto)
+            if user_to_delete and user.id == user_to_delete.id:
+                continue
+            user.plant_id = None  # Remover vínculo com a planta
+        
+        # Fazer flush para garantir que as alterações sejam aplicadas antes de deletar
+        db.session.flush()
+        
         # Excluir o usuário com mesmo email da planta
         if user_to_delete:
             db.session.delete(user_to_delete)
+            db.session.flush()  # Flush após deletar usuário
         
         # Inativar os outros usuários vinculados à planta
         for user in users_to_inactivate:
             user.is_active = False
-            user.plant_id = None  # Remover vínculo com a planta
         
-        # Excluir a planta
+        # Agora podemos deletar a planta com segurança (todos os vínculos foram removidos)
         db.session.delete(plant)
         db.session.commit()
         
