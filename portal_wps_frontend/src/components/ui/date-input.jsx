@@ -245,9 +245,30 @@ const DateInput = ({ value, onChange, onBlur, disabled, className, placeholder =
     }
   }
 
-  const calendarDate = selectedDate ? new Date(selectedDate + 'T00:00:00') : undefined
-  const minDateObj = minDate ? new Date(formatDateForInput(minDate) + 'T00:00:00') : undefined
-  const maxDateObj = maxDate ? new Date(formatDateForInput(maxDate) + 'T00:00:00') : undefined
+  // IMPORTANTE: Criar datas usando setHours(12,0,0,0) para evitar problemas de fuso horário
+  // Quando criamos new Date('YYYY-MM-DD'), o JavaScript interpreta como UTC 00:00:00
+  // que pode ser convertido para o dia anterior no fuso horário local
+  // Usando setHours(12,0,0,0) garantimos que a data seja interpretada corretamente
+  const calendarDate = selectedDate ? (() => {
+    const [year, month, day] = selectedDate.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
+    date.setHours(12, 0, 0, 0) // Normalizar para meio-dia para evitar problemas de timezone
+    return date
+  })() : undefined
+  const minDateObj = minDate ? (() => {
+    const minDateFormatted = formatDateForInput(minDate)
+    const [year, month, day] = minDateFormatted.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
+    date.setHours(12, 0, 0, 0)
+    return date
+  })() : undefined
+  const maxDateObj = maxDate ? (() => {
+    const maxDateFormatted = formatDateForInput(maxDate)
+    const [year, month, day] = maxDateFormatted.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
+    date.setHours(12, 0, 0, 0)
+    return date
+  })() : undefined
 
   return (
     <div className="relative">
