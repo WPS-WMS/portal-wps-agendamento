@@ -243,7 +243,10 @@ const PlantDashboard = ({ user, token }) => {
 
   const handleCheckOut = async (appointmentId) => {
     if (!hasPermission('check_out', 'editor')) {
-      setError('Você não tem permissão para realizar check-out')
+      toast.error('Permissão negada', {
+        description: 'Você não tem permissão para realizar check-out',
+        duration: 4000
+      })
       return
     }
     try {
@@ -254,8 +257,15 @@ const PlantDashboard = ({ user, token }) => {
           : apt
       ))
       await loadAppointments(currentDate)
+      toast.success('Check-out realizado com sucesso!', {
+        duration: 4000
+      })
     } catch (err) {
-      setError('Erro ao realizar check-out: ' + (err.response?.data?.error || err.message))
+      const errorMessage = err.response?.data?.error || err.message || 'Erro desconhecido'
+      toast.error('Erro ao realizar check-out', {
+        description: errorMessage,
+        duration: 5000
+      })
     }
   }
 
