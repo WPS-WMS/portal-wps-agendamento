@@ -38,6 +38,11 @@ import usePermissions from '../hooks/usePermissions'
 const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user }) => {
   const { hasViewPermission, getPermissionType, loading: permissionsLoading } = usePermissions(user)
   
+  // Verificar permissão geral "Configurar horários da planta"
+  // Se esta permissão estiver em modo viewer, todas as sub-funcionalidades também ficam em modo viewer
+  const plantHoursPermission = (user && !permissionsLoading) ? getPermissionType('configure_plant_hours') : 'editor'
+  const isPlantHoursViewOnly = plantHoursPermission === 'viewer'
+  
   // Verificar permissões específicas para cada seção
   // Se user não estiver disponível ou ainda carregando, assumir permissões padrão (editor)
   const defaultHoursPermission = (user && !permissionsLoading) ? getPermissionType('configure_default_hours') : 'editor'
@@ -45,9 +50,10 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   const dateBlockPermission = (user && !permissionsLoading) ? getPermissionType('configure_date_block') : 'editor'
   
   // Determinar se cada seção está em modo somente leitura ou oculta
-  const isDefaultHoursViewOnly = defaultHoursPermission === 'viewer'
-  const isWeeklyBlockViewOnly = weeklyBlockPermission === 'viewer'
-  const isDateBlockViewOnly = dateBlockPermission === 'viewer'
+  // Se a permissão geral "configure_plant_hours" estiver em viewer, forçar todas as sub-funcionalidades a viewer também
+  const isDefaultHoursViewOnly = isPlantHoursViewOnly || defaultHoursPermission === 'viewer'
+  const isWeeklyBlockViewOnly = isPlantHoursViewOnly || weeklyBlockPermission === 'viewer'
+  const isDateBlockViewOnly = isPlantHoursViewOnly || dateBlockPermission === 'viewer'
   
   const canViewDefaultHours = (user && !permissionsLoading) ? hasViewPermission('configure_default_hours') : true
   const canViewWeeklyBlock = (user && !permissionsLoading) ? hasViewPermission('configure_weekly_block') : true
@@ -463,7 +469,6 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
 
   // Handlers para Bloqueio por Data Específica
   const handleToggleAvailability = (time, currentStatus) => {
-    if (isDateBlockViewOnly) return
     const timeSlot = availableTimes.find(ts => ts.time === time)
     if (timeSlot?.has_appointment) {
       return
@@ -624,7 +629,6 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   }
 
   const handleWeekdaysToggle = (enabled) => {
-    if (isDefaultHoursViewOnly) return
     setDefaultSchedule(prev => ({
       ...prev,
       weekdays: {
@@ -640,7 +644,6 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   }
 
   const handleWeekdaysOperatingTimeChange = (field, value) => {
-    if (isDefaultHoursViewOnly) return
     const newSchedule = {
       ...defaultSchedule.weekdays,
       [field]: value || null // Garantir que string vazia vira null
@@ -693,7 +696,6 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   }
 
   const handleWeekendToggle = (enabled) => {
-    if (isDefaultHoursViewOnly) return
     setDefaultSchedule(prev => ({
       ...prev,
       weekend: {
@@ -709,7 +711,6 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   }
 
   const handleWeekendOperatingTimeChange = (field, value) => {
-    if (isDefaultHoursViewOnly) return
     const newSchedule = {
       ...defaultSchedule.weekend,
       [field]: value
@@ -735,7 +736,6 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   }
 
   const handleWeekendDayToggle = (day) => {
-    if (isDefaultHoursViewOnly) return
     const currentDays = defaultSchedule.weekend.days
     const newDays = currentDays.includes(day)
       ? currentDays.filter(d => d !== day)
@@ -1083,7 +1083,6 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
                             minHour={0}
                             maxHour={23}
                             className={scheduleErrors.weekend ? 'border-red-500' : ''}
-                            disabled={isDefaultHoursViewOnly}
                           />
                         </div>
                       </div>
@@ -1253,9 +1252,9 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
               )}
 
               {!isWeeklyBlockViewOnly && (
-                <Button
+              <Button 
                 onClick={handleSaveWeeklyConfig} 
-                disabled={savingWeekly || isWeeklyBlockViewOnly || !newWeeklyConfig.day_of_week || !newWeeklyConfig.time_start || !newWeeklyConfig.time_end || !newWeeklyConfig.reason.trim()} 
+                disabled={savingWeekly || !newWeeklyConfig.day_of_week || !newWeeklyConfig.time_start || !newWeeklyConfig.time_end || !newWeeklyConfig.reason.trim()} 
                 className="w-full"
               >
                 {savingWeekly ? (

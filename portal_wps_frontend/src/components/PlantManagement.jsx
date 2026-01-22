@@ -108,7 +108,7 @@ const PlantManagement = ({ plant, onBack, onUpdate, user, permissionType = 'edit
   }
   
   const handleSaveMaxCapacity = async () => {
-    if (!plant?.id) return
+    if (!plant?.id || isViewOnly) return
     
     setMaxCapacityLoading(true)
     setMaxCapacityError('')
@@ -596,6 +596,7 @@ const PlantManagement = ({ plant, onBack, onUpdate, user, permissionType = 'edit
                   max="50"
                   value={maxCapacity}
                   onChange={(e) => {
+                    if (isViewOnly) return
                     const value = parseInt(e.target.value) || 1
                     // Limitar ao máximo de 50
                     const limitedValue = Math.min(Math.max(value, 1), 50)
