@@ -463,6 +463,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
 
   // Handlers para Bloqueio por Data Específica
   const handleToggleAvailability = (time, currentStatus) => {
+    if (isDateBlockViewOnly) return
     const timeSlot = availableTimes.find(ts => ts.time === time)
     if (timeSlot?.has_appointment) {
       return
@@ -623,6 +624,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   }
 
   const handleWeekdaysToggle = (enabled) => {
+    if (isDefaultHoursViewOnly) return
     setDefaultSchedule(prev => ({
       ...prev,
       weekdays: {
@@ -638,6 +640,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   }
 
   const handleWeekdaysOperatingTimeChange = (field, value) => {
+    if (isDefaultHoursViewOnly) return
     const newSchedule = {
       ...defaultSchedule.weekdays,
       [field]: value || null // Garantir que string vazia vira null
@@ -690,6 +693,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   }
 
   const handleWeekendToggle = (enabled) => {
+    if (isDefaultHoursViewOnly) return
     setDefaultSchedule(prev => ({
       ...prev,
       weekend: {
@@ -705,6 +709,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   }
 
   const handleWeekendOperatingTimeChange = (field, value) => {
+    if (isDefaultHoursViewOnly) return
     const newSchedule = {
       ...defaultSchedule.weekend,
       [field]: value
@@ -730,6 +735,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   }
 
   const handleWeekendDayToggle = (day) => {
+    if (isDefaultHoursViewOnly) return
     const currentDays = defaultSchedule.weekend.days
     const newDays = currentDays.includes(day)
       ? currentDays.filter(d => d !== day)
