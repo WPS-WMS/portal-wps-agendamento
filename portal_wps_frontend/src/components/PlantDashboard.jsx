@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { plantAPI, adminAPI } from '../lib/api'
 import { dateUtils, statusUtils } from '../lib/utils'
+import { toast } from 'sonner'
 import { UI_CONFIG } from '../lib/constants'
 import SupplierForm from './SupplierForm'
 import SupplierManagement from './SupplierManagement'
@@ -217,18 +218,26 @@ const PlantDashboard = ({ user, token }) => {
 
   const handleCheckIn = async (appointmentId) => {
     if (!hasPermission('check_in', 'editor')) {
-      setError('Você não tem permissão para realizar check-in')
+      toast.error('Permissão negada', {
+        description: 'Você não tem permissão para realizar check-in',
+        duration: 4000
+      })
       return
     }
     try {
       const result = await plantAPI.checkIn(appointmentId)
       const dateToLoad = currentDate instanceof Date ? currentDate : new Date(currentDate)
       await loadAppointments(dateToLoad)
-      alert(`Check-in realizado com sucesso!\n\nPayload ERP:\n${JSON.stringify(result.erp_payload, null, 2)}`)
+      toast.success('Check-in realizado com sucesso!', {
+        description: `Payload ERP gerado com sucesso`,
+        duration: 5000
+      })
     } catch (err) {
       const errorMessage = err.response?.data?.error || err.message || 'Erro desconhecido'
-      setError('Erro ao realizar check-in: ' + errorMessage)
-      alert(`Erro ao realizar check-in: ${errorMessage}`)
+      toast.error('Erro ao realizar check-in', {
+        description: errorMessage,
+        duration: 5000
+      })
     }
   }
 
