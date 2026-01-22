@@ -6,6 +6,7 @@ import SupplierDashboard from './components/SupplierDashboard'
 import AdminDashboard from './components/AdminDashboard'
 import PlantDashboard from './components/PlantDashboard'
 import useAuth from './hooks/useAuth'
+import { Toaster } from './components/ui/sonner'
 import './App.css'
 
 function App() {
@@ -31,6 +32,7 @@ function App() {
           <SupplierDashboard user={user} token={token} />
         )}
       </main>
+      <Toaster />
     </div>
   )
 }

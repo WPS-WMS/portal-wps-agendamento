@@ -13,6 +13,7 @@ import { ArrowLeft, Save, Loader2, Plus, AlertCircle } from 'lucide-react'
 import { adminAPI, plantAPI, supplierAPI } from '../lib/api'
 import { dateUtils, statusUtils } from '../lib/utils'
 import usePermissions from '../hooks/usePermissions'
+import { toast } from 'sonner'
 
 const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmit, onCancel, user = null }) => {
   const { hasPermission } = usePermissions(user)
@@ -326,8 +327,18 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
       let response
       if (isCreating) {
         response = await api.createAppointment(submitData)
+        // Mostrar mensagem de sucesso
+        toast.success('Agendamento criado com sucesso!', {
+          description: `Agendamento para ${dateUtils.formatDate(submitData.date)} às ${dateUtils.formatTime(submitData.time)} foi criado.`,
+          duration: 4000
+        })
       } else {
         response = await api.updateAppointment(appointment.id, submitData)
+        // Mostrar mensagem de sucesso
+        toast.success('Agendamento atualizado com sucesso!', {
+          description: `Agendamento para ${dateUtils.formatDate(submitData.date)} às ${dateUtils.formatTime(submitData.time)} foi atualizado.`,
+          duration: 4000
+        })
       }
       
       // Limpar estado da modal
@@ -401,8 +412,18 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
       let response
       if (isCreating) {
         response = await api.createAppointment(submitData)
+        // Mostrar mensagem de sucesso
+        toast.success('Agendamento criado com sucesso!', {
+          description: `Agendamento para ${dateUtils.formatDate(submitData.date)} às ${dateUtils.formatTime(submitData.time)} foi criado.`,
+          duration: 4000
+        })
       } else {
         response = await api.updateAppointment(appointment.id, submitData)
+        // Mostrar mensagem de sucesso
+        toast.success('Agendamento atualizado com sucesso!', {
+          description: `Agendamento para ${dateUtils.formatDate(submitData.date)} às ${dateUtils.formatTime(submitData.time)} foi atualizado.`,
+          duration: 4000
+        })
       }
       
       // Limpar estado da modal
