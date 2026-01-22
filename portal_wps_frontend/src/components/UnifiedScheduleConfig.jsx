@@ -338,7 +338,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
   // Salvar horários de funcionamento
   const handleSaveOperatingHours = async () => {
     // Validar se há erros
-    if (scheduleErrors.weekdays || scheduleErrors.weekend || scheduleErrors.holiday) {
+    if (scheduleErrors.weekdays || scheduleErrors.weekend) {
       setError('Corrija os erros antes de salvar')
       return
     }
@@ -1088,70 +1088,6 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
                 )}
               </div>
 
-              {/* Divisor */}
-              <div className="border-t"></div>
-
-              {/* Seção 3: Feriados */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-orange-100 rounded-lg">
-                      <Calendar className="w-5 h-5 text-orange-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Feriados</h3>
-                      <p className="text-sm text-gray-600">Dias de feriado</p>
-                    </div>
-                  </div>
-                  <Switch
-                    checked={defaultSchedule.holiday.enabled}
-                    onCheckedChange={handleHolidayToggle}
-                    disabled={isDefaultHoursViewOnly}
-                  />
-                </div>
-
-                {defaultSchedule.holiday.enabled && (
-                  <div className="pl-14 space-y-4 border-l-2 border-orange-200 ml-2">
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium text-gray-700">Horários de Funcionamento</Label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="holiday-operating-start" className="text-sm">De *</Label>
-                          <TimeInput
-                            id="holiday-operating-start"
-                            value={defaultSchedule.holiday.operating_start || ''}
-                            onChange={(value) => handleHolidayOperatingTimeChange('operating_start', value)}
-                            placeholder="HH:mm"
-                            intervalMinutes={30}
-                            minHour={0}
-                            maxHour={23}
-                            className={scheduleErrors.holiday ? 'border-red-500' : ''}
-                            disabled={isDefaultHoursViewOnly}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="holiday-operating-end" className="text-sm">Até *</Label>
-                          <TimeInput
-                            id="holiday-operating-end"
-                            value={defaultSchedule.holiday.operating_end || ''}
-                            onChange={(value) => handleHolidayOperatingTimeChange('operating_end', value)}
-                            disabled={isDefaultHoursViewOnly}
-                            placeholder="HH:mm"
-                            intervalMinutes={30}
-                            minHour={0}
-                            maxHour={23}
-                            className={scheduleErrors.holiday ? 'border-red-500' : ''}
-                          />
-                        </div>
-                      </div>
-                      {scheduleErrors.holiday && (
-                        <p className="text-sm text-red-600">{scheduleErrors.holiday}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Mensagem Informativa */}
               <Alert className="bg-blue-50 border-blue-200">
                 <AlertCircle className="w-4 h-4 text-blue-600" />
@@ -1165,7 +1101,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
               <div className="flex justify-end pt-4">
                 <Button
                   onClick={handleSaveOperatingHours}
-                  disabled={savingOperatingHours || scheduleErrors.weekdays || scheduleErrors.weekend || scheduleErrors.holiday}
+                  disabled={savingOperatingHours || scheduleErrors.weekdays || scheduleErrors.weekend}
                   className="min-w-[150px]"
                 >
                   {savingOperatingHours ? (
