@@ -1077,6 +1077,7 @@ const UnifiedScheduleConfig = ({ onBack, plantId = null, plantName = null, user 
                             minHour={0}
                             maxHour={23}
                             className={scheduleErrors.weekend ? 'border-red-500' : ''}
+                            disabled={isDefaultHoursViewOnly}
                           />
                         </div>
                       </div>
