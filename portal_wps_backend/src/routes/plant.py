@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, date
 from src.models.user import User, db
 from src.models.appointment import Appointment
 from src.models.plant import Plant
@@ -399,6 +399,11 @@ def check_in_appointment(current_user, appointment_id):
         if appointment.plant_id != current_user.plant_id:
             return jsonify({'error': 'Agendamento não pertence a esta planta'}), 403
         
+        # Verificar se a data do agendamento é a data atual (apenas para perfis de planta e fornecedor)
+        today = date.today()
+        if appointment.date != today:
+            return jsonify({'error': 'Check-in só pode ser realizado na data do agendamento'}), 400
+        
         # Verificar se já está com check-in
         if appointment.status == 'checked_in':
             return jsonify({'error': 'Agendamento já está com check-in realizado'}), 400
@@ -438,6 +443,11 @@ def check_out_appointment(current_user, appointment_id):
         # Verificar se o agendamento pertence à planta do usuário
         if appointment.plant_id != current_user.plant_id:
             return jsonify({'error': 'Agendamento não pertence a esta planta'}), 403
+        
+        # Verificar se a data do agendamento é a data atual (apenas para perfis de planta e fornecedor)
+        today = date.today()
+        if appointment.date != today:
+            return jsonify({'error': 'Check-out só pode ser realizado na data do agendamento'}), 400
         
         # Verificar se já está com check-out
         if appointment.status == 'checked_out':
