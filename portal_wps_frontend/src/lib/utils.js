@@ -34,10 +34,21 @@ export const dateUtils = {
   },
 
   // Formata data para exibição (DD/MM/YYYY)
+  // IMPORTANTE: Usa métodos locais para evitar problemas de fuso horário
   formatDate: (date) => {
     if (!date) return ''
+    
+    // Se for string no formato ISO (YYYY-MM-DD), parsear diretamente sem usar Date
+    if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(date)) {
+      const [year, month, day] = date.split('T')[0].split('-')
+      return `${day}/${month}/${year}`
+    }
+    
+    // Se for Date object ou outra string, usar métodos locais
     const d = date instanceof Date ? date : new Date(date)
     if (isNaN(d.getTime())) return ''
+    
+    // Usar métodos locais para preservar a data exata sem conversão de timezone
     const day = String(d.getDate()).padStart(2, '0')
     const month = String(d.getMonth() + 1).padStart(2, '0')
     const year = d.getFullYear()
