@@ -1687,21 +1687,13 @@ const SupplierDashboard = ({ user, token }) => {
                                 zIndex: zIndex
                               }}
                             >
-                        {appointment.is_blocked ? (
-                          // Mostrar apenas "Bloqueado" quando for agendamento de outro fornecedor
-                          <div className="h-full w-full flex items-center justify-center">
-                            <p className="text-sm text-red-300 font-medium">Bloqueado</p>
-                          </div>
-                        ) : (
-                          // Card completo para agendamentos próprios
-                          <>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Card 
-                                    className={`h-full w-full bg-white border-l-4 ${getStatusBorderColor(appointment.status)} hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group`}
-                                    onClick={() => handleCardClick(appointment)}
-                                  >
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Card 
+                                className={`h-full w-full bg-white border-l-4 ${getStatusBorderColor(appointment.status)} hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group`}
+                                onClick={() => handleCardClick(appointment)}
+                              >
                                     <CardContent className="p-2 h-full w-full flex flex-col justify-center">
                                       <div className="flex items-start justify-between gap-1.5">
                                         <div className="flex-1 min-w-0">
@@ -1874,10 +1866,8 @@ const SupplierDashboard = ({ user, token }) => {
                                 <TooltipContent>Realizar check-out</TooltipContent>
                               </Tooltip>
                               )}
-                            </TooltipProvider>
-                            </div>
-                          </>
-                        )}
+                          </TooltipProvider>
+                        </div>
                       </div>
                         )
                       })}
