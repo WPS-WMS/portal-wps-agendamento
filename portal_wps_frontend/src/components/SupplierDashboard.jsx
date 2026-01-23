@@ -1752,47 +1752,25 @@ const SupplierDashboard = ({ user, token }) => {
                         // Área clicável apenas se: dentro da capacidade, dentro do funcionamento, tem capacidade, está vazia
                         const isClickable = isWithinCapacity && isWithinHours && hasCapacity && isEmpty
                         
-                        // Debug: log apenas para a primeira coluna e primeira vez
-                        if (colIndex === 1 && i === 0) {
-                          console.log('Debug clickable areas:', {
-                            colIndex,
-                            timeString,
-                            maxCapacity,
-                            isWithinCapacity,
-                            isWithinHours,
-                            hasCapacity,
-                            isEmpty,
-                            isClickable
-                          })
-                        }
-                        
                         return (
                           <div
                             key={`clickable-slot-${colIndex}-${i}`}
-                            className={`absolute left-0 right-0 border-b border-dashed transition-all ${
+                            className={`absolute left-0 right-0 border-b border-dashed transition-all duration-200 ${
                               isClickable
-                                ? 'border-blue-200/50 hover:bg-blue-50/30 cursor-pointer'
+                                ? 'border-blue-300/60 hover:border-blue-400 hover:bg-blue-100/40 cursor-pointer group'
                                 : 'border-transparent'
                             }`}
                             style={{ 
                               top: `${top}px`, 
                               height: `${HOUR_HEIGHT / 2}px`,
-                              zIndex: isClickable ? 8 : 0, // Acima das linhas de guia (z-index 1), abaixo dos cards (z-index 10+), mas acima quando não há cards
-                              pointerEvents: isClickable ? 'auto' : 'none',
-                              // Debug: garantir que o elemento está presente
-                              backgroundColor: isClickable ? 'transparent' : 'transparent'
+                              zIndex: isClickable ? 8 : 0, // Acima das linhas de guia (z-index 1), abaixo dos cards (z-index 10+)
+                              pointerEvents: isClickable ? 'auto' : 'none'
                             }}
                             onClick={(e) => {
                               e.stopPropagation() // Evitar propagação
                               e.preventDefault() // Prevenir comportamento padrão
-                              console.log('Click detected:', { timeString, colIndex, isClickable, isWithinCapacity, isWithinHours, hasCapacity, isEmpty })
                               if (isClickable) {
                                 handleEmptyAreaClick(timeString, colIndex)
-                              }
-                            }}
-                            onMouseEnter={() => {
-                              if (isClickable) {
-                                console.log('Hover on clickable area:', { timeString, colIndex })
                               }
                             }}
                             title={
@@ -1808,7 +1786,15 @@ const SupplierDashboard = ({ user, token }) => {
                                         ? 'Horário ocupado'
                                         : `Coluna ${colIndex + 1} - Indisponível`
                             }
-                          />
+                          >
+                            {isClickable && (
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                <div className="bg-blue-500/90 text-white text-xs font-medium px-2 py-1 rounded shadow-lg">
+                                  {timeString}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         )
                       })}
 
