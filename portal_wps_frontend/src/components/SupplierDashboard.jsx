@@ -1619,11 +1619,6 @@ const SupplierDashboard = ({ user, token }) => {
                                     <span className="text-xs text-blue-600 font-medium">{slot.time}</span>
                                   </div>
                                 )}
-                                {!isAvailable && slot.capacity_used >= slot.capacity_max && (
-                                  <div className="h-full flex items-center justify-center">
-                                    <span className="text-xs text-red-500 font-medium">Bloqueado</span>
-                                  </div>
-                                )}
                               </div>
                             )
                           })}
