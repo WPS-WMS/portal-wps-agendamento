@@ -202,6 +202,12 @@ export const adminAPI = {
     })
     return response.data
   },
+  getPlantTimeSlots: async (plantId, date) => {
+    const response = await apiClient.get(`/admin/plants/${plantId}/time-slots`, {
+      params: { date }
+    })
+    return response.data
+  },
   getOperatingHours: async (plantId) => {
     const response = await apiClient.get(`/admin/plants/${plantId}/operating-hours`)
     return response.data
