@@ -1694,108 +1694,109 @@ const SupplierDashboard = ({ user, token }) => {
                           </div>
                         ) : (
                           // Card completo para agendamentos próprios
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Card 
-                                  className={`h-full w-full bg-white border-l-4 ${getStatusBorderColor(appointment.status)} hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group`}
-                                  onClick={() => handleCardClick(appointment)}
-                                >
-                                  <CardContent className="p-2 h-full w-full flex flex-col justify-center">
-                                    <div className="flex items-start justify-between gap-1.5">
-                                      <div className="flex-1 min-w-0">
-                                        {/* Número do agendamento no canto superior esquerdo */}
-                                        {appointment.appointment_number && (
-                                          <p className="text-xs font-mono font-semibold text-blue-600 truncate leading-tight mb-0.5">
-                                            {appointment.appointment_number}
+                          <>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Card 
+                                    className={`h-full w-full bg-white border-l-4 ${getStatusBorderColor(appointment.status)} hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group`}
+                                    onClick={() => handleCardClick(appointment)}
+                                  >
+                                    <CardContent className="p-2 h-full w-full flex flex-col justify-center">
+                                      <div className="flex items-start justify-between gap-1.5">
+                                        <div className="flex-1 min-w-0">
+                                          {/* Número do agendamento no canto superior esquerdo */}
+                                          {appointment.appointment_number && (
+                                            <p className="text-xs font-mono font-semibold text-blue-600 truncate leading-tight mb-0.5">
+                                              {appointment.appointment_number}
+                                            </p>
+                                          )}
+                                          <CardTitle className="text-sm font-bold text-gray-900 truncate leading-tight">
+                                            {supplierName}
+                                          </CardTitle>
+                                          <p className="text-xs text-gray-500 mt-0.5 leading-tight">
+                                            {dateUtils.formatTimeRange(appointment.time, appointment.time_end)}
                                           </p>
-                                        )}
-                                        <CardTitle className="text-sm font-bold text-gray-900 truncate leading-tight">
-                                          {supplierName}
-                                        </CardTitle>
-                                        <p className="text-xs text-gray-500 mt-0.5 leading-tight">
-                                          {dateUtils.formatTimeRange(appointment.time, appointment.time_end)}
-                                        </p>
+                                        </div>
+                                        <Badge className={`text-[10px] px-1.5 py-0.5 shrink-0 ${statusUtils.getStatusColor(appointment.status)}`}>
+                                          {statusUtils.getStatusLabel(appointment.status)}
+                                        </Badge>
                                       </div>
-                                      <Badge className={`text-[10px] px-1.5 py-0.5 shrink-0 ${statusUtils.getStatusColor(appointment.status)}`}>
-                                        {statusUtils.getStatusLabel(appointment.status)}
-                                      </Badge>
-                                    </div>
-                                    
-                                    {contentLevel === 'minimal' ? (
-                                      // Cards pequenos não mostram conteúdo adicional
-                                      null
-                                    ) : contentLevel === 'summary' ? (
-                                      <div className="mt-1.5 space-y-0.5 text-xs text-gray-600 overflow-hidden">
-                                        <p className="truncate leading-tight">
-                                          <span className="font-medium">PO:</span> {appointment.purchase_order}
-                                        </p>
-                                        <p className="truncate leading-tight">
-                                          <span className="font-medium">Placa:</span> {appointment.truck_plate}
-                                        </p>
-                                        {appointment.status === 'rescheduled' && appointment.motivo_reagendamento && (
-                                          <p className="truncate leading-tight text-purple-600 italic text-[10px]">
-                                            <span className="font-medium">Motivo:</span> {appointment.motivo_reagendamento}
-                                          </p>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <div className="mt-1.5 space-y-0.5 text-xs text-gray-600 overflow-hidden">
-                                        <p className="truncate leading-tight">
-                                          <span className="font-medium">PO:</span> {appointment.purchase_order}
-                                        </p>
-                                        <p className="truncate leading-tight">
-                                          <span className="font-medium">Placa:</span> {appointment.truck_plate}
-                                        </p>
-                                        {appointment.driver_name && (
+                                      
+                                      {contentLevel === 'minimal' ? (
+                                        // Cards pequenos não mostram conteúdo adicional
+                                        null
+                                      ) : contentLevel === 'summary' ? (
+                                        <div className="mt-1.5 space-y-0.5 text-xs text-gray-600 overflow-hidden">
                                           <p className="truncate leading-tight">
-                                            <span className="font-medium">Motorista:</span> {appointment.driver_name}
+                                            <span className="font-medium">PO:</span> {appointment.purchase_order}
                                           </p>
-                                        )}
-                                        {appointment.status === 'rescheduled' && appointment.motivo_reagendamento && (
-                                          <p className="truncate leading-tight text-purple-600 italic">
-                                            <span className="font-medium">Motivo:</span> {appointment.motivo_reagendamento}
+                                          <p className="truncate leading-tight">
+                                            <span className="font-medium">Placa:</span> {appointment.truck_plate}
                                           </p>
-                                        )}
-                                      </div>
-                                    )}
-                                  </CardContent>
-                                </Card>
-                              </TooltipTrigger>
-                              <TooltipContent side="right" className="max-w-xs p-3">
-                                <div className="space-y-2">
-                                  <div>
-                                    <p className="font-semibold text-sm">{supplierName}</p>
-                                    <p className="text-xs text-gray-500 mt-0.5">{dateUtils.formatTimeRange(appointment.time, appointment.time_end)}</p>
+                                          {appointment.status === 'rescheduled' && appointment.motivo_reagendamento && (
+                                            <p className="truncate leading-tight text-purple-600 italic text-[10px]">
+                                              <span className="font-medium">Motivo:</span> {appointment.motivo_reagendamento}
+                                            </p>
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <div className="mt-1.5 space-y-0.5 text-xs text-gray-600 overflow-hidden">
+                                          <p className="truncate leading-tight">
+                                            <span className="font-medium">PO:</span> {appointment.purchase_order}
+                                          </p>
+                                          <p className="truncate leading-tight">
+                                            <span className="font-medium">Placa:</span> {appointment.truck_plate}
+                                          </p>
+                                          {appointment.driver_name && (
+                                            <p className="truncate leading-tight">
+                                              <span className="font-medium">Motorista:</span> {appointment.driver_name}
+                                            </p>
+                                          )}
+                                          {appointment.status === 'rescheduled' && appointment.motivo_reagendamento && (
+                                            <p className="truncate leading-tight text-purple-600 italic">
+                                              <span className="font-medium">Motivo:</span> {appointment.motivo_reagendamento}
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
+                                    </CardContent>
+                                  </Card>
+                                </TooltipTrigger>
+                                <TooltipContent side="right" className="max-w-xs p-3">
+                                  <div className="space-y-2">
+                                    <div>
+                                      <p className="font-semibold text-sm">{supplierName}</p>
+                                      <p className="text-xs text-gray-500 mt-0.5">{dateUtils.formatTimeRange(appointment.time, appointment.time_end)}</p>
+                                    </div>
+                                    <div className="space-y-1 text-xs border-t pt-2">
+                                      {appointment.appointment_number && (
+                                        <p className="font-mono text-blue-600">
+                                          <span className="font-medium">Nº:</span> {appointment.appointment_number}
+                                        </p>
+                                      )}
+                                      <p><span className="font-medium">PO:</span> {appointment.purchase_order}</p>
+                                      <p><span className="font-medium">Placa:</span> {appointment.truck_plate}</p>
+                                      {appointment.driver_name && (
+                                        <p><span className="font-medium">Motorista:</span> {appointment.driver_name}</p>
+                                      )}
+                                      {appointment.status === 'rescheduled' && appointment.motivo_reagendamento && (
+                                        <div className="mt-2 pt-2 border-t border-purple-200">
+                                          <p className="font-medium text-purple-700">Motivo do Reagendamento:</p>
+                                          <p className="text-purple-600 italic">{appointment.motivo_reagendamento}</p>
+                                        </div>
+                                      )}
+                                      <p className="text-gray-500 mt-1">Clique para ver detalhes completos</p>
+                                    </div>
                                   </div>
-                                  <div className="space-y-1 text-xs border-t pt-2">
-                                    {appointment.appointment_number && (
-                                      <p className="font-mono text-blue-600">
-                                        <span className="font-medium">Nº:</span> {appointment.appointment_number}
-                                      </p>
-                                    )}
-                                    <p><span className="font-medium">PO:</span> {appointment.purchase_order}</p>
-                                    <p><span className="font-medium">Placa:</span> {appointment.truck_plate}</p>
-                                    {appointment.driver_name && (
-                                      <p><span className="font-medium">Motorista:</span> {appointment.driver_name}</p>
-                                    )}
-                                    {appointment.status === 'rescheduled' && appointment.motivo_reagendamento && (
-                                      <div className="mt-2 pt-2 border-t border-purple-200">
-                                        <p className="font-medium text-purple-700">Motivo do Reagendamento:</p>
-                                        <p className="text-purple-600 italic">{appointment.motivo_reagendamento}</p>
-                                      </div>
-                                    )}
-                                    <p className="text-gray-500 mt-1">Clique para ver detalhes completos</p>
-                                  </div>
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                          
-                          <div className="absolute bottom-1 right-1 flex items-center gap-0.5 opacity-80 group-hover:opacity-100 transition-opacity z-20">
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            
+                            <div className="absolute bottom-1 right-1 flex items-center gap-0.5 opacity-80 group-hover:opacity-100 transition-opacity z-20">
                             <TooltipProvider>
                               {(appointment.status !== 'checked_in' && appointment.status !== 'checked_out') && hasPermission('edit_appointment', 'editor') && (
-                            <Tooltip>
+                                <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
                                   size="sm"
@@ -1810,9 +1811,9 @@ const SupplierDashboard = ({ user, token }) => {
                                   <Edit className="w-3.5 h-3.5 text-gray-700" />
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>Editar agendamento</TooltipContent>
-                            </Tooltip>
-                            )}
+                                <TooltipContent>Editar agendamento</TooltipContent>
+                              </Tooltip>
+                              )}
                             
                             {(appointment.status !== 'checked_in' && appointment.status !== 'checked_out') && hasPermission('delete_appointment', 'editor') && (
                               <Tooltip>
@@ -1874,7 +1875,8 @@ const SupplierDashboard = ({ user, token }) => {
                               </Tooltip>
                               )}
                             </TooltipProvider>
-                          </div>
+                            </div>
+                          </>
                         )}
                       </div>
                         )
