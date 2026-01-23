@@ -541,13 +541,19 @@ const PlantDashboard = ({ user, token }) => {
     const capacity = Math.max(1, maxCapacity)
     const columns = Array.from({ length: capacity }, () => [])
     
-    // Ordenar agendamentos por horário de início
+    // Ordenar agendamentos por horário de início, e por ID (ordem de criação) quando o horário for igual
+    // Isso garante que a posição dos cards seja fixa baseada na ordem de criação
     const sortedAppointments = [...filteredAppointments].sort((a, b) => {
       const timeA = dateUtils.formatTime(a.time)
       const timeB = dateUtils.formatTime(b.time)
       const [h1, m1] = timeA.split(':').map(Number)
       const [h2, m2] = timeB.split(':').map(Number)
-      return (h1 * 60 + m1) - (h2 * 60 + m2)
+      const timeDiff = (h1 * 60 + m1) - (h2 * 60 + m2)
+      // Se o horário for igual, ordenar por ID (ordem de criação) para manter posição fixa
+      if (timeDiff === 0) {
+        return (a.id || 0) - (b.id || 0)
+      }
+      return timeDiff
     })
     
     const appointmentColumnMap = new Map()
