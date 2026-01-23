@@ -326,17 +326,25 @@ def create_appointment(current_user):
         max_capacity = plant.max_capacity if plant.max_capacity else 1
         
         # Validar capacidade para todos os slots do intervalo
+        # IMPORTANTE: Validar slots de 1 hora (não 30 minutos) para manter compatibilidade
+        # Um agendamento de 30 minutos ocupa o slot de 1 hora correspondente
         from sqlalchemy import or_, and_
         from datetime import timedelta
         
         if appointment_time_end:
-            # Agendamento com intervalo - validar todos os slots
+            # Agendamento com intervalo - validar todos os slots de 1 hora
             slots = []
             current = datetime.combine(appointment_date, appointment_time)
             end = datetime.combine(appointment_date, appointment_time_end)
             
+            # Arredondar para baixo para o horário de 1 hora mais próximo
+            # Exemplo: 08:30 -> 08:00, 09:15 -> 09:00
+            start_hour = time(current.hour, 0)
+            current = datetime.combine(appointment_date, start_hour)
+            
             while current < end:
-                slots.append(current.time())
+                slot_hour = current.time()
+                slots.append(slot_hour)
                 current += timedelta(hours=1)
             
             for slot in slots:
@@ -819,6 +827,143 @@ def get_plant_schedule_config(current_user, plant_id):
         
     except Exception as e:
         logger.error(f"Erro ao buscar configurações da planta {plant_id}: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@supplier_bp.route('/plants/<int:plant_id>/time-slots', methods=['GET'])
+@token_required
+def get_plant_time_slots(current_user, plant_id):
+    """Retorna slots de 30 minutos com disponibilidade para uma planta e data específica"""
+    try:
+        if current_user.role != 'supplier':
+            return jsonify({'error': 'Acesso negado. Apenas fornecedores podem acessar'}), 403
+        
+        date_str = request.args.get('date')
+        if not date_str:
+            return jsonify({'error': 'Parâmetro date é obrigatório (formato: YYYY-MM-DD)'}), 400
+        
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
+        
+        # Verificar se a data não é no passado
+        if target_date < datetime.now().date():
+            return jsonify({'error': 'Não é possível agendar para datas passadas'}), 400
+        
+        # Buscar planta
+        from src.models.plant import Plant
+        plant = Plant.query.filter_by(
+            id=plant_id,
+            is_active=True,
+            company_id=current_user.company_id
+        ).first()
+        
+        if not plant:
+            return jsonify({'error': 'Planta não encontrada, inativa ou não pertence ao seu domínio'}), 404
+        
+        max_capacity = plant.max_capacity if plant.max_capacity else 1
+        
+        # Buscar horários de funcionamento da planta
+        from src.utils.operating_hours_validator import validate_operating_hours
+        python_weekday = target_date.weekday()
+        if python_weekday == 6:  # Domingo
+            db_day_of_week = 0
+        else:
+            db_day_of_week = python_weekday + 1
+        
+        is_weekend = db_day_of_week == 0 or db_day_of_week == 6
+        operating_hours_day = 6 if db_day_of_week == 0 else 5 if is_weekend else None
+        
+        operating_hours_config = None
+        if is_weekend:
+            operating_hours_config = OperatingHours.query.filter_by(
+                plant_id=plant_id,
+                schedule_type='weekend',
+                day_of_week=operating_hours_day,
+                is_active=True
+            ).first()
+        else:
+            operating_hours_config = OperatingHours.query.filter_by(
+                plant_id=plant_id,
+                schedule_type='weekdays',
+                day_of_week=None,
+                is_active=True
+            ).first()
+        
+        # Se não encontrou configuração, usar padrão 08:00-17:00
+        if not operating_hours_config:
+            from datetime import time as time_class
+            start_time = time_class(8, 0)
+            end_time = time_class(17, 0)
+        else:
+            start_time = operating_hours_config.operating_start
+            end_time = operating_hours_config.operating_end
+        
+        # Gerar slots de 30 minutos dentro do horário de funcionamento
+        # IMPORTANTE: Não incluir o último slot se for igual ao horário final
+        # Exemplo: se funcionamento é 08:00-17:00, último slot é 16:30 (não 17:00)
+        slots = []
+        current_time = datetime.combine(target_date, start_time)
+        end_datetime = datetime.combine(target_date, end_time)
+        
+        while current_time < end_datetime:
+            slot_time = current_time.time()
+            slot_str = slot_time.strftime('%H:%M')
+            
+            # Não incluir slot se for igual ou maior que o horário final
+            if slot_time >= end_time:
+                break
+            
+            # Verificar capacidade para este slot
+            # Um slot de 30 minutos está disponível se houver capacidade no horário de 1 hora correspondente
+            # Exemplo: slot 08:30 verifica capacidade em 08:00
+            hour_slot = time(slot_time.hour, 0)
+            
+            # Contar agendamentos que ocupam este horário de 1 hora
+            from sqlalchemy import or_, and_
+            count = Appointment.query.filter(
+                Appointment.date == target_date,
+                Appointment.plant_id == plant_id,
+                Appointment.company_id == current_user.company_id
+            ).filter(
+                or_(
+                    # Agendamento antigo que começa neste horário
+                    and_(
+                        Appointment.time == hour_slot,
+                        Appointment.time_end.is_(None)
+                    ),
+                    # Agendamento com intervalo que inclui este horário
+                    and_(
+                        Appointment.time <= hour_slot,
+                        Appointment.time_end.isnot(None),
+                        Appointment.time_end > hour_slot
+                    )
+                )
+            ).count()
+            
+            is_available = count < max_capacity
+            
+            slots.append({
+                'time': slot_str,
+                'is_available': is_available,
+                'capacity_used': count,
+                'capacity_max': max_capacity
+            })
+            
+            current_time += timedelta(minutes=30)
+        
+        return jsonify({
+            'date': date_str,
+            'plant_id': plant_id,
+            'operating_hours': {
+                'start': start_time.strftime('%H:%M'),
+                'end': end_time.strftime('%H:%M')
+            },
+            'slots': slots
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar slots de tempo: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @supplier_bp.route('/plants/<int:plant_id>/max-capacity', methods=['GET'])

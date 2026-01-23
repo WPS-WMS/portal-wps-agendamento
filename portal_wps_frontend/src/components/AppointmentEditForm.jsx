@@ -88,19 +88,37 @@ const AppointmentEditForm = ({ appointment, suppliers = [], plants = [], onSubmi
         time_end: normalizedTimeEnd
       })
     } else if (isCreating) {
-      // Preencher automaticamente baseado no perfil do usuário
-      if (user?.role === 'supplier' && user?.supplier_id) {
-        // Fornecedor: preencher supplier_id automaticamente
-        setFormData(prev => ({
-          ...prev,
-          supplier_id: user.supplier_id.toString()
-        }))
-      } else if (user?.role === 'plant' && user?.plant_id) {
-        // Planta: preencher plant_id automaticamente
-        setFormData(prev => ({
-          ...prev,
-          plant_id: user.plant_id.toString()
-        }))
+      // Se appointment não tem id mas tem dados (pré-preenchido do slot), usar esses dados
+      if (appointment && typeof appointment === 'object') {
+        const normalizedDate = appointment.date || ''
+        const normalizedTime = normalizeTime(appointment.time)
+        const normalizedTimeEnd = normalizeTime(appointment.time_end)
+        
+        setFormData({
+          date: normalizedDate,
+          time: normalizedTime,
+          time_end: normalizedTimeEnd,
+          purchase_order: '',
+          truck_plate: '',
+          driver_name: '',
+          supplier_id: user?.role === 'supplier' && user?.supplier_id ? user.supplier_id.toString() : (appointment.supplier_id?.toString() || ''),
+          plant_id: appointment.plant_id?.toString() || (user?.role === 'plant' && user?.plant_id ? user.plant_id.toString() : '')
+        })
+      } else {
+        // Preencher automaticamente baseado no perfil do usuário
+        if (user?.role === 'supplier' && user?.supplier_id) {
+          // Fornecedor: preencher supplier_id automaticamente
+          setFormData(prev => ({
+            ...prev,
+            supplier_id: user.supplier_id.toString()
+          }))
+        } else if (user?.role === 'plant' && user?.plant_id) {
+          // Planta: preencher plant_id automaticamente
+          setFormData(prev => ({
+            ...prev,
+            plant_id: user.plant_id.toString()
+          }))
+        }
       }
     }
   }, [appointment, isCreating, user])

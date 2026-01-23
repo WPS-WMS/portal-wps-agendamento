@@ -33,15 +33,17 @@ const AppointmentForm = ({ appointment, preSelectedDate, preSelectedTime, onSubm
 
   useEffect(() => {
     if (appointment) {
-      const normalizedDate = appointment.date || ''
-      const normalizedTime = appointment.time ? appointment.time.slice(0, 5) : ''
+      const normalizedDate = appointment.date || preSelectedDate || ''
+      const normalizedTime = appointment.time ? appointment.time.slice(0, 5) : (preSelectedTime || '')
+      const normalizedTimeEnd = appointment.time_end ? appointment.time_end.slice(0, 5) : ''
       
       setFormData({
         date: normalizedDate,
         time: normalizedTime,
-        purchase_order: appointment.purchase_order,
-        truck_plate: appointment.truck_plate,
-        driver_name: appointment.driver_name
+        time_end: normalizedTimeEnd,
+        purchase_order: appointment.purchase_order || '',
+        truck_plate: appointment.truck_plate || '',
+        driver_name: appointment.driver_name || ''
       })
       
       // Armazenar valores originais
@@ -49,8 +51,23 @@ const AppointmentForm = ({ appointment, preSelectedDate, preSelectedTime, onSubm
         date: normalizedDate,
         time: normalizedTime
       })
+    } else if (preSelectedDate || preSelectedTime) {
+      // Se não há appointment mas há dados pré-selecionados (ex: clique em slot)
+      const normalizedTimeEnd = preSelectedTime ? (() => {
+        const [hour, min] = preSelectedTime.split(':').map(Number)
+        const endHour = min === 30 ? (hour + 1) % 24 : hour
+        const endMin = min === 30 ? 0 : 30
+        return `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`
+      })() : ''
+      
+      setFormData(prev => ({
+        ...prev,
+        date: preSelectedDate || prev.date,
+        time: preSelectedTime || prev.time,
+        time_end: normalizedTimeEnd || prev.time_end
+      }))
     }
-  }, [appointment, preSelectedDate])
+  }, [appointment, preSelectedDate, preSelectedTime])
 
   const handleDateChange = (e) => {
     const newDate = e.target.value

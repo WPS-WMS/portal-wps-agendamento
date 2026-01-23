@@ -1300,6 +1300,128 @@ def get_available_times(current_user):
         logger.error(f"Erro em get_available_times: {str(e)}\n{error_trace}")
         return jsonify({'error': str(e), 'traceback': error_trace}), 500
 
+@admin_bp.route('/plants/<int:plant_id>/time-slots', methods=['GET'])
+@permission_required('view_appointments', 'viewer')
+def get_plant_time_slots(current_user, plant_id):
+    """Retorna slots de 30 minutos com disponibilidade para uma planta e data específica (para admin)"""
+    try:
+        date_str = request.args.get('date')
+        if not date_str:
+            return jsonify({'error': 'Parâmetro date é obrigatório (formato: YYYY-MM-DD)'}), 400
+        
+        try:
+            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
+        
+        # Buscar planta
+        plant = Plant.query.filter_by(
+            id=plant_id,
+            company_id=current_user.company_id
+        ).first()
+        
+        if not plant:
+            return jsonify({'error': 'Planta não encontrada ou não pertence ao seu domínio'}), 404
+        
+        max_capacity = plant.max_capacity if plant.max_capacity else 1
+        
+        # Buscar horários de funcionamento da planta
+        from src.models.operating_hours import OperatingHours
+        python_weekday = target_date.weekday()
+        if python_weekday == 6:  # Domingo
+            db_day_of_week = 0
+        else:
+            db_day_of_week = python_weekday + 1
+        
+        is_weekend = db_day_of_week == 0 or db_day_of_week == 6
+        operating_hours_day = 6 if db_day_of_week == 0 else 5 if is_weekend else None
+        
+        operating_hours_config = None
+        if is_weekend:
+            operating_hours_config = OperatingHours.query.filter_by(
+                plant_id=plant_id,
+                schedule_type='weekend',
+                day_of_week=operating_hours_day,
+                is_active=True,
+                company_id=current_user.company_id
+            ).first()
+        else:
+            operating_hours_config = OperatingHours.query.filter_by(
+                plant_id=plant_id,
+                schedule_type='weekdays',
+                day_of_week=None,
+                is_active=True,
+                company_id=current_user.company_id
+            ).first()
+        
+        # Se não encontrou configuração, usar padrão 08:00-17:00
+        if not operating_hours_config:
+            from datetime import time as time_class
+            start_time = time_class(8, 0)
+            end_time = time_class(17, 0)
+        else:
+            start_time = operating_hours_config.operating_start
+            end_time = operating_hours_config.operating_end
+        
+        # Gerar slots de 30 minutos dentro do horário de funcionamento
+        slots = []
+        current_time = datetime.combine(target_date, start_time)
+        end_datetime = datetime.combine(target_date, end_time)
+        
+        while current_time < end_datetime:
+            slot_time = current_time.time()
+            slot_str = slot_time.strftime('%H:%M')
+            
+            if slot_time >= end_time:
+                break
+            
+            # Verificar capacidade para este slot
+            hour_slot = time(slot_time.hour, 0)
+            
+            from sqlalchemy import or_, and_
+            count = Appointment.query.filter(
+                Appointment.date == target_date,
+                Appointment.plant_id == plant_id,
+                Appointment.company_id == current_user.company_id
+            ).filter(
+                or_(
+                    and_(
+                        Appointment.time == hour_slot,
+                        Appointment.time_end.is_(None)
+                    ),
+                    and_(
+                        Appointment.time <= hour_slot,
+                        Appointment.time_end.isnot(None),
+                        Appointment.time_end > hour_slot
+                    )
+                )
+            ).count()
+            
+            is_available = count < max_capacity
+            
+            slots.append({
+                'time': slot_str,
+                'is_available': is_available,
+                'capacity_used': count,
+                'capacity_max': max_capacity
+            })
+            
+            current_time += timedelta(minutes=30)
+        
+        return jsonify({
+            'date': date_str,
+            'plant_id': plant_id,
+            'operating_hours': {
+                'start': start_time.strftime('%H:%M'),
+                'end': end_time.strftime('%H:%M')
+            },
+            'slots': slots
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erro em get_plant_time_slots: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 @admin_bp.route('/default-schedule', methods=['GET'])
 @permission_required('configure_plant_hours', 'viewer')
 def get_default_schedule(current_user):
