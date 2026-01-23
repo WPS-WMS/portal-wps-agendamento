@@ -888,34 +888,8 @@ const SupplierDashboard = ({ user, token }) => {
     return columns
   }, [filteredAppointments, maxCapacity, plantCapacities, selectedPlantId, currentDateISO])
 
-  // Calcular altura da timeline baseado nos horários de funcionamento ou slots disponíveis
-  let timelineHeight = 24 * HOUR_HEIGHT
-  if (timeSlots.length > 0) {
-    // Se temos slots, calcular altura baseado no último slot
-    const lastSlot = timeSlots[timeSlots.length - 1]
-    const [lastHour, lastMin] = lastSlot.time.split(':').map(Number)
-    const lastSlotTop = (lastHour * 60 + lastMin) / 60 * HOUR_HEIGHT
-    // Adicionar espaço para o slot de 30 minutos + margem
-    timelineHeight = lastSlotTop + (HOUR_HEIGHT / 2) + 100
-  } else if (operatingHours.start && operatingHours.end) {
-    // Se temos horários de funcionamento, calcular altura baseado neles
-    const [startH, startM] = operatingHours.start.split(':').map(Number)
-    const [endH, endM] = operatingHours.end.split(':').map(Number)
-    const startMinutes = startH * 60 + startM
-    const endMinutes = endH * 60 + endM
-    const durationHours = (endMinutes - startMinutes) / 60
-    timelineHeight = durationHours * HOUR_HEIGHT + 100
-  } else if (filteredAppointments.length > 0) {
-    // Fallback: usar agendamentos existentes
-    const lastAppointment = filteredAppointments.reduce((latest, apt) => {
-      const aptTime = dateUtils.formatTime(apt.time_end || apt.time)
-      const latestTime = dateUtils.formatTime(latest.time_end || latest.time)
-      return aptTime > latestTime ? apt : latest
-    }, filteredAppointments[0])
-    
-    const lastTime = dateUtils.formatTime(lastAppointment.time_end || lastAppointment.time)
-    timelineHeight = Math.max(calculateCardTop(lastTime) + calculateCardHeight(lastAppointment) + 100, 24 * HOUR_HEIGHT)
-  }
+  // Calcular altura da timeline - sempre mostrar todos os 24 horários
+  const timelineHeight = 24 * HOUR_HEIGHT
 
   const stats = useMemo(() => {
     // Filtrar agendamentos pela planta selecionada
@@ -1537,71 +1511,43 @@ const SupplierDashboard = ({ user, token }) => {
           <Card className="overflow-hidden">
             <div className="h-[calc(100vh-400px)] min-h-[600px] overflow-y-auto overflow-x-auto">
               <div className="hidden md:flex relative" style={{ minHeight: `${timelineHeight}px`, minWidth: maxCapacity >= 5 ? `${maxCapacity * 200}px` : '100%' }}>
-                {/* Coluna de Horários - Fixa à Esquerda */}
-                {/* Renderizar apenas horários dentro do funcionamento da planta */}
+                {/* Coluna de Horários */}
                 <div className="w-24 flex-shrink-0 bg-gray-50 border-r border-gray-200 relative sticky left-0 z-10" style={{ minHeight: `${timelineHeight}px` }}>
-                  {/* Calcular horários de início e fim baseado nos slots disponíveis ou horários de funcionamento */}
-                  {(() => {
-                    // Se temos slots, usar o primeiro e último slot para determinar o range
-                    let startHour = 0
-                    let endHour = 24
-                    
-                    if (timeSlots.length > 0) {
-                      const firstSlot = timeSlots[0]
-                      const lastSlot = timeSlots[timeSlots.length - 1]
-                      const [firstHour] = firstSlot.time.split(':').map(Number)
-                      const [lastHour, lastMin] = lastSlot.time.split(':').map(Number)
-                      startHour = firstHour
-                      // Se o último slot é :30, mostrar até a hora seguinte
-                      endHour = lastMin === 30 ? lastHour + 2 : lastHour + 1
-                    } else if (operatingHours.start && operatingHours.end) {
-                      const [startH] = operatingHours.start.split(':').map(Number)
-                      const [endH] = operatingHours.end.split(':').map(Number)
-                      startHour = startH
-                      endHour = endH + 1
-                    }
-                    
-                    // Renderizar apenas horários dentro do range
+                  {Array.from({ length: 24 }, (_, i) => {
+                    const hour = i
+                    const top = i * HOUR_HEIGHT
                     return (
-                      <>
-                        {Array.from({ length: endHour - startHour }, (_, i) => {
-                          const hour = startHour + i
-                          const top = hour * HOUR_HEIGHT
-                          return (
-                            <div
-                              key={`time-guide-${hour}`}
-                              className="absolute left-0 right-0 border-b border-gray-200"
-                              style={{ top: `${top}px`, height: `${HOUR_HEIGHT}px` }}
-                            >
-                              <div className="p-2 h-full flex items-start justify-end pr-3">
-                                <span className="font-semibold text-sm text-gray-700">{hour.toString().padStart(2, '0')}:00</span>
-                              </div>
-                            </div>
-                          )
-                        })}
-                        
-                        {Array.from({ length: (endHour - startHour) * 2 }, (_, i) => {
-                          const hour = startHour + Math.floor(i / 2)
-                          const isHalfHour = i % 2 === 1
-                          const top = hour * HOUR_HEIGHT + (isHalfHour ? HOUR_HEIGHT / 2 : 0)
-                          if (isHalfHour) {
-                            return (
-                              <div
-                                key={`time-half-${i}`}
-                                className="absolute left-0 right-0 border-b border-dashed border-gray-200"
-                                style={{ top: `${top}px`, height: `${HOUR_HEIGHT / 2}px` }}
-                              >
-                                <div className="p-1 h-full flex items-start justify-end pr-2">
-                                  <span className="text-xs text-gray-400">{hour.toString().padStart(2, '0')}:30</span>
-                                </div>
-                              </div>
-                            )
-                          }
-                          return null
-                        })}
-                      </>
+                      <div
+                        key={`time-guide-${hour}`}
+                        className="absolute left-0 right-0 border-b border-gray-200"
+                        style={{ top: `${top}px`, height: `${HOUR_HEIGHT}px` }}
+                      >
+                        <div className="p-2 h-full flex items-start justify-end pr-3">
+                          <span className="font-semibold text-sm text-gray-700">{hour.toString().padStart(2, '0')}:00</span>
+                        </div>
+                      </div>
                     )
-                  })()}
+                  })}
+                  
+                  {Array.from({ length: 48 }, (_, i) => {
+                    const hour = Math.floor(i / 2)
+                    const isHalfHour = i % 2 === 1
+                    const top = hour * HOUR_HEIGHT + (isHalfHour ? HOUR_HEIGHT / 2 : 0)
+                    if (isHalfHour) {
+                      return (
+                        <div
+                          key={`time-half-${i}`}
+                          className="absolute left-0 right-0 border-b border-dashed border-gray-200"
+                          style={{ top: `${top}px`, height: `${HOUR_HEIGHT / 2}px` }}
+                        >
+                          <div className="p-1 h-full flex items-start justify-end pr-2">
+                            <span className="text-xs text-gray-400">{hour.toString().padStart(2, '0')}:30</span>
+                          </div>
+                        </div>
+                      )
+                    }
+                    return null
+                  })}
                 </div>
 
                 {/* Área de Colunas de Agendamentos */}
