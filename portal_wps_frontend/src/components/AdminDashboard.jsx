@@ -74,6 +74,9 @@ const AdminDashboard = ({ user, token }) => {
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [showAccessProfiles, setShowAccessProfiles] = useState(false)
   const [showUsersScreen, setShowUsersScreen] = useState(false)
+  const [timeSlots, setTimeSlots] = useState([])
+  const [operatingHours, setOperatingHours] = useState({ start: '08:00', end: '17:00' })
+  const [loadingSlots, setLoadingSlots] = useState(false)
 
   const loadSuppliers = async () => {
     try {
@@ -116,6 +119,34 @@ const AdminDashboard = ({ user, token }) => {
     }
   }
 
+  const loadTimeSlots = async (plantId, date) => {
+    if (!plantId || !date) {
+      setTimeSlots([])
+      setOperatingHours({ start: '08:00', end: '17:00' })
+      return
+    }
+
+    try {
+      setLoadingSlots(true)
+      const dateStr = dateUtils.toISODate(date)
+      const data = await adminAPI.getPlantTimeSlots(plantId, dateStr)
+      
+      if (data && data.slots) {
+        setTimeSlots(data.slots)
+        if (data.operating_hours) {
+          setOperatingHours(data.operating_hours)
+        }
+      } else {
+        setTimeSlots([])
+      }
+    } catch (err) {
+      console.error('Erro ao carregar slots de tempo:', err)
+      setTimeSlots([])
+    } finally {
+      setLoadingSlots(false)
+    }
+  }
+
 
   useEffect(() => {
     loadSuppliers()
@@ -144,6 +175,26 @@ const AdminDashboard = ({ user, token }) => {
       loadPlants()
     }
   }, [showPlantsScreen, showPlantManagement, showPlantForm])
+
+  // Carregar slots de tempo quando planta ou data mudarem
+  useEffect(() => {
+    if (selectedPlantId && currentDate && !isNaN(currentDate.getTime())) {
+      // Verificar se a data não é no passado
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const selectedDate = new Date(currentDate)
+      selectedDate.setHours(0, 0, 0, 0)
+      
+      if (selectedDate >= today) {
+        loadTimeSlots(selectedPlantId, currentDate)
+      } else {
+        setTimeSlots([])
+      }
+    } else {
+      setTimeSlots([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlantId, currentDate?.getTime()])
 
   // Carregar fornecedores quando a tela de Fornecedores é aberta
   useEffect(() => {
@@ -534,6 +585,126 @@ const AdminDashboard = ({ user, token }) => {
     } else {
       return 'full' // Todos os dados
     }
+  }
+
+  // Função auxiliar para verificar permissão (admin sempre tem permissão)
+  const hasPermission = (permission, level) => {
+    // Admin sempre tem todas as permissões
+    return user?.role === 'admin'
+  }
+
+  // Função para verificar se um horário está dentro do funcionamento
+  const isTimeWithinOperatingHours = (timeString) => {
+    if (!operatingHours.start || !operatingHours.end) {
+      return true // Se não há horários definidos, permitir
+    }
+    
+    const [timeHour, timeMin] = timeString.split(':').map(Number)
+    const [startHour, startMin] = operatingHours.start.split(':').map(Number)
+    const [endHour, endMin] = operatingHours.end.split(':').map(Number)
+    
+    const timeMinutes = timeHour * 60 + timeMin
+    const startMinutes = startHour * 60 + startMin
+    const endMinutes = endHour * 60 + endMin
+    
+    return timeMinutes >= startMinutes && timeMinutes < endMinutes
+  }
+
+  // Função para verificar se há capacidade disponível em um horário e coluna específica
+  const hasCapacityAvailable = (timeString, colIndex) => {
+    // Verificar se a coluna está dentro da capacidade máxima
+    if (colIndex >= maxCapacity) {
+      return false
+    }
+    
+    // Se há timeSlots, verificar se o horário existe
+    // Não verificar slot.is_available porque isso verifica capacidade geral,
+    // não por coluna. A verificação de área vazia (isAreaEmpty) já garante
+    // que esta coluna específica está disponível.
+    if (timeSlots.length > 0) {
+      const slot = timeSlots.find(s => s.time === timeString)
+      if (!slot) {
+        // Se não encontrou o slot, pode ser que esteja fora do horário de funcionamento
+        // Mas isso já é verificado por isTimeWithinOperatingHours
+        return true // Permitir, pois outras verificações vão bloquear se necessário
+      }
+    }
+    
+    // A verificação de área vazia (isAreaEmpty) já garante que a coluna está disponível
+    return true
+  }
+
+  // Função para verificar se uma área está vazia (sem agendamentos sobrepostos)
+  const isAreaEmpty = (top, height, colIndex) => {
+    const columnAppointments = appointmentsByColumn[colIndex] || []
+    
+    // Verificar se há agendamentos sobrepostos nesta coluna
+    for (const appointment of columnAppointments) {
+      if (!appointment.date) continue
+      const aptDate = getDateString(appointment.date)
+      if (aptDate !== currentDateISO) continue
+      
+      const aptTop = calculateCardTop(dateUtils.formatTime(appointment.time))
+      const aptHeight = calculateCardHeight(appointment)
+      const aptBottom = aptTop + aptHeight
+      const clickedBottom = top + height
+      
+      // Verificar sobreposição
+      if (top < aptBottom && clickedBottom > aptTop) {
+        return false // Há sobreposição
+      }
+    }
+    
+    return true // Área está vazia
+  }
+
+  // Função para lidar com clique em área vazia
+  const handleEmptyAreaClick = (timeString, colIndex) => {
+    // Verificar permissão
+    if (!hasPermission('create_appointment', 'editor')) {
+      return
+    }
+    
+    // Verificar se a coluna está dentro da capacidade máxima
+    if (colIndex >= maxCapacity) {
+      return
+    }
+    
+    // Verificar se está dentro do horário de funcionamento
+    if (!isTimeWithinOperatingHours(timeString)) {
+      return
+    }
+    
+    // Verificar se há capacidade disponível nesta coluna
+    if (!hasCapacityAvailable(timeString, colIndex)) {
+      return
+    }
+    
+    // Verificar se a área está vazia (sem agendamentos sobrepostos)
+    const slotHeight = HOUR_HEIGHT / 2 // 30 minutos
+    const top = calculateCardTop(timeString)
+    if (!isAreaEmpty(top, slotHeight, colIndex)) {
+      return
+    }
+    
+    // Calcular horário final (30 minutos depois)
+    const [hour, min] = timeString.split(':').map(Number)
+    const endHour = min === 30 ? (hour + 1) % 24 : hour
+    const endMin = min === 30 ? 0 : 30
+    const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`
+
+    // Abrir formulário com dados pré-preenchidos
+    setEditingAppointment(null)
+    setShowAppointmentForm(true)
+    
+    setTimeout(() => {
+      setEditingAppointment({
+        date: currentDateISO,
+        time: timeString,
+        time_end: endTime,
+        plant_id: selectedPlantId
+      })
+    }, 100)
   }
 
   // Handler para abrir drawer com detalhes do agendamento
@@ -1318,10 +1489,10 @@ const AdminDashboard = ({ user, token }) => {
                     <div 
                       key={`column-${colIndex}`}
                       className="relative border-r border-gray-200/50 last:border-r-0"
-                      style={{ minHeight: `${timelineHeight}px` }}
+                      style={{ minHeight: `${timelineHeight}px`, position: 'relative' }}
                     >
                       {/* Fundo sutil para indicar lane disponível */}
-                      <div className="absolute inset-0 bg-gray-50/30" />
+                      <div className="absolute inset-0 bg-gray-50/30 pointer-events-none" />
                       
                       {/* Linhas guia de horário dentro de cada coluna - Proporcionais (00:00 às 23:00) */}
                       {Array.from({ length: 24 }, (_, i) => {
@@ -1331,7 +1502,7 @@ const AdminDashboard = ({ user, token }) => {
                           <div
                             key={`guide-col-${colIndex}-${hour}`}
                             className="absolute left-0 right-0 border-b border-gray-200"
-                            style={{ top: `${top}px`, height: `${HOUR_HEIGHT}px`, pointerEvents: 'none' }}
+                            style={{ top: `${top}px`, height: `${HOUR_HEIGHT}px`, pointerEvents: 'none', zIndex: 1 }}
                           />
                         )
                       })}
@@ -1345,8 +1516,76 @@ const AdminDashboard = ({ user, token }) => {
                           <div
                             key={`guide-half-col-${colIndex}-${i}`}
                             className="absolute left-0 right-0 border-b border-dashed border-gray-100"
-                            style={{ top: `${top}px`, height: `${HOUR_HEIGHT / 2}px`, pointerEvents: 'none' }}
+                            style={{ top: `${top}px`, height: `${HOUR_HEIGHT / 2}px`, pointerEvents: 'none', zIndex: 1 }}
                           />
+                        )
+                      })}
+                      
+                      {/* Áreas clicáveis vazias em todas as colunas - slots de 30 minutos - renderizadas depois para ficarem acima */}
+                      {hasPermission('create_appointment', 'editor') && Array.from({ length: 48 }, (_, i) => {
+                        const hour = Math.floor(i / 2)
+                        const isHalfHour = i % 2 === 1
+                        const top = hour * HOUR_HEIGHT + (isHalfHour ? HOUR_HEIGHT / 2 : 0)
+                        const timeString = `${hour.toString().padStart(2, '0')}:${isHalfHour ? '30' : '00'}`
+                        
+                        // Verificar se a coluna está dentro da capacidade máxima
+                        const isWithinCapacity = colIndex < maxCapacity
+                        
+                        // Verificar se está dentro do horário de funcionamento
+                        const isWithinHours = isTimeWithinOperatingHours(timeString)
+                        
+                        // Verificar se há capacidade disponível nesta coluna
+                        const hasCapacity = hasCapacityAvailable(timeString, colIndex)
+                        
+                        // Verificar se a área está vazia
+                        const isEmpty = isAreaEmpty(top, HOUR_HEIGHT / 2, colIndex)
+                        
+                        // Área clicável apenas se: dentro da capacidade, dentro do funcionamento, tem capacidade, está vazia
+                        const isClickable = isWithinCapacity && isWithinHours && hasCapacity && isEmpty
+                        
+                        return (
+                          <div
+                            key={`clickable-slot-${colIndex}-${i}`}
+                            className={`absolute left-0 right-0 border-b border-dashed transition-all duration-200 ${
+                              isClickable
+                                ? 'border-blue-300/60 hover:border-blue-400 hover:bg-blue-100/40 cursor-pointer group'
+                                : 'border-transparent'
+                            }`}
+                            style={{ 
+                              top: `${top}px`, 
+                              height: `${HOUR_HEIGHT / 2}px`,
+                              zIndex: isClickable ? 8 : 0, // Acima das linhas de guia (z-index 1), abaixo dos cards (z-index 10+)
+                              pointerEvents: isClickable ? 'auto' : 'none'
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation() // Evitar propagação
+                              e.preventDefault() // Prevenir comportamento padrão
+                              if (isClickable) {
+                                handleEmptyAreaClick(timeString, colIndex)
+                              }
+                            }}
+                            title={
+                              isClickable
+                                ? `Clique para agendar às ${timeString} (Coluna ${colIndex + 1})`
+                                : !isWithinCapacity
+                                  ? `Coluna ${colIndex + 1} fora da capacidade máxima (${maxCapacity})`
+                                  : !isWithinHours
+                                    ? 'Fora do horário de funcionamento'
+                                    : !hasCapacity
+                                      ? 'Capacidade máxima atingida'
+                                      : !isEmpty
+                                        ? 'Horário ocupado'
+                                        : `Coluna ${colIndex + 1} - Indisponível`
+                            }
+                          >
+                            {isClickable && (
+                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                <div className="bg-blue-500/90 text-white text-xs font-medium px-2 py-1 rounded shadow-lg">
+                                  {timeString}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         )
                       })}
 
