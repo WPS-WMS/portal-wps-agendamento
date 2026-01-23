@@ -256,6 +256,12 @@ const Login = ({ onLogin }) => {
                     setError('')
                   }
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !loading && !isSubmittingRef.current) {
+                    e.preventDefault()
+                    handleSubmit(e)
+                  }
+                }}
                 onInvalid={(e) => {
                   e.preventDefault()
                 }}
@@ -278,6 +284,12 @@ const Login = ({ onLogin }) => {
                     if (error) {
                       setFieldErrors(prev => ({ ...prev, password: false }))
                       setError('')
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !loading && !isSubmittingRef.current) {
+                      e.preventDefault()
+                      handleSubmit(e)
                     }
                   }}
                   disabled={loading}
