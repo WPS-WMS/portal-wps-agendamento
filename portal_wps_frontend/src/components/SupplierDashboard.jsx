@@ -727,32 +727,21 @@ const SupplierDashboard = ({ user, token }) => {
       return false
     }
     
-    // Se há timeSlots, verificar se o horário está disponível
+    // Se há timeSlots, verificar se o horário existe
+    // Não verificar slot.is_available porque isso verifica capacidade geral,
+    // não por coluna. A verificação de área vazia (isAreaEmpty) já garante
+    // que esta coluna específica está disponível.
     if (timeSlots.length > 0) {
       const slot = timeSlots.find(s => s.time === timeString)
       if (!slot) {
-        return false // Se não encontrou o slot, não está disponível
-      }
-      
-      // Verificar se o slot está disponível e se há capacidade geral
-      if (!slot.is_available || slot.capacity_used >= slot.capacity_max) {
-        return false
+        // Se não encontrou o slot, pode ser que esteja fora do horário de funcionamento
+        // Mas isso já é verificado por isTimeWithinOperatingHours
+        return true // Permitir, pois outras verificações vão bloquear se necessário
       }
     }
     
-    // Verificar quantos agendamentos já existem neste horário em todas as colunas
-    const appointmentsAtTime = filteredAppointments.filter(apt => {
-      if (!apt.date) return false
-      const aptDate = getDateString(apt.date)
-      if (aptDate !== currentDateISO) return false
-      
-      const aptTime = dateUtils.formatTime(apt.time)
-      return aptTime === timeString
-    })
-    
-    // Se já há agendamentos suficientes para preencher todas as colunas, não há capacidade
-    // Mas permitir se a coluna específica está vazia
-    return true // A verificação de área vazia já garante que a coluna está disponível
+    // A verificação de área vazia (isAreaEmpty) já garante que a coluna está disponível
+    return true
   }
 
   // Função para verificar se uma área está vazia (sem agendamentos sobrepostos)
@@ -1711,7 +1700,7 @@ const SupplierDashboard = ({ user, token }) => {
                     <div 
                       key={`column-${colIndex}`}
                       className="relative border-r border-gray-200/50 last:border-r-0"
-                      style={{ minHeight: `${timelineHeight}px` }}
+                      style={{ minHeight: `${timelineHeight}px`, position: 'relative' }}
                     >
                       <div className="absolute inset-0 bg-gray-50/30 pointer-events-none" />
                       
@@ -1763,6 +1752,20 @@ const SupplierDashboard = ({ user, token }) => {
                         // Área clicável apenas se: dentro da capacidade, dentro do funcionamento, tem capacidade, está vazia
                         const isClickable = isWithinCapacity && isWithinHours && hasCapacity && isEmpty
                         
+                        // Debug: log apenas para a primeira coluna e primeira vez
+                        if (colIndex === 1 && i === 0) {
+                          console.log('Debug clickable areas:', {
+                            colIndex,
+                            timeString,
+                            maxCapacity,
+                            isWithinCapacity,
+                            isWithinHours,
+                            hasCapacity,
+                            isEmpty,
+                            isClickable
+                          })
+                        }
+                        
                         return (
                           <div
                             key={`clickable-slot-${colIndex}-${i}`}
@@ -1774,25 +1777,36 @@ const SupplierDashboard = ({ user, token }) => {
                             style={{ 
                               top: `${top}px`, 
                               height: `${HOUR_HEIGHT / 2}px`,
-                              zIndex: isClickable ? 5 : 0, // Acima das linhas de guia (z-index 1), abaixo dos cards (z-index 10+)
-                              pointerEvents: isClickable ? 'auto' : 'none'
+                              zIndex: isClickable ? 8 : 0, // Acima das linhas de guia (z-index 1), abaixo dos cards (z-index 10+), mas acima quando não há cards
+                              pointerEvents: isClickable ? 'auto' : 'none',
+                              // Debug: garantir que o elemento está presente
+                              backgroundColor: isClickable ? 'transparent' : 'transparent'
                             }}
                             onClick={(e) => {
                               e.stopPropagation() // Evitar propagação
+                              e.preventDefault() // Prevenir comportamento padrão
+                              console.log('Click detected:', { timeString, colIndex, isClickable, isWithinCapacity, isWithinHours, hasCapacity, isEmpty })
                               if (isClickable) {
                                 handleEmptyAreaClick(timeString, colIndex)
                               }
                             }}
+                            onMouseEnter={() => {
+                              if (isClickable) {
+                                console.log('Hover on clickable area:', { timeString, colIndex })
+                              }
+                            }}
                             title={
                               isClickable
-                                ? `Clique para agendar às ${timeString}`
-                                : !isWithinHours
-                                  ? 'Fora do horário de funcionamento'
-                                  : !hasCapacity
-                                    ? 'Capacidade máxima atingida'
-                                    : !isEmpty
-                                      ? 'Horário ocupado'
-                                      : ''
+                                ? `Clique para agendar às ${timeString} (Coluna ${colIndex + 1})`
+                                : !isWithinCapacity
+                                  ? `Coluna ${colIndex + 1} fora da capacidade máxima (${maxCapacity})`
+                                  : !isWithinHours
+                                    ? 'Fora do horário de funcionamento'
+                                    : !hasCapacity
+                                      ? 'Capacidade máxima atingida'
+                                      : !isEmpty
+                                        ? 'Horário ocupado'
+                                        : `Coluna ${colIndex + 1} - Indisponível`
                             }
                           />
                         )
