@@ -132,6 +132,9 @@ def get_supplier_appointments(current_user):
         
         # Converter para dicionário
         result = []
+        own_appointment_times = set()  # Armazenar (date, time, plant_id) dos próprios agendamentos
+        
+        # Processar agendamentos do próprio fornecedor
         for appointment in appointments:
             appointment_dict = appointment.to_dict()
             # Buscar informações do fornecedor usando o relacionamento ou query direta
@@ -156,8 +159,86 @@ def get_supplier_appointments(current_user):
                 logger.warning(f"Supplier não encontrado para appointment {appointment.id} com supplier_id {appointment.supplier_id}")
             
             appointment_dict['is_own'] = True  # Todos são do próprio fornecedor
+            appointment_dict['is_blocked'] = False
             appointment_dict['can_edit'] = appointment.status == 'scheduled'
             result.append(appointment_dict)
+            
+            # Armazenar horário para buscar conflitos
+            if plant_id is not None and appointment.plant_id == plant_id:
+                own_appointment_times.add((appointment.date, appointment.time, appointment.plant_id))
+        
+        # Se houver plant_id, buscar agendamentos de outros fornecedores na mesma planta
+        # para mostrar como bloqueados quando estiverem no mesmo horário dos próprios agendamentos
+        if plant_id is not None:
+            from sqlalchemy import and_
+            # Buscar agendamentos de outros fornecedores na mesma planta
+            blocked_query = Appointment.query.filter(
+                and_(
+                    Appointment.supplier_id != current_user.supplier_id,
+                    Appointment.plant_id == plant_id,
+                    Appointment.date >= start_date,
+                    Appointment.date <= end_date,
+                    Appointment.company_id == current_user.company_id
+                )
+            )
+            
+            blocked_appointments = blocked_query.order_by(Appointment.date, Appointment.time).all()
+            
+            # Coletar todos os horários únicos dos próprios agendamentos para verificar sobreposição
+            own_appointment_time_ranges = []
+            for appointment in appointments:
+                if plant_id is not None and appointment.plant_id == plant_id:
+                    start_time = appointment.time
+                    end_time = appointment.time_end if appointment.time_end else appointment.time
+                    own_appointment_time_ranges.append((appointment.date, start_time, end_time, appointment.plant_id))
+            
+            # Filtrar agendamentos de outros fornecedores que estão no mesmo horário dos próprios
+            for blocked_apt in blocked_appointments:
+                blocked_start = blocked_apt.time
+                blocked_end = blocked_apt.time_end if blocked_apt.time_end else blocked_apt.time
+                
+                # Verificar se há sobreposição com algum agendamento próprio
+                has_overlap = False
+                for own_date, own_start, own_end, own_plant_id in own_appointment_time_ranges:
+                    if blocked_apt.date == own_date and blocked_apt.plant_id == own_plant_id:
+                        # Converter horários para minutos para comparar
+                        def time_to_minutes(time_str):
+                            h, m = map(int, time_str.split(':'))
+                            return h * 60 + m
+                        
+                        blocked_start_min = time_to_minutes(str(blocked_start))
+                        blocked_end_min = time_to_minutes(str(blocked_end))
+                        own_start_min = time_to_minutes(str(own_start))
+                        own_end_min = time_to_minutes(str(own_end))
+                        
+                        # Verificar sobreposição: start1 < end2 && start2 < end1
+                        if blocked_start_min < own_end_min and own_start_min < blocked_end_min:
+                            has_overlap = True
+                            break
+                
+                if has_overlap:
+                    # Este agendamento está no mesmo horário de um agendamento próprio
+                    blocked_dict = blocked_apt.to_dict()
+                    
+                    # Buscar informações do fornecedor
+                    blocked_supplier = None
+                    try:
+                        blocked_supplier = blocked_apt.supplier
+                    except:
+                        if blocked_apt.supplier_id:
+                            blocked_supplier = Supplier.query.filter_by(
+                                id=blocked_apt.supplier_id,
+                                is_deleted=False,
+                                company_id=current_user.company_id
+                            ).first()
+                    
+                    if blocked_supplier:
+                        blocked_dict['supplier'] = blocked_supplier.to_dict()
+                    
+                    blocked_dict['is_own'] = False
+                    blocked_dict['is_blocked'] = True  # Marcar como bloqueado
+                    blocked_dict['can_edit'] = False
+                    result.append(blocked_dict)
         
         return jsonify(result), 200
         

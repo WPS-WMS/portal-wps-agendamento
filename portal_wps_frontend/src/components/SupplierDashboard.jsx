@@ -1691,8 +1691,16 @@ const SupplierDashboard = ({ user, token }) => {
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <Card 
-                                className={`h-full w-full bg-white border-l-4 ${getStatusBorderColor(appointment.status)} hover:shadow-xl hover:scale-[1.02] transition-all cursor-pointer group`}
-                                onClick={() => handleCardClick(appointment)}
+                                className={`h-full w-full border-l-4 transition-all ${
+                                  appointment.is_blocked 
+                                    ? 'bg-gray-100/50 border-gray-300 opacity-60 cursor-not-allowed' 
+                                    : `bg-white ${getStatusBorderColor(appointment.status)} hover:shadow-xl hover:scale-[1.02] cursor-pointer group`
+                                }`}
+                                onClick={() => {
+                                  if (!appointment.is_blocked) {
+                                    handleCardClick(appointment)
+                                  }
+                                }}
                               >
                                 <CardContent className="p-2 h-full w-full flex flex-col justify-center">
                                   <div className="flex items-start justify-between gap-1.5">
@@ -1703,16 +1711,26 @@ const SupplierDashboard = ({ user, token }) => {
                                           {appointment.appointment_number}
                                         </p>
                                       )}
-                                      <CardTitle className="text-sm font-bold text-gray-900 truncate leading-tight">
+                                      <CardTitle className={`text-sm font-bold truncate leading-tight ${
+                                        appointment.is_blocked ? 'text-gray-500' : 'text-gray-900'
+                                      }`}>
                                         {supplierName}
                                       </CardTitle>
-                                      <p className="text-xs text-gray-500 mt-0.5 leading-tight">
+                                      <p className={`text-xs mt-0.5 leading-tight ${
+                                        appointment.is_blocked ? 'text-gray-400' : 'text-gray-500'
+                                      }`}>
                                         {dateUtils.formatTimeRange(appointment.time, appointment.time_end)}
                                       </p>
                                     </div>
-                                    <Badge className={`text-[10px] px-1.5 py-0.5 shrink-0 ${statusUtils.getStatusColor(appointment.status)}`}>
-                                      {statusUtils.getStatusLabel(appointment.status)}
-                                    </Badge>
+                                    {appointment.is_blocked ? (
+                                      <Badge className="text-[10px] px-1.5 py-0.5 shrink-0 bg-gray-400 text-white">
+                                        Bloqueado
+                                      </Badge>
+                                    ) : (
+                                      <Badge className={`text-[10px] px-1.5 py-0.5 shrink-0 ${statusUtils.getStatusColor(appointment.status)}`}>
+                                        {statusUtils.getStatusLabel(appointment.status)}
+                                      </Badge>
+                                    )}
                                   </div>
                                   
                                   {contentLevel === 'minimal' ? (
@@ -1760,7 +1778,11 @@ const SupplierDashboard = ({ user, token }) => {
                                 <div>
                                   <p className="font-semibold text-sm">{supplierName}</p>
                                   <p className="text-xs text-gray-500 mt-0.5">{dateUtils.formatTimeRange(appointment.time, appointment.time_end)}</p>
+                                  {appointment.is_blocked && (
+                                    <p className="text-xs text-gray-400 mt-1 italic">Agendamento de outro fornecedor no mesmo horário</p>
+                                  )}
                                 </div>
+                                {!appointment.is_blocked && (
                                 <div className="space-y-1 text-xs border-t pt-2">
                                   {appointment.appointment_number && (
                                     <p className="font-mono text-blue-600">
@@ -1780,11 +1802,13 @@ const SupplierDashboard = ({ user, token }) => {
                                   )}
                                   <p className="text-gray-500 mt-1">Clique para ver detalhes completos</p>
                                 </div>
+                                )}
                               </div>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                         
+                        {!appointment.is_blocked && (
                         <div className="absolute bottom-1 right-1 flex items-center gap-0.5 opacity-80 group-hover:opacity-100 transition-opacity z-20">
                           <TooltipProvider>
                             {(appointment.status !== 'checked_in' && appointment.status !== 'checked_out') && hasPermission('edit_appointment', 'editor') && (
@@ -1868,6 +1892,7 @@ const SupplierDashboard = ({ user, token }) => {
                             )}
                           </TooltipProvider>
                         </div>
+                        )}
                       </div>
                         )
                       })}
