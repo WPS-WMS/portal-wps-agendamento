@@ -170,3 +170,6 @@ portal_wps_backend/database.db
 portal_wps_backend/src/database/*.db
 portal_wps_backend/src/database/*.sqlite
 portal_wps_backend/src/database/*.sqlite3
+
+# Firebase
+.firebase/

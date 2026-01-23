@@ -20,17 +20,17 @@ O sistema de recuperação de senha requer a configuração de um serviço de e-
      - `SMTP_FROM_EMAIL=noreply@seudominio.com`
 
 
-### 2 SMTP Próprio (Gmail, Outlook, etc.)
-- **Gmail**: Requer "App Password" (não funciona com senha normal)
-- **Como configurar Gmail**:
-  1. Ativar verificação em 2 etapas
-  2. Gerar "App Password" em https://myaccount.google.com/apppasswords
+### 2. SMTP Próprio (Outlook)
+- **Outlook**: Requer "App Password" (não funciona com senha normal)
+- **Como configurar Outlook**:
+  1. Ativar verificação em 2 etapas na sua conta Microsoft
+  2. Gerar "App Password" em https://account.microsoft.com/security/app-passwords
   3. Adicionar variáveis de ambiente no Railway:
-     - `SMTP_HOST=smtp.gmail.com`
+     - `SMTP_HOST=smtp-mail.outlook.com`
      - `SMTP_PORT=587`
-     - `SMTP_USER=seu-email@gmail.com`
+     - `SMTP_USER=seu-email@outlook.com` (ou @hotmail.com, @live.com)
      - `SMTP_PASSWORD=<app-password-gerado>`
-     - `SMTP_FROM_EMAIL=seu-email@gmail.com`
+     - `SMTP_FROM_EMAIL=seu-email@outlook.com`
 
 ## Variáveis de Ambiente Necessárias
 
@@ -111,7 +111,7 @@ Após configurar as variáveis:
 
 ### Erro "Authentication failed"
 - Verifique se as credenciais SMTP estão corretas
-- Para Gmail, certifique-se de usar "App Password", não a senha normal
+- Para Outlook, certifique-se de usar "App Password", não a senha normal
 - Para SendGrid, use `apikey` como usuário e a API Key como senha
 
 ### E-mails indo para spam
