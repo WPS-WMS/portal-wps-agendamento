@@ -236,6 +236,12 @@ export const supplierAPI = {
     const response = await apiClient.get('/supplier/plants')
     return response.data
   },
+  getPlantTimeSlots: async (plantId, date) => {
+    const response = await apiClient.get(`/supplier/plants/${plantId}/time-slots`, {
+      params: { date }
+    })
+    return response.data
+  },
   getAppointments: async (week, plantId = null) => {
     // O backend do fornecedor espera 'week' (início da semana) em vez de 'date'
     // Converter week para string ISO se necessário

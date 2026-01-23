@@ -77,6 +77,10 @@ const SupplierDashboard = ({ user, token }) => {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [showUsersScreen, setShowUsersScreen] = useState(false)
+  // Slots de 30 minutos para seleção direta
+  const [timeSlots, setTimeSlots] = useState([])
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [operatingHours, setOperatingHours] = useState({ start: '08:00', end: '17:00' })
 
   // Helper para escolher API baseada em permissões
   const getAPI = (resource) => {
@@ -167,6 +171,34 @@ const SupplierDashboard = ({ user, token }) => {
     }
   }
 
+  const loadTimeSlots = async (plantId, date) => {
+    if (!plantId || !date) {
+      setTimeSlots([])
+      setOperatingHours({ start: '08:00', end: '17:00' })
+      return
+    }
+
+    try {
+      setLoadingSlots(true)
+      const dateStr = dateUtils.toISODate(date)
+      const data = await supplierAPI.getPlantTimeSlots(plantId, dateStr)
+      
+      if (data && data.slots) {
+        setTimeSlots(data.slots)
+        if (data.operating_hours) {
+          setOperatingHours(data.operating_hours)
+        }
+      } else {
+        setTimeSlots([])
+      }
+    } catch (err) {
+      console.error('Erro ao carregar slots de tempo:', err)
+      setTimeSlots([])
+    } finally {
+      setLoadingSlots(false)
+    }
+  }
+
 
   // Carregar plantas e fornecedores quando o componente montar ou o usuário mudar
   useEffect(() => {
@@ -215,6 +247,26 @@ const SupplierDashboard = ({ user, token }) => {
     loadAppointments(dateToLoad, selectedPlantId || null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate?.getTime(), activeTab, selectedPlantId])
+
+  // Carregar slots de tempo quando planta ou data mudarem
+  useEffect(() => {
+    if (selectedPlantId && currentDate && !isNaN(currentDate.getTime())) {
+      // Verificar se a data não é no passado
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const selectedDate = new Date(currentDate)
+      selectedDate.setHours(0, 0, 0, 0)
+      
+      if (selectedDate >= today) {
+        loadTimeSlots(selectedPlantId, currentDate)
+      } else {
+        setTimeSlots([])
+      }
+    } else {
+      setTimeSlots([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPlantId, currentDate?.getTime()])
   
   // Handler para mudança de planta
   const handlePlantChange = (plantId) => {
@@ -628,6 +680,34 @@ const SupplierDashboard = ({ user, token }) => {
     const totalMinutes = hour * 60 + min
     const hoursFromStart = totalMinutes / 60
     return hoursFromStart * HOUR_HEIGHT
+  }
+
+  const calculateSlotTop = (timeString) => {
+    const [hour, min] = timeString.split(':').map(Number)
+    const totalMinutes = hour * 60 + min
+    const hoursFromStart = totalMinutes / 60
+    return hoursFromStart * HOUR_HEIGHT
+  }
+
+  const handleSlotClick = (slot) => {
+    if (!slot.is_available || !hasPermission('create_appointment', 'editor')) {
+      return
+    }
+
+    // Calcular horário final (30 minutos depois)
+    const [hour, min] = slot.time.split(':').map(Number)
+    const endHour = min === 30 ? (hour + 1) % 24 : hour
+    const endMin = min === 30 ? 0 : 30
+    const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`
+
+    // Abrir formulário com dados pré-preenchidos
+    setEditingAppointment({
+      date: currentDateISO,
+      time: slot.time,
+      time_end: endTime,
+      plant_id: selectedPlantId
+    })
+    setShowAppointmentForm(true)
   }
 
   const getStatusBorderColor = (status) => {
@@ -1489,6 +1569,44 @@ const SupplierDashboard = ({ user, token }) => {
                       style={{ minHeight: `${timelineHeight}px` }}
                     >
                       <div className="absolute inset-0 bg-gray-50/30" />
+                      
+                      {/* Slots clicáveis de 30 minutos - apenas na primeira coluna */}
+                      {colIndex === 0 && timeSlots.length > 0 && (
+                        <>
+                          {timeSlots.map((slot, slotIndex) => {
+                            const top = calculateSlotTop(slot.time)
+                            const isAvailable = slot.is_available && hasPermission('create_appointment', 'editor')
+                            
+                            return (
+                              <div
+                                key={`slot-${slotIndex}`}
+                                className={`absolute left-0 right-0 border-b transition-all ${
+                                  isAvailable 
+                                    ? 'border-blue-200 hover:bg-blue-50/50 cursor-pointer' 
+                                    : 'border-gray-300 bg-gray-100/50 cursor-not-allowed opacity-50'
+                                }`}
+                                style={{ 
+                                  top: `${top}px`, 
+                                  height: `${HOUR_HEIGHT / 2}px`,
+                                  zIndex: 1
+                                }}
+                                onClick={() => handleSlotClick(slot)}
+                                title={
+                                  isAvailable 
+                                    ? `Clique para agendar às ${slot.time}` 
+                                    : `Indisponível - ${slot.capacity_used}/${slot.capacity_max} agendamentos`
+                                }
+                              >
+                                {isAvailable && (
+                                  <div className="h-full flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                    <span className="text-xs text-blue-600 font-medium">{slot.time}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </>
+                      )}
                       
                       {Array.from({ length: 24 }, (_, i) => {
                         const hour = i
