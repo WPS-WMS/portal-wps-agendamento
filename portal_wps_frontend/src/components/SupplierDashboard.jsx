@@ -496,20 +496,17 @@ const SupplierDashboard = ({ user, token }) => {
       // Chamar a API primeiro antes de atualizar a UI
       await supplierAPI.deleteAppointment(appointmentId)
       
-      // Verificar se a resposta indica sucesso (mesmo que vazia)
-      // Status 200-299 são considerados sucesso pelo axios
-      
-      // Remover o agendamento da lista após confirmação do backend
-      setAppointments(prev => prev.filter(apt => apt.id !== appointmentId))
-      
       // Fechar drawer se estiver aberto com o agendamento excluído
       if (selectedAppointment && selectedAppointment.id === appointmentId) {
         setDrawerOpen(false)
         setSelectedAppointment(null)
       }
       
-      // Recarregar agendamentos para garantir sincronização com o backend
+      // Recarregar agendamentos e timeSlots para garantir sincronização com o backend
       await loadAppointments(currentDate, selectedPlantId)
+      if (selectedPlantId && currentDate && !isNaN(currentDate.getTime())) {
+        await loadTimeSlots(selectedPlantId, currentDate)
+      }
     } catch (err) {
       // Se houver erro, recarregar a lista para restaurar o estado correto
       await loadAppointments(currentDate, selectedPlantId)
@@ -524,6 +521,10 @@ const SupplierDashboard = ({ user, token }) => {
     setShowAppointmentForm(false)
     setEditingAppointment(null)
     await loadAppointments(currentDate, selectedPlantId)
+    // Recarregar timeSlots para atualizar capacity_used após criar/editar agendamento
+    if (selectedPlantId && currentDate && !isNaN(currentDate.getTime())) {
+      await loadTimeSlots(selectedPlantId, currentDate)
+    }
   }
 
   // Função para normalizar datas sem problemas de timezone
