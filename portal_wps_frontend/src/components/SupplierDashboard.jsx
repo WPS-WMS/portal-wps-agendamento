@@ -800,13 +800,14 @@ const SupplierDashboard = ({ user, token }) => {
       return false
     }
     
-    // Verificar se o fornecedor logado tem algum agendamento neste horário
+    // Contar quantos agendamentos o fornecedor logado tem neste horário
     // Um slot de 30 minutos verifica se há agendamento que se sobrepõe a ele
     const [slotHour, slotMin] = timeString.split(':').map(Number)
     const slotMinutes = slotHour * 60 + slotMin
+    const slotEndMinutes = slotMinutes + 30 // Slot de 30 minutos
     
-    // Verificar se há agendamentos do próprio fornecedor que se sobrepõem a este slot
-    const hasOwnAppointment = filteredAppointments.some(apt => {
+    // Contar agendamentos do próprio fornecedor que se sobrepõem a este slot
+    const ownAppointmentsCount = filteredAppointments.filter(apt => {
       if (!apt.date) return false
       const aptDate = getDateString(apt.date)
       if (aptDate !== currentDateISO) return false
@@ -819,15 +820,14 @@ const SupplierDashboard = ({ user, token }) => {
       
       const aptStartMinutes = aptStartHour * 60 + aptStartMin
       const aptEndMinutes = aptEndHour * 60 + aptEndMin
-      const slotEndMinutes = slotMinutes + 30 // Slot de 30 minutos
       
       // Verificar sobreposição: o slot se sobrepõe ao agendamento
       return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
-    })
+    }).length
     
-    // Se há agendamentos (capacity_used > 0) E o fornecedor logado não tem agendamento,
+    // Se há mais agendamentos (capacity_used) do que os do fornecedor logado,
     // significa que há outros fornecedores com agendamentos
-    return !hasOwnAppointment
+    return slot.capacity_used > ownAppointmentsCount
   }
 
   // Função para encontrar a última coluna disponível (sem agendamentos do fornecedor logado)
