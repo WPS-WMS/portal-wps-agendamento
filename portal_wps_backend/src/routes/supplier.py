@@ -914,29 +914,50 @@ def get_plant_time_slots(current_user, plant_id):
             if slot_time >= end_time:
                 break
             
-            # Verificar capacidade para este slot
-            # Um slot de 30 minutos está disponível se houver capacidade no horário de 1 hora correspondente
-            # Exemplo: slot 08:30 verifica capacidade em 08:00
-            hour_slot = time(slot_time.hour, 0)
-            
-            # Contar agendamentos que ocupam este horário de 1 hora
+            # Verificar capacidade para este slot de 30 minutos
+            # Um agendamento ocupa um slot de 30 minutos se se sobrepõe a ele
+            # Exemplo: slot 13:00-13:30 é ocupado por agendamento 13:00-13:30 ou 12:30-14:00
             from sqlalchemy import or_, and_
+            
+            # Calcular início e fim do slot de 30 minutos
+            slot_start = slot_time
+            slot_end_minutes = (slot_time.hour * 60 + slot_time.minute + 30) % (24 * 60)
+            slot_end_hour = slot_end_minutes // 60
+            slot_end_min = slot_end_minutes % 60
+            slot_end = time(slot_end_hour, slot_end_min)
+            
+            # Calcular slot_start - 1h para verificar agendamentos antigos
+            # Agendamentos antigos (sem time_end) duram 1 hora
+            if slot_start.hour > 0:
+                slot_start_minus_1h = time(slot_start.hour - 1, slot_start.minute)
+            else:
+                slot_start_minus_1h = time(23, slot_start.minute)
+            
+            # Contar agendamentos que se sobrepõem a este slot de 30 minutos
+            # Um agendamento se sobrepõe se: start < slot_end && slot_start < end
+            # Para agendamentos antigos (sem time_end), assumir duração de 1 hora
+            # Então um agendamento antigo que começa em T ocupa T até T+1h
+            # Se sobrepõe se: T < slot_end && T + 1h > slot_start
+            # Isso é equivalente a: T < slot_end && T > slot_start - 1h
             count = Appointment.query.filter(
                 Appointment.date == target_date,
                 Appointment.plant_id == plant_id,
                 Appointment.company_id == current_user.company_id
             ).filter(
                 or_(
-                    # Agendamento antigo que começa neste horário
+                    # Agendamento antigo (sem time_end) - assumir duração de 1 hora
+                    # Se sobrepõe se: time < slot_end && time > slot_start - 1h
                     and_(
-                        Appointment.time == hour_slot,
-                        Appointment.time_end.is_(None)
+                        Appointment.time_end.is_(None),
+                        Appointment.time < slot_end,
+                        Appointment.time > slot_start_minus_1h
                     ),
-                    # Agendamento com intervalo que inclui este horário
+                    # Agendamento com intervalo que se sobrepõe ao slot
+                    # start < slot_end && slot_start < end
                     and_(
-                        Appointment.time <= hour_slot,
                         Appointment.time_end.isnot(None),
-                        Appointment.time_end > hour_slot
+                        Appointment.time < slot_end,
+                        Appointment.time_end > slot_start
                     )
                 )
             ).count()
