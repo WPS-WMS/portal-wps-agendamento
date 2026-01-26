@@ -768,6 +768,53 @@ const SupplierDashboard = ({ user, token }) => {
     return true // Área está vazia
   }
 
+  // Função para verificar se um horário está com capacidade máxima e o fornecedor não tem agendamento
+  const isSlotUnavailableForSupplier = (timeString) => {
+    // Verificar se há timeSlots carregados
+    if (timeSlots.length === 0) {
+      return false
+    }
+    
+    // Buscar o slot correspondente
+    const slot = timeSlots.find(s => s.time === timeString)
+    if (!slot) {
+      return false
+    }
+    
+    // Verificar se a capacidade máxima foi atingida
+    if (slot.capacity_used < slot.capacity_max) {
+      return false
+    }
+    
+    // Verificar se o fornecedor tem algum agendamento neste horário
+    // Um slot de 30 minutos verifica se há agendamento que se sobrepõe a ele
+    const [slotHour, slotMin] = timeString.split(':').map(Number)
+    const slotMinutes = slotHour * 60 + slotMin
+    
+    // Verificar se há agendamentos do próprio fornecedor que se sobrepõem a este slot
+    const hasOwnAppointment = filteredAppointments.some(apt => {
+      if (!apt.date) return false
+      const aptDate = getDateString(apt.date)
+      if (aptDate !== currentDateISO) return false
+      
+      const aptStartTime = dateUtils.formatTime(apt.time)
+      const aptEndTime = apt.time_end ? dateUtils.formatTime(apt.time_end) : aptStartTime
+      
+      const [aptStartHour, aptStartMin] = aptStartTime.split(':').map(Number)
+      const [aptEndHour, aptEndMin] = aptEndTime.split(':').map(Number)
+      
+      const aptStartMinutes = aptStartHour * 60 + aptStartMin
+      const aptEndMinutes = aptEndHour * 60 + aptEndMin
+      const slotEndMinutes = slotMinutes + 30 // Slot de 30 minutos
+      
+      // Verificar sobreposição: o slot se sobrepõe ao agendamento
+      return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
+    })
+    
+    // Se capacidade máxima E fornecedor não tem agendamento, slot está indisponível
+    return !hasOwnAppointment
+  }
+
   const handleSlotClick = (slot) => {
     // Validação rigorosa: verificar disponibilidade, permissão e capacidade
     if (!slot.is_available || 
@@ -1749,21 +1796,27 @@ const SupplierDashboard = ({ user, token }) => {
                         // Verificar se a área está vazia
                         const isEmpty = isAreaEmpty(top, HOUR_HEIGHT / 2, colIndex)
                         
-                        // Área clicável apenas se: dentro da capacidade, dentro do funcionamento, tem capacidade, está vazia
-                        const isClickable = isWithinCapacity && isWithinHours && hasCapacity && isEmpty
+                        // Verificar se este slot está indisponível (capacidade máxima atingida e fornecedor não tem agendamento)
+                        // Mostrar apenas na última coluna (mais à direita)
+                        const isUnavailable = colIndex === maxCapacity - 1 && isSlotUnavailableForSupplier(timeString)
+                        
+                        // Área clicável apenas se: dentro da capacidade, dentro do funcionamento, tem capacidade, está vazia, e não está indisponível
+                        const isClickable = isWithinCapacity && isWithinHours && hasCapacity && isEmpty && !isUnavailable
                         
                         return (
                           <div
                             key={`clickable-slot-${colIndex}-${i}`}
                             className={`absolute left-1 right-1 transition-all duration-200 ${
-                              isClickable
+                              isUnavailable
+                                ? 'border-2 border-dashed border-red-300/60 bg-red-50/20 rounded'
+                                : isClickable
                                 ? 'border-2 border-dashed border-blue-300 bg-blue-50/30 hover:border-blue-400 hover:bg-blue-100/50 cursor-pointer group rounded'
                                 : 'border-transparent'
                             }`}
                             style={{ 
                               top: `${top + 2}px`, 
                               height: `${HOUR_HEIGHT / 2 - 4}px`,
-                              zIndex: isClickable ? 8 : 0, // Acima das linhas de guia (z-index 1), abaixo dos cards (z-index 10+)
+                              zIndex: (isClickable || isUnavailable) ? 8 : 0, // Acima das linhas de guia (z-index 1), abaixo dos cards (z-index 10+)
                               pointerEvents: isClickable ? 'auto' : 'none'
                             }}
                             onClick={(e) => {
@@ -1774,7 +1827,9 @@ const SupplierDashboard = ({ user, token }) => {
                               }
                             }}
                             title={
-                              isClickable
+                              isUnavailable
+                                ? 'Indisponível - Capacidade máxima atingida por outros fornecedores'
+                                : isClickable
                                 ? `Clique para agendar às ${timeString} (Coluna ${colIndex + 1})`
                                 : !isWithinCapacity
                                   ? `Coluna ${colIndex + 1} fora da capacidade máxima (${maxCapacity})`
@@ -1787,6 +1842,11 @@ const SupplierDashboard = ({ user, token }) => {
                                         : `Coluna ${colIndex + 1} - Indisponível`
                             }
                           >
+                            {isUnavailable && (
+                              <div className="absolute inset-0 flex items-center justify-center opacity-50 pointer-events-none">
+                                <span className="text-[10px] text-red-600 font-medium">Indisponível</span>
+                              </div>
+                            )}
                             {isClickable && (
                               <>
                                 {/* Texto "Disponível" sempre visível, mas mais sutil */}
