@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +10,7 @@ import { Loader2, Truck, Eye, EyeOff } from 'lucide-react'
 import { authAPI } from '../lib/api'
 
 const Login = ({ onLogin }) => {
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -102,6 +104,8 @@ const Login = ({ onLogin }) => {
       localStorage.setItem('token', data.token)
       localStorage.setItem('user', JSON.stringify(data.user))
       onLogin(data.user, data.token)
+      // Redirecionar para o dashboard após login bem-sucedido
+      navigate('/dashboard')
     } catch (err) {
       // IMPORTANTE: Não limpar os campos email e password - mantê-los preenchidos
       let errorMessage = 'Dados inválidos'
