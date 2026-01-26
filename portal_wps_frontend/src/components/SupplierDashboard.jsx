@@ -768,8 +768,8 @@ const SupplierDashboard = ({ user, token }) => {
     return true // Área está vazia
   }
 
-  // Função para verificar se um horário está com capacidade máxima e o fornecedor não tem agendamento
-  const isSlotUnavailableForSupplier = (timeString) => {
+  // Função para verificar se há agendamentos de outros fornecedores neste horário
+  const hasOtherSuppliersAppointments = (timeString) => {
     // Verificar se há timeSlots carregados
     if (timeSlots.length === 0) {
       return false
@@ -781,12 +781,12 @@ const SupplierDashboard = ({ user, token }) => {
       return false
     }
     
-    // Verificar se a capacidade máxima foi atingida
-    if (slot.capacity_used < slot.capacity_max) {
+    // Se não há agendamentos (capacity_used === 0), não há outros fornecedores
+    if (slot.capacity_used === 0) {
       return false
     }
     
-    // Verificar se o fornecedor tem algum agendamento neste horário
+    // Verificar se o fornecedor logado tem algum agendamento neste horário
     // Um slot de 30 minutos verifica se há agendamento que se sobrepõe a ele
     const [slotHour, slotMin] = timeString.split(':').map(Number)
     const slotMinutes = slotHour * 60 + slotMin
@@ -811,8 +811,48 @@ const SupplierDashboard = ({ user, token }) => {
       return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
     })
     
-    // Se capacidade máxima E fornecedor não tem agendamento, slot está indisponível
+    // Se há agendamentos (capacity_used > 0) E o fornecedor logado não tem agendamento,
+    // significa que há outros fornecedores com agendamentos
     return !hasOwnAppointment
+  }
+
+  // Função para encontrar a última coluna disponível (sem agendamentos do fornecedor logado)
+  const getLastAvailableColumn = (timeString) => {
+    // Verificar em qual coluna mais à direita não há agendamentos do fornecedor logado
+    for (let colIndex = maxCapacity - 1; colIndex >= 0; colIndex--) {
+      const columnAppointments = appointmentsByColumn[colIndex] || []
+      
+      // Verificar se há agendamentos do fornecedor logado nesta coluna neste horário
+      const [slotHour, slotMin] = timeString.split(':').map(Number)
+      const slotMinutes = slotHour * 60 + slotMin
+      const slotEndMinutes = slotMinutes + 30
+      
+      const hasAppointmentInColumn = columnAppointments.some(apt => {
+        if (!apt.date) return false
+        const aptDate = getDateString(apt.date)
+        if (aptDate !== currentDateISO) return false
+        
+        const aptStartTime = dateUtils.formatTime(apt.time)
+        const aptEndTime = apt.time_end ? dateUtils.formatTime(apt.time_end) : aptStartTime
+        
+        const [aptStartHour, aptStartMin] = aptStartTime.split(':').map(Number)
+        const [aptEndHour, aptEndMin] = aptEndTime.split(':').map(Number)
+        
+        const aptStartMinutes = aptStartHour * 60 + aptStartMin
+        const aptEndMinutes = aptEndHour * 60 + aptEndMin
+        
+        // Verificar sobreposição
+        return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
+      })
+      
+      // Se não há agendamento nesta coluna, esta é a última coluna disponível
+      if (!hasAppointmentInColumn) {
+        return colIndex
+      }
+    }
+    
+    // Se todas as colunas têm agendamentos, retornar a última coluna
+    return maxCapacity - 1
   }
 
   const handleSlotClick = (slot) => {
@@ -1796,9 +1836,14 @@ const SupplierDashboard = ({ user, token }) => {
                         // Verificar se a área está vazia
                         const isEmpty = isAreaEmpty(top, HOUR_HEIGHT / 2, colIndex)
                         
-                        // Verificar se este slot está indisponível (capacidade máxima atingida e fornecedor não tem agendamento)
-                        // Mostrar apenas na última coluna (mais à direita)
-                        const isUnavailable = colIndex === maxCapacity - 1 && isSlotUnavailableForSupplier(timeString)
+                        // Verificar se há agendamentos de outros fornecedores neste horário
+                        const hasOtherSuppliers = hasOtherSuppliersAppointments(timeString)
+                        
+                        // Encontrar a última coluna disponível (sem agendamentos do fornecedor logado)
+                        const lastAvailableColumn = hasOtherSuppliers ? getLastAvailableColumn(timeString) : -1
+                        
+                        // Verificar se este slot está indisponível (há outros fornecedores e esta é a última coluna disponível)
+                        const isUnavailable = hasOtherSuppliers && colIndex === lastAvailableColumn
                         
                         // Área clicável apenas se: dentro da capacidade, dentro do funcionamento, tem capacidade, está vazia, e não está indisponível
                         const isClickable = isWithinCapacity && isWithinHours && hasCapacity && isEmpty && !isUnavailable
@@ -1828,7 +1873,7 @@ const SupplierDashboard = ({ user, token }) => {
                             }}
                             title={
                               isUnavailable
-                                ? 'Indisponível - Capacidade máxima atingida por outros fornecedores'
+                                ? 'Indisponível - Outros fornecedores têm agendamentos neste horário'
                                 : isClickable
                                 ? `Clique para agendar às ${timeString} (Coluna ${colIndex + 1})`
                                 : !isWithinCapacity
