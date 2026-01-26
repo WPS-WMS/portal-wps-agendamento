@@ -163,6 +163,19 @@ const SupplierDashboard = ({ user, token }) => {
       const data = await supplierAPI.getAppointments(weekStartISO, plantId)
       setAppointments(Array.isArray(data) ? data : [])
       setError('')
+      
+      // Recarregar timeSlots após carregar agendamentos para garantir sincronização
+      // Isso é importante para detectar agendamentos de outros fornecedores já existentes
+      if (plantId && date && !isNaN(date.getTime())) {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const selectedDate = new Date(date)
+        selectedDate.setHours(0, 0, 0, 0)
+        
+        if (selectedDate >= today) {
+          await loadTimeSlots(plantId, date)
+        }
+      }
     } catch (err) {
       setError('Erro ao carregar agendamentos: ' + (err.response?.data?.error || err.message))
       setAppointments([])
