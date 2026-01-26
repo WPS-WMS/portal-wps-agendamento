@@ -1488,14 +1488,14 @@ const PlantDashboard = ({ user, token }) => {
                         return (
                           <div
                             key={`clickable-slot-${colIndex}-${i}`}
-                            className={`absolute left-0 right-0 border-b border-dashed transition-all duration-200 ${
+                            className={`absolute left-1 right-1 transition-all duration-200 ${
                               isClickable
-                                ? 'border-blue-300/60 hover:border-blue-400 hover:bg-blue-100/40 cursor-pointer group'
+                                ? 'border-2 border-dashed border-blue-300 bg-blue-50/30 hover:border-blue-400 hover:bg-blue-100/50 cursor-pointer group rounded'
                                 : 'border-transparent'
                             }`}
                             style={{ 
-                              top: `${top}px`, 
-                              height: `${HOUR_HEIGHT / 2}px`,
+                              top: `${top + 2}px`, 
+                              height: `${HOUR_HEIGHT / 2 - 4}px`,
                               zIndex: isClickable ? 8 : 0, // Acima das linhas de guia (z-index 1), abaixo dos cards (z-index 10+)
                               pointerEvents: isClickable ? 'auto' : 'none'
                             }}
@@ -1521,11 +1521,18 @@ const PlantDashboard = ({ user, token }) => {
                             }
                           >
                             {isClickable && (
-                              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                                <div className="bg-blue-500/90 text-white text-xs font-medium px-2 py-1 rounded shadow-lg">
-                                  {timeString}
+                              <>
+                                {/* Texto "Disponível" sempre visível, mas mais sutil */}
+                                <div className="absolute inset-0 flex items-center justify-center opacity-40 group-hover:opacity-0 transition-opacity duration-200 pointer-events-none">
+                                  <span className="text-[10px] text-blue-600 font-medium">Disponível</span>
                                 </div>
-                              </div>
+                                {/* Badge com horário no hover */}
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                  <div className="bg-blue-500/90 text-white text-xs font-medium px-2 py-1 rounded shadow-lg">
+                                    {timeString}
+                                  </div>
+                                </div>
+                              </>
                             )}
                           </div>
                         )
