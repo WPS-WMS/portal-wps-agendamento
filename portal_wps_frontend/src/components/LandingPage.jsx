@@ -121,45 +121,150 @@ const LandingPage = () => {
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-2xl transform rotate-3 opacity-20"></div>
                 <Card className="relative shadow-2xl border-0 bg-white rounded-2xl overflow-hidden">
                   <CardContent className="p-0">
-                    <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 text-white">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold">Dashboard</h3>
-                        <Calendar className="w-5 h-5" />
-                      </div>
-                      <div className="space-y-3">
-                        <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm">Agendamentos hoje</span>
-                            <span className="font-bold">12</span>
-                          </div>
-                        </div>
-                        <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm">Plantas ativas</span>
-                            <span className="font-bold">5</span>
-                          </div>
-                        </div>
-                        <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm">Fornecedores</span>
-                            <span className="font-bold">24</span>
-                          </div>
-                        </div>
+                    {/* Header do Dashboard */}
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 border-b border-blue-500">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold text-white">Calendário de Agendamentos</h3>
+                        <Calendar className="w-5 h-5 text-white" />
                       </div>
                     </div>
-                    <div className="p-6 bg-gray-50">
-                      <div className="space-y-2">
-                        {[1, 2, 3].map((i) => (
-                          <div key={i} className="flex items-center space-x-3">
-                            <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    
+                    {/* Simulação do Calendário Real */}
+                    <div className="bg-white p-4">
+                      <div className="flex border border-gray-200 rounded-lg overflow-hidden shadow-sm" style={{ height: '384px' }}>
+                        {/* Coluna de Horários */}
+                        <div className="w-20 bg-gray-50 border-r border-gray-200 flex-shrink-0">
+                          {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00'].map((time, idx) => (
+                            <div 
+                              key={time}
+                              className="h-12 border-b border-gray-200 flex items-center justify-end pr-2 last:border-b-0"
+                            >
+                              <span className="text-xs font-semibold text-gray-700">{time}</span>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        {/* Colunas de Agendamentos */}
+                        <div className="flex-1 flex relative" style={{ minHeight: '384px' }}>
+                          {/* Coluna 1 */}
+                          <div className="flex-1 border-r border-gray-200 relative">
+                            {/* Linhas de horário */}
+                            {Array.from({ length: 8 }, (_, idx) => (
                               <div 
-                                className="h-full bg-blue-600 rounded-full transition-all"
-                                style={{ width: `${60 + i * 10}%` }}
-                              ></div>
+                                key={`col1-line-${idx}`}
+                                className="absolute left-0 right-0 border-b border-dashed border-gray-200"
+                                style={{ top: `${idx * 48}px`, height: '48px' }}
+                              />
+                            ))}
+                            
+                            {/* Card 1: 09:00 - 10:30 (3 linhas) */}
+                            <div 
+                              className="absolute left-1 right-1 bg-blue-500 text-white rounded px-2 py-1.5 text-xs font-medium shadow-sm z-10"
+                              style={{ top: '48px', height: '96px' }}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold">Fornecedor A</span>
+                                <CheckCircle2 className="w-3 h-3" />
+                              </div>
+                              <div className="text-[10px] opacity-90">09:00 - 10:30</div>
+                            </div>
+                            
+                            {/* Card 2: 11:00 - 12:00 (2 linhas) */}
+                            <div 
+                              className="absolute left-1 right-1 bg-green-500 text-white rounded px-2 py-1.5 text-xs font-medium shadow-sm z-10"
+                              style={{ top: '144px', height: '48px' }}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold">Fornecedor B</span>
+                                <CheckCircle2 className="w-3 h-3" />
+                              </div>
+                              <div className="text-[10px] opacity-90">11:00 - 12:00</div>
+                            </div>
+                            
+                            {/* Card 3: 13:00 - 14:00 (2 linhas) */}
+                            <div 
+                              className="absolute left-1 right-1 bg-indigo-500 text-white rounded px-2 py-1.5 text-xs font-medium shadow-sm z-10"
+                              style={{ top: '240px', height: '48px' }}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold">Fornecedor C</span>
+                                <Clock className="w-3 h-3" />
+                              </div>
+                              <div className="text-[10px] opacity-90">13:00 - 14:00</div>
                             </div>
                           </div>
-                        ))}
+                          
+                          {/* Coluna 2 */}
+                          <div className="flex-1 border-r border-gray-200 relative">
+                            {/* Linhas de horário */}
+                            {Array.from({ length: 8 }, (_, idx) => (
+                              <div 
+                                key={`col2-line-${idx}`}
+                                className="absolute left-0 right-0 border-b border-dashed border-gray-200"
+                                style={{ top: `${idx * 48}px`, height: '48px' }}
+                              />
+                            ))}
+                            
+                            {/* Card 1: 10:00 - 11:00 (2 linhas) */}
+                            <div 
+                              className="absolute left-1 right-1 bg-purple-500 text-white rounded px-2 py-1.5 text-xs font-medium shadow-sm z-10"
+                              style={{ top: '96px', height: '48px' }}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold">Fornecedor D</span>
+                                <CheckCircle2 className="w-3 h-3" />
+                              </div>
+                              <div className="text-[10px] opacity-90">10:00 - 11:00</div>
+                            </div>
+                            
+                            {/* Card 2: 14:00 - 15:00 (2 linhas) */}
+                            <div 
+                              className="absolute left-1 right-1 bg-teal-500 text-white rounded px-2 py-1.5 text-xs font-medium shadow-sm z-10"
+                              style={{ top: '288px', height: '48px' }}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-semibold">Fornecedor E</span>
+                                <Clock className="w-3 h-3" />
+                              </div>
+                              <div className="text-[10px] opacity-90">14:00 - 15:00</div>
+                            </div>
+                          </div>
+                          
+                          {/* Coluna 3 (vazia para mostrar disponibilidade) */}
+                          <div className="flex-1 relative">
+                            {/* Linhas de horário */}
+                            {Array.from({ length: 8 }, (_, idx) => (
+                              <div 
+                                key={`col3-line-${idx}`}
+                                className="absolute left-0 right-0 border-b border-dashed border-gray-200 hover:bg-blue-50/50 transition-colors"
+                                style={{ top: `${idx * 48}px`, height: '48px' }}
+                              />
+                            ))}
+                            
+                            {/* Slots disponíveis */}
+                            {[0, 4, 7].map((idx) => (
+                              <div 
+                                key={`available-${idx}`}
+                                className="absolute inset-1 border-2 border-dashed border-blue-300 rounded bg-blue-50/30 flex items-center justify-center z-10"
+                                style={{ top: `${idx * 48 + 4}px`, height: '40px' }}
+                              >
+                                <span className="text-[10px] text-blue-600 font-medium">Disponível</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Legenda */}
+                      <div className="mt-4 flex items-center justify-center gap-4 text-xs text-gray-600">
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                          <span>Agendado</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-3 h-3 border-2 border-dashed border-blue-300 rounded bg-blue-50/30"></div>
+                          <span>Disponível</span>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
