@@ -1,6 +1,6 @@
 const Logo = ({ className = "", showText = false, size = "default" }) => {
   // Tamanhos maiores para o logo sem texto
-  const iconSize = size === "small" ? "w-12 h-12" : size === "large" ? "w-24 h-24" : "w-16 h-16"
+  const iconSize = size === "small" ? "w-20 h-20" : size === "large" ? "w-32 h-32" : "w-24 h-24"
   
   return (
     <div className={`flex items-center justify-center ${className}`}>
