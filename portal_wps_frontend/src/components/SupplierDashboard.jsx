@@ -1857,9 +1857,9 @@ const SupplierDashboard = ({ user, token }) => {
                             key={`clickable-slot-${colIndex}-${i}`}
                             className={`absolute left-1 right-1 transition-all duration-200 ${
                               isUnavailable
-                                ? 'border-2 border-dashed border-red-300/60 bg-red-50/20 rounded'
+                                ? 'border-2 border-dashed border-red-400 bg-red-50/30 rounded'
                                 : isClickable
-                                ? 'border-2 border-dashed border-orange-300 bg-orange-50/30 hover:border-orange-400 hover:bg-orange-100/50 cursor-pointer group rounded'
+                                ? 'border-2 border-dashed border-green-400 bg-green-50/40 hover:border-green-500 hover:bg-green-100/60 cursor-pointer group rounded'
                                 : 'border-transparent'
                             }`}
                             style={{ 
@@ -1892,19 +1892,19 @@ const SupplierDashboard = ({ user, token }) => {
                             }
                           >
                             {isUnavailable && (
-                              <div className="absolute inset-0 flex items-center justify-center opacity-50 pointer-events-none">
-                                <span className="text-[10px] text-red-600 font-medium">Indisponível</span>
+                              <div className="absolute inset-0 flex items-center justify-center opacity-60 pointer-events-none">
+                                <span className="text-[10px] text-red-700 font-medium">Indisponível</span>
                               </div>
                             )}
                             {isClickable && (
                               <>
                                 {/* Texto "Disponível" sempre visível, mas mais sutil */}
                                 <div className="absolute inset-0 flex items-center justify-center opacity-40 group-hover:opacity-0 transition-opacity duration-200 pointer-events-none">
-                                  <span className="text-[10px] text-[#FF6B35] font-medium">Disponível</span>
+                                  <span className="text-[10px] text-green-600 font-medium">Disponível</span>
                                 </div>
                                 {/* Badge com horário no hover */}
                                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                                  <div className="bg-orange-500/90 text-white text-xs font-medium px-2 py-1 rounded shadow-lg">
+                                  <div className="bg-green-500/90 text-white text-xs font-medium px-2 py-1 rounded shadow-lg">
                                     {timeString}
                                   </div>
                                 </div>
