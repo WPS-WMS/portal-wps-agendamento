@@ -775,24 +775,7 @@ const SupplierDashboard = ({ user, token }) => {
 
   // Função para verificar se há agendamentos de outros fornecedores neste horário
   const hasOtherSuppliersAppointments = (timeString) => {
-    // Verificar se há timeSlots carregados
-    if (timeSlots.length === 0) {
-      return false
-    }
-    
-    // Buscar o slot correspondente
-    const slot = timeSlots.find(s => s.time === timeString)
-    if (!slot) {
-      return false
-    }
-    
-    // Se não há agendamentos (capacity_used === 0), não há outros fornecedores
-    if (slot.capacity_used === 0) {
-      return false
-    }
-    
-    // Contar quantos agendamentos o fornecedor logado tem neste horário
-    // Um slot de 30 minutos verifica se há agendamento que se sobrepõe a ele
+    // Calcular início e fim do slot de 30 minutos
     const [slotHour, slotMin] = timeString.split(':').map(Number)
     const slotMinutes = slotHour * 60 + slotMin
     const slotEndMinutes = slotMinutes + 30 // Slot de 30 minutos
@@ -816,9 +799,46 @@ const SupplierDashboard = ({ user, token }) => {
       return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
     }).length
     
-    // Se há mais agendamentos (capacity_used) do que os do fornecedor logado,
+    // Se há timeSlots carregados, usar capacity_used do backend
+    if (timeSlots.length > 0) {
+      const slot = timeSlots.find(s => s.time === timeString)
+      if (!slot) {
+        return false
+      }
+      
+      // Se não há agendamentos (capacity_used === 0), não há outros fornecedores
+      if (slot.capacity_used === 0) {
+        return false
+      }
+      
+      // Se há mais agendamentos (capacity_used) do que os do fornecedor logado,
+      // significa que há outros fornecedores com agendamentos
+      return slot.capacity_used > ownAppointmentsCount
+    }
+    
+    // Se não há timeSlots (datas anteriores), calcular capacity_used baseado em dayAppointments
+    // Contar todos os agendamentos (de todos os fornecedores) que se sobrepõem a este slot
+    const totalAppointmentsCount = dayAppointments.filter(apt => {
+      if (!apt.date) return false
+      const aptDate = getDateString(apt.date)
+      if (aptDate !== currentDateISO) return false
+      
+      const aptStartTime = dateUtils.formatTime(apt.time)
+      const aptEndTime = apt.time_end ? dateUtils.formatTime(apt.time_end) : aptStartTime
+      
+      const [aptStartHour, aptStartMin] = aptStartTime.split(':').map(Number)
+      const [aptEndHour, aptEndMin] = aptEndTime.split(':').map(Number)
+      
+      const aptStartMinutes = aptStartHour * 60 + aptStartMin
+      const aptEndMinutes = aptEndHour * 60 + aptEndMin
+      
+      // Verificar sobreposição: o slot se sobrepõe ao agendamento
+      return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
+    }).length
+    
+    // Se há mais agendamentos totais do que os do fornecedor logado,
     // significa que há outros fornecedores com agendamentos
-    return slot.capacity_used > ownAppointmentsCount
+    return totalAppointmentsCount > ownAppointmentsCount
   }
 
   const handleSlotClick = (slot) => {
