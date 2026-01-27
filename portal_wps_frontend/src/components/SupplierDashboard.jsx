@@ -821,45 +821,6 @@ const SupplierDashboard = ({ user, token }) => {
     return slot.capacity_used > ownAppointmentsCount
   }
 
-  // Função para encontrar a última coluna disponível (sem agendamentos do fornecedor logado)
-  const getLastAvailableColumn = (timeString) => {
-    // Verificar em qual coluna mais à direita não há agendamentos do fornecedor logado
-    for (let colIndex = maxCapacity - 1; colIndex >= 0; colIndex--) {
-      const columnAppointments = appointmentsByColumn[colIndex] || []
-      
-      // Verificar se há agendamentos do fornecedor logado nesta coluna neste horário
-      const [slotHour, slotMin] = timeString.split(':').map(Number)
-      const slotMinutes = slotHour * 60 + slotMin
-      const slotEndMinutes = slotMinutes + 30
-      
-      const hasAppointmentInColumn = columnAppointments.some(apt => {
-        if (!apt.date) return false
-        const aptDate = getDateString(apt.date)
-        if (aptDate !== currentDateISO) return false
-        
-        const aptStartTime = dateUtils.formatTime(apt.time)
-        const aptEndTime = apt.time_end ? dateUtils.formatTime(apt.time_end) : aptStartTime
-        
-        const [aptStartHour, aptStartMin] = aptStartTime.split(':').map(Number)
-        const [aptEndHour, aptEndMin] = aptEndTime.split(':').map(Number)
-        
-        const aptStartMinutes = aptStartHour * 60 + aptStartMin
-        const aptEndMinutes = aptEndHour * 60 + aptEndMin
-        
-        // Verificar sobreposição
-        return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
-      })
-      
-      // Se não há agendamento nesta coluna, esta é a última coluna disponível
-      if (!hasAppointmentInColumn) {
-        return colIndex
-      }
-    }
-    
-    // Se todas as colunas têm agendamentos, retornar a última coluna
-    return maxCapacity - 1
-  }
-
   const handleSlotClick = (slot) => {
     // Validação rigorosa: verificar disponibilidade, permissão e capacidade
     if (!slot.is_available || 
@@ -1844,39 +1805,35 @@ const SupplierDashboard = ({ user, token }) => {
                         // Verificar se há agendamentos de outros fornecedores neste horário
                         const hasOtherSuppliers = hasOtherSuppliersAppointments(timeString)
                         
-                        // Encontrar a última coluna disponível (sem agendamentos do fornecedor logado)
-                        const lastAvailableColumn = hasOtherSuppliers ? getLastAvailableColumn(timeString) : -1
+                        // Verificar se esta coluna específica tem agendamentos do fornecedor logado neste horário
+                        const columnAppointments = appointmentsByColumn[colIndex] || []
+                        const hasOwnAppointmentInColumn = columnAppointments.some(apt => {
+                          if (!apt.date) return false
+                          const aptDate = getDateString(apt.date)
+                          if (aptDate !== currentDateISO) return false
+                          
+                          const aptStartTime = dateUtils.formatTime(apt.time)
+                          const aptEndTime = apt.time_end ? dateUtils.formatTime(apt.time_end) : aptStartTime
+                          
+                          const [aptStartHour, aptStartMin] = aptStartTime.split(':').map(Number)
+                          const [aptEndHour, aptEndMin] = aptEndTime.split(':').map(Number)
+                          
+                          const aptStartMinutes = aptStartHour * 60 + aptStartMin
+                          const aptEndMinutes = aptEndHour * 60 + aptEndMin
+                          
+                          const [slotHour, slotMin] = timeString.split(':').map(Number)
+                          const slotMinutes = slotHour * 60 + slotMin
+                          const slotEndMinutes = slotMinutes + 30
+                          
+                          // Verificar sobreposição
+                          return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
+                        })
                         
-                        // Verificar se este slot está indisponível (há outros fornecedores e esta é a última coluna disponível)
-                        const isUnavailable = hasOtherSuppliers && colIndex === lastAvailableColumn
-                        
-                        // Debug temporário - remover depois
-                        if (timeString === '13:00' && colIndex === 0) {
-                          console.log('Slot debug 13:00:', {
-                            timeString,
-                            colIndex,
-                            hasOtherSuppliers,
-                            lastAvailableColumn,
-                            isUnavailable,
-                            timeSlotsLength: timeSlots.length,
-                            slot: timeSlots.find(s => s.time === timeString),
-                            filteredAppointmentsCount: filteredAppointments.length,
-                            ownAppointmentsCount: filteredAppointments.filter(apt => {
-                              if (!apt.date) return false
-                              const aptDate = getDateString(apt.date)
-                              if (aptDate !== currentDateISO) return false
-                              const aptStartTime = dateUtils.formatTime(apt.time)
-                              const aptEndTime = apt.time_end ? dateUtils.formatTime(apt.time_end) : aptStartTime
-                              const [aptStartHour, aptStartMin] = aptStartTime.split(':').map(Number)
-                              const [aptEndHour, aptEndMin] = aptEndTime.split(':').map(Number)
-                              const aptStartMinutes = aptStartHour * 60 + aptStartMin
-                              const aptEndMinutes = aptEndHour * 60 + aptEndMin
-                              const slotMinutes = 13 * 60
-                              const slotEndMinutes = slotMinutes + 30
-                              return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
-                            }).length
-                          })
-                        }
+                        // Verificar se este slot está indisponível:
+                        // - Há outros fornecedores ocupando slots neste horário
+                        // - Esta coluna não tem agendamentos do fornecedor logado
+                        // - A área está vazia (não há agendamento visual nesta posição)
+                        const isUnavailable = hasOtherSuppliers && !hasOwnAppointmentInColumn && isEmpty
                         
                         // Área clicável apenas se: dentro da capacidade, dentro do funcionamento, tem capacidade, está vazia, e não está indisponível
                         const isClickable = isWithinCapacity && isWithinHours && hasCapacity && isEmpty && !isUnavailable
