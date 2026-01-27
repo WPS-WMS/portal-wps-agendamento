@@ -1230,12 +1230,14 @@ const SupplierDashboard = ({ user, token }) => {
   ])
   
   // Expandir automaticamente se houver agendamentos fora do horário padrão
-  useEffect(() => {
-    if (hasAppointmentsOutsideHours) {
-      if (hasHoursBefore) setShowBeforeHours(true)
-      if (hasHoursAfter) setShowAfterHours(true)
-    }
-  }, [hasAppointmentsOutsideHours, hasHoursBefore, hasHoursAfter])
+  // REMOVIDO: Por padrão, ambos os botões devem vir ocultos
+  // O usuário pode expandir manualmente se necessário
+  // useEffect(() => {
+  //   if (hasAppointmentsOutsideHours) {
+  //     if (hasHoursBefore) setShowBeforeHours(true)
+  //     if (hasHoursAfter) setShowAfterHours(true)
+  //   }
+  // }, [hasAppointmentsOutsideHours, hasHoursBefore, hasHoursAfter])
   
   // Handler para controlar o scroll e bloquear áreas não expandidas
   const handleCalendarScroll = (e) => {
@@ -1948,8 +1950,8 @@ const SupplierDashboard = ({ user, token }) => {
               <div 
                 ref={(el) => {
                   calendarScrollRef.current = el
-                  // Scroll inicial para o início do horário padrão quando carregar
-                  if (el && !showBeforeHours && !showAfterHours && !hasAppointmentsOutsideHours) {
+                  // Scroll inicial para o início do horário padrão quando carregar (sempre, já que ambos vêm ocultos por padrão)
+                  if (el && !showBeforeHours && !showAfterHours) {
                     setTimeout(() => {
                       el.scrollTop = getOperatingHoursTop
                     }, 100)
