@@ -208,7 +208,7 @@ const Login = ({ onLogin }) => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100/50 p-4">
       <Card className="w-full max-w-md shadow-xl">
-        <CardHeader className="text-center space-y-4">
+        <CardHeader className="text-center space-y-2 pb-4">
           <Logo showText={true} size="large" className="mx-auto justify-center" />
           <CardTitle className="text-2xl font-bold text-gray-900 sr-only">CargoFlow</CardTitle>
           <CardDescription className="text-gray-600">
