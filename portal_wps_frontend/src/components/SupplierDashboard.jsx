@@ -1860,15 +1860,30 @@ const SupplierDashboard = ({ user, token }) => {
                         const isUnavailable = hasOtherSuppliers && colIndex === lastAvailableColumn
                         
                         // Debug temporário - remover depois
-                        if (timeString === '13:00' && colIndex === 0 && hasOtherSuppliers) {
-                          console.log('Slot indisponível detectado:', {
+                        if (timeString === '13:00' && colIndex === 0) {
+                          console.log('Slot debug 13:00:', {
                             timeString,
                             colIndex,
                             hasOtherSuppliers,
                             lastAvailableColumn,
                             isUnavailable,
                             timeSlotsLength: timeSlots.length,
-                            slot: timeSlots.find(s => s.time === timeString)
+                            slot: timeSlots.find(s => s.time === timeString),
+                            filteredAppointmentsCount: filteredAppointments.length,
+                            ownAppointmentsCount: filteredAppointments.filter(apt => {
+                              if (!apt.date) return false
+                              const aptDate = getDateString(apt.date)
+                              if (aptDate !== currentDateISO) return false
+                              const aptStartTime = dateUtils.formatTime(apt.time)
+                              const aptEndTime = apt.time_end ? dateUtils.formatTime(apt.time_end) : aptStartTime
+                              const [aptStartHour, aptStartMin] = aptStartTime.split(':').map(Number)
+                              const [aptEndHour, aptEndMin] = aptEndTime.split(':').map(Number)
+                              const aptStartMinutes = aptStartHour * 60 + aptStartMin
+                              const aptEndMinutes = aptEndHour * 60 + aptEndMin
+                              const slotMinutes = 13 * 60
+                              const slotEndMinutes = slotMinutes + 30
+                              return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
+                            }).length
                           })
                         }
                         
