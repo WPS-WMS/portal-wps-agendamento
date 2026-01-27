@@ -161,6 +161,7 @@ Abra o navegador em: **http://localhost:5173**
 3. **Editar Agendamento**: Botão de edição nos próprios agendamentos
 4. **Excluir Agendamento**: Botão de exclusão (apenas status 'scheduled' ou 'rescheduled')
 5. **Reagendar**: Ao alterar data/horário, sistema exige motivo obrigatório
+6. **Acesso a Configurações**: Aba "Configurações" visível apenas se tiver permissão `view_system_config` configurada como "Editor" ou "Visualizador" em Perfis de Acesso
 
 ### Como Planta:
 1. **Ver Agendamentos Recebidos**: Calendário diário com agendamentos da planta

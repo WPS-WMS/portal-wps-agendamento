@@ -491,7 +491,8 @@ O sistema implementa um controle de acesso granular por funcionalidade através 
 ### Design System
 O sistema utiliza um design moderno e profissional baseado em:
 
-- **Cores**: Paleta azul corporativa com acentos coloridos
+- **Cores**: Paleta laranja corporativa (#FF6B35, #E55A2B) com acentos coloridos
+- **Logo**: Imagem PNG do CargoFlow com tamanhos responsivos (small: 40x40px, default: 48x48px, large: 64x64px)
 - **Tipografia**: Fonte system-ui para legibilidade
 - **Componentes**: shadcn/ui para consistência
 - **Responsividade**: Layout adaptável para desktop e mobile
