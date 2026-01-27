@@ -145,14 +145,15 @@ Abra o navegador em: **http://localhost:5173**
 ## Funcionalidades Principais
 
 ### Como Administrador:
-1. **Gerenciar Fornecedores**: Botão "Fornecedores" → "Novo Fornecedor"
-2. **Gerenciar Plantas**: Botão "Plantas" → "Nova Planta"
+1. **Gerenciar Fornecedores**: Aba "Configurações" → Botão "Fornecedores" → "Novo Fornecedor"
+2. **Gerenciar Plantas**: Aba "Configurações" → Botão "Plantas" → "Nova Planta"
 3. **Visualizar Agendamentos**: Aba "Agendamentos" → Navegação diária
 4. **Check-in/Check-out**: Botões nos agendamentos do dia
 5. **Editar Agendamentos**: Botão de edição em cada agendamento
 6. **Filtros**: Cards de estatísticas funcionam como filtros por status
-7. **Gerenciar Usuários**: Botão "Usuários" → Criar/editar usuários
-8. **Perfis de Acesso**: Configurar permissões por perfil (admin/supplier/plant)
+7. **Gerenciar Usuários**: Aba "Configurações" → Botão "Usuários" → Criar/editar usuários
+8. **Perfis de Acesso**: Aba "Configurações" → Botão "Perfis de Acesso" → Configurar permissões por perfil (admin/supplier/plant)
+9. **Módulo Configurações**: Em Perfis de Acesso, configurar permissão "Configurações" para controlar visibilidade da aba "Configurações" nos dashboards
 
 ### Como Fornecedor:
 1. **Ver Agendamentos**: Calendário diário com navegação
@@ -165,8 +166,9 @@ Abra o navegador em: **http://localhost:5173**
 1. **Ver Agendamentos Recebidos**: Calendário diário com agendamentos da planta
 2. **Check-in**: Marcar chegada do veículo
 3. **Check-out**: Marcar saída após descarga
-4. **Visualizar Fornecedores**: Lista de fornecedores que agendam na planta
-5. **Configurar Horários**: Configurar horários de funcionamento e capacidade máxima
+4. **Visualizar Fornecedores**: Aba "Configurações" → Lista de fornecedores que agendam na planta
+5. **Configurar Horários**: Aba "Configurações" → Configurar horários de funcionamento e capacidade máxima
+6. **Acesso a Configurações**: Aba "Configurações" visível apenas se tiver permissão `view_system_config` configurada como "Editor" ou "Visualizador" em Perfis de Acesso
 
 ## Estrutura de Arquivos
 

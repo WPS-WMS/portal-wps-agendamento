@@ -214,6 +214,7 @@ O sistema implementa um controle de acesso granular por funcionalidade através 
 
 #### Funcionalidades Configuráveis
 - **Agendamentos**: Criar, visualizar, editar, excluir, check-in, check-out, reagendar
+- **Configurações**: Acesso à aba de configurações (controla visibilidade do botão "Configurações" nas tabs)
 - **Fornecedores**: Criar, visualizar, editar, inativar, excluir
 - **Plantas**: Criar, visualizar, editar, inativar, excluir, configurar horários
 - **Configurações de Horários**: Horário padrão, bloqueio semanal, bloqueio por data
@@ -224,6 +225,8 @@ O sistema implementa um controle de acesso granular por funcionalidade através 
 - Alterações não salvas são perdidas ao sair da tela
 - Apenas Administradores podem configurar permissões
 - Permissões são aplicadas tanto no frontend quanto no backend
+- **Permissão de Configurações**: Quando a permissão `view_system_config` está inativa, o botão "Configurações" desaparece das tabs nos dashboards (Fornecedor e Planta)
+- **Módulo Configurações**: Aparece antes de "Fornecedores" na tela de Perfis de Acesso, contendo apenas a funcionalidade "Configurações"
 
 ## API Endpoints
 
@@ -659,6 +662,9 @@ CORS_ORIGINS=*
 - **Modais**: Formulários convertidos para modais (melhor UX)
 - **Sistema de Permissões**: Interface completa para configuração de permissões por perfil
 - **Validações em Tempo Real**: Feedback imediato ao usuário em formulários
+- **Logo Atualizado**: Logo CargoFlow em formato PNG com tamanhos otimizados para todas as telas
+- **Módulo Configurações**: Novo módulo em Perfis de Acesso para controlar acesso à aba de configurações
+- **Calendário Colapsável**: Visualização otimizada com botões para expandir/recolher horários fora do horário de funcionamento
 
 ## Melhorias Futuras
 
