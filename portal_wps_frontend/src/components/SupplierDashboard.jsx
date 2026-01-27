@@ -1834,39 +1834,10 @@ const SupplierDashboard = ({ user, token }) => {
           {selectedPlantId && (
           <>
           <div className="space-y-2">
-            {/* Botão para expandir horários anteriores - ACIMA do calendário */}
-            {hasHoursBefore && !showBeforeHours && (
-              <div className="flex justify-center py-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowBeforeHours(true)}
-                  className="shadow-md hover:shadow-lg transition-shadow"
-                >
-                  <ChevronUp className="w-4 h-4 mr-2" />
-                  Mostrar horários anteriores (00:00 até {operatingHours.start || '00:00'})
-                </Button>
-              </div>
-            )}
-            
-            {/* Botão para recolher horários anteriores - ACIMA do calendário */}
-            {hasHoursBefore && showBeforeHours && (
-              <div className="flex justify-center py-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowBeforeHours(false)}
-                  className="shadow-md hover:shadow-lg transition-shadow"
-                >
-                  <ChevronDown className="w-4 h-4 mr-2" />
-                  Ocultar horários anteriores
-                </Button>
-              </div>
-            )}
-
-            {/* Botão Novo Agendamento - ACIMA do calendário */}
-            {hasPermission('create_appointment', 'editor') && (
-              <div className="flex justify-center">
+            {/* Linha com botões: Novo Agendamento à esquerda e Mostrar horários anteriores próximo ao calendário */}
+            <div className="flex items-center justify-between gap-4">
+              {/* Botão Novo Agendamento - À ESQUERDA */}
+              {hasPermission('create_appointment', 'editor') && (
                 <Button
                   onClick={() => {
                     setEditingAppointment({
@@ -1881,8 +1852,37 @@ const SupplierDashboard = ({ user, token }) => {
                   <Plus className="w-5 h-5" />
                   <span>Novo Agendamento</span>
                 </Button>
-              </div>
-            )}
+              )}
+              
+              {/* Espaço flexível no meio */}
+              <div className="flex-1"></div>
+              
+              {/* Botão para expandir horários anteriores - PRÓXIMO À DIVISA DO CALENDÁRIO */}
+              {hasHoursBefore && !showBeforeHours && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBeforeHours(true)}
+                  className="shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <ChevronUp className="w-4 h-4 mr-2" />
+                  Mostrar horário (00:00 - {operatingHours.start || '00:00'})
+                </Button>
+              )}
+              
+              {/* Botão para recolher horários anteriores */}
+              {hasHoursBefore && showBeforeHours && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBeforeHours(false)}
+                  className="shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <ChevronDown className="w-4 h-4 mr-2" />
+                  Ocultar horário (00:00 - {operatingHours.start || '00:00'})
+                </Button>
+              )}
+            </div>
 
           <Card className="overflow-hidden">
             <div className="h-[calc(100vh-450px)] min-h-[500px] overflow-x-auto">
@@ -2439,7 +2439,7 @@ const SupplierDashboard = ({ user, token }) => {
 
             {/* Botão para expandir horários posteriores - ABAIXO do calendário */}
             {hasHoursAfter && !showAfterHours && (
-              <div className="flex justify-center py-2">
+              <div className="flex justify-end py-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -2447,14 +2447,14 @@ const SupplierDashboard = ({ user, token }) => {
                   className="shadow-md hover:shadow-lg transition-shadow"
                 >
                   <ChevronDown className="w-4 h-4 mr-2" />
-                  Mostrar horários posteriores ({operatingHours.end || '23:59'} - 23:59)
+                  Mostrar horário ({operatingHours.end || '23:59'} - 23:59)
                 </Button>
               </div>
             )}
             
             {/* Botão para recolher horários posteriores - ABAIXO do calendário */}
             {hasHoursAfter && showAfterHours && (
-              <div className="flex justify-center py-2">
+              <div className="flex justify-end py-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -2462,7 +2462,7 @@ const SupplierDashboard = ({ user, token }) => {
                   className="shadow-md hover:shadow-lg transition-shadow"
                 >
                   <ChevronUp className="w-4 h-4 mr-2" />
-                  Ocultar horários posteriores
+                  Ocultar horário ({operatingHours.end || '23:59'} - 23:59)
                 </Button>
               </div>
             )}
