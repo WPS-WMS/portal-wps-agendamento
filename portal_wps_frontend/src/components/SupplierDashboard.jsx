@@ -1650,7 +1650,7 @@ const SupplierDashboard = ({ user, token }) => {
         <TabsContent value="appointments" className="space-y-4">
           <div className="space-y-4">
             {/* Seletor de Planta - Destaque */}
-            <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 shadow-md">
+            <Card className="bg-gradient-to-r from-orange-50 to-orange-50/50 border-2 border-orange-200 shadow-md">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold text-gray-800 mb-2">
                   Seleção de Planta
@@ -1706,7 +1706,7 @@ const SupplierDashboard = ({ user, token }) => {
                     })
                     setShowAppointmentForm(true)
                   }}
-                  className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 px-8 py-6 text-base font-semibold rounded-lg flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto bg-[#FF6B35] hover:bg-[#E55A2B] text-white shadow-lg hover:shadow-xl transition-all duration-200 px-8 py-6 text-base font-semibold rounded-lg flex items-center justify-center gap-2"
                   size="lg"
                 >
                   <Plus className="w-5 h-5" />
