@@ -27,8 +27,10 @@ from src.routes.supplier import supplier_bp
 from src.routes.plant import plant_bp
 
 # Configurar logging
+# Em produção, usar WARNING para reduzir logs desnecessários
+log_level = logging.WARNING if (os.environ.get('FLASK_ENV') == 'production' or os.environ.get('ENVIRONMENT') == 'production') else logging.INFO
 logging.basicConfig(
-    level=logging.INFO,
+    level=log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)

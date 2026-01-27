@@ -282,7 +282,7 @@ def reset_password():
         
         db.session.commit()
         
-        logger.info(f"Senha redefinida com sucesso para usuário {user.email}")
+        logger.info(f"Senha redefinida com sucesso para usuário ID {user.id}")
         
         return jsonify({
             'message': 'Senha redefinida com sucesso. Você já pode fazer login com a nova senha.'

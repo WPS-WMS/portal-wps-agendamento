@@ -178,7 +178,6 @@ const PlantDashboard = ({ user, token }) => {
         setTimeSlots([])
       }
     } catch (err) {
-      console.error('Erro ao carregar slots de tempo:', err)
       setTimeSlots([])
     } finally {
       setLoadingSlots(false)
@@ -830,7 +829,6 @@ const PlantDashboard = ({ user, token }) => {
       if (isNaN(startHour) || isNaN(startMin)) return 0
       return (startHour * 60 + startMin) / 60 * HOUR_HEIGHT
     } catch (error) {
-      console.error('Erro ao calcular top do horário padrão:', error)
       return 0
     }
   }, [operatingHours?.start])
@@ -845,7 +843,6 @@ const PlantDashboard = ({ user, token }) => {
       const endTop = (endHour * 60 + endMin) / 60 * HOUR_HEIGHT
       return Math.max(0, endTop - startTop)
     } catch (error) {
-      console.error('Erro ao calcular altura do horário padrão:', error)
       return timelineHeight
     }
   }, [operatingHours?.start, operatingHours?.end, timelineHeight])

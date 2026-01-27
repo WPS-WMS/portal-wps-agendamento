@@ -60,7 +60,7 @@ def get_plant_appointments(current_user):
         return jsonify(result), 200
         
     except Exception as e:
-        logger.error(f"Erro ao buscar agendamentos da planta: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao buscar agendamentos da planta: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @plant_bp.route('/appointments', methods=['POST'])
@@ -192,7 +192,7 @@ def create_appointment(current_user):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao criar agendamento: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao criar agendamento: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @plant_bp.route('/appointments/<int:appointment_id>', methods=['PUT'])
@@ -341,7 +341,7 @@ def update_appointment(current_user, appointment_id):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao atualizar agendamento: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao atualizar agendamento: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @plant_bp.route('/appointments/<int:appointment_id>', methods=['DELETE'])
@@ -379,7 +379,7 @@ def delete_appointment(current_user, appointment_id):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao excluir agendamento: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao excluir agendamento: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @plant_bp.route('/appointments/<int:appointment_id>/check-in', methods=['POST'])
@@ -559,7 +559,6 @@ def get_suppliers(current_user):
     Multi-tenant: Filtra apenas fornecedores da mesma company da planta.
     """
     try:
-        logger.info(f"[get_suppliers] Chamado por usuário {current_user.id} (role: {current_user.role}, plant_id: {current_user.plant_id})")
         
         if current_user.role != 'plant':
             logger.warning(f"[get_suppliers] Acesso negado - role incorreto: {current_user.role}")
@@ -574,7 +573,6 @@ def get_suppliers(current_user):
         permission_type = Permission.get_permission(current_user.role, 'view_suppliers', current_user.company_id)
         has_view_permission = has_permission('view_suppliers', 'viewer', current_user)
         
-        logger.info(f"[get_suppliers] Permissão view_suppliers para plant: {permission_type}, has_permission: {has_view_permission}")
         
         # Se a permissão estiver configurada como 'none', ainda permitir acesso
         # pois plantas precisam visualizar fornecedores para criar agendamentos

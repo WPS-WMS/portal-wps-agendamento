@@ -1,15 +1,18 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import LandingPage from './components/LandingPage'
 import Login from './components/Login'
 import Header from './components/Header'
 import Loading from './components/Loading'
-import SupplierDashboard from './components/SupplierDashboard'
-import AdminDashboard from './components/AdminDashboard'
-import PlantDashboard from './components/PlantDashboard'
 import ResetPassword from './components/ResetPassword'
 import useAuth from './hooks/useAuth'
 import { Toaster } from './components/ui/sonner'
 import './App.css'
+
+// Lazy loading dos dashboards para melhor performance
+const SupplierDashboard = lazy(() => import('./components/SupplierDashboard'))
+const AdminDashboard = lazy(() => import('./components/AdminDashboard'))
+const PlantDashboard = lazy(() => import('./components/PlantDashboard'))
 
 // Componente para rotas públicas (LandingPage, Login)
 function PublicRoute({ children }) {
@@ -48,13 +51,15 @@ function ProtectedRoute() {
     <div className="min-h-screen bg-gray-50">
       <Header user={user} onLogout={logout} />
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        {user.role === 'admin' ? (
-          <AdminDashboard user={user} token={token} />
-        ) : user.role === 'plant' ? (
-          <PlantDashboard user={user} token={token} />
-        ) : (
-          <SupplierDashboard user={user} token={token} />
-        )}
+        <Suspense fallback={<Loading message="Carregando dashboard..." />}>
+          {user.role === 'admin' ? (
+            <AdminDashboard user={user} token={token} />
+          ) : user.role === 'plant' ? (
+            <PlantDashboard user={user} token={token} />
+          ) : (
+            <SupplierDashboard user={user} token={token} />
+          )}
+        </Suspense>
       </main>
     </div>
   )

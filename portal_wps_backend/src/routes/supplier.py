@@ -67,7 +67,7 @@ def get_plant_operating_hours_message(plant_id, appointment_date):
         # Se não encontrou configuração específica, retornar mensagem padrão
         return 'Horários disponíveis: 08:00 às 17:00'
     except Exception as e:
-        logger.error(f"Erro ao buscar horários de funcionamento da planta: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao buscar horários de funcionamento da planta: {str(e)}")
         return 'Horários disponíveis: 08:00 às 17:00'
 
 @supplier_bp.route('/appointments', methods=['GET'])
@@ -408,7 +408,6 @@ def create_appointment(current_user):
         
         # Gerar número único do agendamento
         appointment_number = generate_appointment_number(appointment_date)
-        logger.info(f"Gerado número de agendamento: {appointment_number} para data {appointment_date}")
         
         # Criar agendamento
         appointment = Appointment(
@@ -428,7 +427,6 @@ def create_appointment(current_user):
         db.session.commit()
         
         # Log para verificar se o número foi salvo
-        logger.info(f"Agendamento criado com ID {appointment.id}, número: {appointment.appointment_number}")
         
         return jsonify({
             'message': 'Agendamento criado com sucesso',
@@ -673,7 +671,7 @@ def delete_supplier_appointment(current_user, appointment_id):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao excluir agendamento {appointment_id}: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao excluir agendamento {appointment_id}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @supplier_bp.route('/suppliers', methods=['GET'])
@@ -698,7 +696,7 @@ def get_suppliers(current_user):
         return jsonify([supplier_dict]), 200
         
     except Exception as e:
-        logger.error(f"[get_suppliers] Erro: {str(e)}", exc_info=True)
+        logger.error(f"[get_suppliers] Erro: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # IMPORTANTE: Rotas mais específicas devem vir ANTES das rotas mais genéricas
@@ -826,7 +824,7 @@ def get_plant_schedule_config(current_user, plant_id):
         }), 200
         
     except Exception as e:
-        logger.error(f"Erro ao buscar configurações da planta {plant_id}: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao buscar configurações da planta {plant_id}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @supplier_bp.route('/plants/<int:plant_id>/time-slots', methods=['GET'])
@@ -976,7 +974,7 @@ def get_plant_time_slots(current_user, plant_id):
         }), 200
         
     except Exception as e:
-        logger.error(f"Erro ao buscar slots de tempo: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao buscar slots de tempo: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @supplier_bp.route('/plants/<int:plant_id>/max-capacity', methods=['GET'])
@@ -1009,7 +1007,7 @@ def get_plant_max_capacity(current_user, plant_id):
         }), 200
         
     except Exception as e:
-        logger.error(f"Erro ao buscar capacidade da planta {plant_id} para fornecedor: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao buscar capacidade da planta {plant_id} para fornecedor: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @supplier_bp.route('/plants', methods=['GET'])
@@ -1042,7 +1040,6 @@ def get_plants(current_user):
             Plant.company_id == current_user.company_id
         ).order_by(Plant.name).all()
         
-        logger.info(f"[get_plants] Fornecedor {current_user.id} (company_id: {current_user.company_id}) - Encontradas {len(plants)} plantas (ativas e inativas)")
         
         result = []
         for plant in plants:
@@ -1055,7 +1052,7 @@ def get_plants(current_user):
         return jsonify(result), 200
         
     except Exception as e:
-        logger.error(f"[get_plants] Erro: {str(e)}", exc_info=True)
+        logger.error(f"[get_plants] Erro: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @supplier_bp.route('/appointments/<int:appointment_id>/check-in', methods=['POST'])
@@ -1119,7 +1116,7 @@ def check_in_appointment(current_user, appointment_id):
         db.session.rollback()
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"Erro ao realizar check-in: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao realizar check-in: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @supplier_bp.route('/appointments/<int:appointment_id>/check-out', methods=['POST'])
@@ -1169,5 +1166,5 @@ def check_out_appointment(current_user, appointment_id):
         db.session.rollback()
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"Erro ao realizar check-out: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao realizar check-out: {str(e)}")
         return jsonify({'error': str(e)}), 500

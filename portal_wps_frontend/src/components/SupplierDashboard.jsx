@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -204,12 +204,7 @@ const SupplierDashboard = ({ user, token }) => {
         setTimeSlots([])
       }
     } catch (err) {
-      console.error('Erro ao carregar slots de tempo:', err)
       setTimeSlots([])
-      // Log para debug: verificar se há erro ao carregar timeSlots para datas anteriores
-      if (err.response?.status === 400) {
-        console.warn('Erro 400 ao carregar timeSlots:', err.response?.data)
-      }
     } finally {
       setLoadingSlots(false)
     }
@@ -273,7 +268,6 @@ const SupplierDashboard = ({ user, token }) => {
         loadAppointments(dateToLoad, selectedPlantId),
         loadTimeSlots(selectedPlantId, currentDate)
       ]).catch(err => {
-        console.error('Erro ao carregar dados em paralelo:', err)
       })
     } else {
       // Carregar apenas agendamentos se não houver planta selecionada
@@ -1139,7 +1133,6 @@ const SupplierDashboard = ({ user, token }) => {
       if (isNaN(startHour) || isNaN(startMin)) return 0
       return (startHour * 60 + startMin) / 60 * HOUR_HEIGHT
     } catch (error) {
-      console.error('Erro ao calcular top do horário padrão:', error)
       return 0
     }
   }, [operatingHours?.start])
@@ -1154,7 +1147,6 @@ const SupplierDashboard = ({ user, token }) => {
       const endTop = (endHour * 60 + endMin) / 60 * HOUR_HEIGHT
       return Math.max(0, endTop - startTop)
     } catch (error) {
-      console.error('Erro ao calcular altura do horário padrão:', error)
       return timelineHeight
     }
   }, [operatingHours?.start, operatingHours?.end, timelineHeight])
@@ -1199,7 +1191,6 @@ const SupplierDashboard = ({ user, token }) => {
         // Retornar true se estiver FORA do horário padrão
         return !(timeMinutes >= startMinutes && timeMinutes < endMinutes)
       } catch (error) {
-        console.error('Erro ao verificar horário do agendamento:', error)
         return false
       }
     })

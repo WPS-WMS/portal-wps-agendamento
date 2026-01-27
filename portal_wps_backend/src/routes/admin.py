@@ -137,20 +137,12 @@ def get_suppliers(current_user):
         all_suppliers_in_company = Supplier.query.filter(
             Supplier.company_id == current_user.company_id
         ).all()
-        logger.info(f"[get_suppliers] Total de fornecedores na company {current_user.company_id}: {len(all_suppliers_in_company)}")
-        for s in all_suppliers_in_company:
-            logger.debug(f"[get_suppliers] Fornecedor {s.id} ({s.description}) - is_deleted: {s.is_deleted}, is_active: {s.is_active}, company_id: {s.company_id}")
-        
         suppliers = Supplier.query.filter(
             and_(
                 Supplier.is_deleted == False,
                 Supplier.company_id == current_user.company_id
             )
         ).all()
-        
-        logger.info(f"[get_suppliers] Admin {current_user.id} (role: {current_user.role}) - Retornando {len(suppliers)} fornecedores (filtrados)")
-        for supplier in suppliers:
-            logger.debug(f"[get_suppliers] Fornecedor {supplier.id} ({supplier.description}) - created_by_admin_id: {supplier.created_by_admin_id}")
         
         return jsonify([supplier.to_dict() for supplier in suppliers]), 200
     except Exception as e:
@@ -202,9 +194,6 @@ def create_supplier(current_user):
         db.session.add(supplier)
         db.session.flush()  # Para obter o ID do supplier
         
-        # Log para debug (sem dados sensíveis)
-        logger.info(f"[create_supplier] Fornecedor criado - ID: {supplier.id}, Company ID: {supplier.company_id}, is_active: {supplier.is_active}")
-        
         # Gerar senha temporária
         temp_password = generate_temp_password()
         
@@ -221,7 +210,6 @@ def create_supplier(current_user):
         db.session.commit()
         
         # Log após commit para verificar se os valores foram salvos corretamente
-        logger.info(f"[create_supplier] Fornecedor salvo após commit - ID: {supplier.id}, is_deleted: {supplier.is_deleted}, is_active: {supplier.is_active}, company_id: {supplier.company_id}")
         
         return jsonify({
             'message': 'Fornecedor criado com sucesso',
@@ -245,7 +233,6 @@ def manage_appointments(current_user):
             week_start = request.args.get('week')
             date_str = request.args.get('date')  # Para visualização diária
             
-            logger.info(f"Parâmetros recebidos - week: {week_start}, date: {date_str}, plant_id: {request.args.get('plant_id')}")
             
             # Priorizar date sobre week se ambos estiverem presentes (visualização diária tem prioridade)
             # Se tem date, usar date (visualização diária)
@@ -268,8 +255,6 @@ def manage_appointments(current_user):
                             logger.warning(f"Erro ao converter plant_id '{plant_id_raw}': {e}")
                             plant_id = None
                     
-                    logger.info(f"Buscando agendamentos para data: {target_date}, planta: {plant_id} (raw: {plant_id_raw})")
-                    
                     # Base: agendamentos da mesma company do admin atual
                     query = Appointment.query.filter(
                         Appointment.date == target_date,
@@ -289,10 +274,6 @@ def manage_appointments(current_user):
                         else:
                             # Planta não pertence a esta company, retornar vazio
                             query = query.filter(Appointment.plant_id == -1)  # Filtro impossível
-                        logger.info(f"Filtrado por planta: {plant_id} (company {current_user.company_id})")
-                    else:
-                        # Já está filtrado por company_id, não precisa de join adicional
-                        logger.info("Nenhum filtro de planta aplicado - retornando agendamentos da company")
                     
                     appointments = query.order_by(Appointment.date, Appointment.time).all()
                     
@@ -319,7 +300,6 @@ def manage_appointments(current_user):
                                 'error': 'Erro ao carregar dados completos'
                             })
                     
-                    logger.info(f"Retornando {len(result)} agendamentos serializados")
                     return jsonify(result), 200
                 except ValueError as e:
                     logger.error(f"Erro ao processar data: {e}")
@@ -332,7 +312,6 @@ def manage_appointments(current_user):
             
             try:
                 start_date = datetime.strptime(week_start, '%Y-%m-%d').date()
-                logger.info(f"Buscando agendamentos para semana começando em: {start_date}")
             except ValueError:
                 return jsonify({'error': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
             
@@ -370,7 +349,7 @@ def manage_appointments(current_user):
             return jsonify(result), 200
             
         except Exception as e:
-            logger.error(f"Erro ao buscar agendamentos: {e}", exc_info=True)
+            logger.error(f"Erro ao buscar agendamentos: {e}")
             return jsonify({'error': str(e)}), 500
     
     # POST - Cria um novo agendamento
@@ -565,7 +544,7 @@ def check_in_appointment(current_user, appointment_id):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao realizar check-in: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao realizar check-in: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/appointments/<int:appointment_id>/check-out', methods=['POST'])
@@ -713,7 +692,6 @@ def update_appointment(current_user, appointment_id):
             if not plant_id_to_validate:
                 logger.warning(f"Agendamento {appointment_id} não possui plant_id. Pulando validação de horário de funcionamento.")
             else:
-                logger.info(f"Validando horários de funcionamento para reagendamento: plant_id={plant_id_to_validate}, date={appointment.date}, time={appointment.time}, time_end={appointment.time_end}")
                 from src.utils.operating_hours_validator import validate_operating_hours
                 is_valid, error_msg = validate_operating_hours(plant_id_to_validate, appointment.date, appointment.time, appointment.time_end)
                 if not is_valid:
@@ -873,7 +851,6 @@ def update_supplier(current_user, supplier_id):
             # Reativar usuários quando o fornecedor for reativado
             # IMPORTANTE: Sempre atualizar usuários quando is_active mudar, independente do perfil do usuário
             if old_status != new_status:  # Apenas atualizar se o status realmente mudou
-                logger.info(f"[update_supplier] Status do fornecedor {supplier_id} mudou de {old_status} para {new_status} (usuário: {current_user.id}, role: {current_user.role})")
                 
                 # Buscar usuários do fornecedor da mesma company para garantir isolamento multi-tenant
                 # Usar filter() ao invés de filter_by() para múltiplas condições
@@ -887,26 +864,16 @@ def update_supplier(current_user, supplier_id):
                 
                 # Contar quantos usuários serão afetados antes de atualizar
                 users_count = users_query.count()
-                logger.info(f"[update_supplier] Encontrados {users_count} usuário(s) vinculado(s) ao fornecedor {supplier_id} na company {current_user.company_id}")
-                
                 if not new_status:
                     # Inativar usuários quando o fornecedor for inativado
-                    users_updated = users_query.update({'is_active': False}, synchronize_session=False)
-                    logger.info(f"[update_supplier] Fornecedor {supplier_id} inativado por usuário {current_user.id} (role: {current_user.role}). {users_updated} usuário(s) inativado(s) de {users_count} encontrado(s)")
+                    users_query.update({'is_active': False}, synchronize_session=False)
                 else:
                     # Reativar usuários quando o fornecedor for reativado
-                    users_updated = users_query.update({'is_active': True}, synchronize_session=False)
-                    logger.info(f"[update_supplier] Fornecedor {supplier_id} reativado por usuário {current_user.id} (role: {current_user.role}). {users_updated} usuário(s) reativado(s) de {users_count} encontrado(s)")
-                
-                if users_updated == 0 and users_count > 0:
-                    logger.warning(f"[update_supplier] ATENÇÃO: Nenhum usuário foi atualizado, mas {users_count} usuário(s) foram encontrado(s)!")
-                elif users_updated == 0:
-                    logger.info(f"[update_supplier] Nenhum usuário encontrado vinculado ao fornecedor {supplier_id}")
+                    users_query.update({'is_active': True}, synchronize_session=False)
                 
                 # Forçar flush para garantir que a atualização seja aplicada antes do commit
                 db.session.flush()
             else:
-                logger.info(f"[update_supplier] Status do fornecedor {supplier_id} não mudou (mantido como {old_status})")
         
         supplier.updated_at = datetime.utcnow()
         
@@ -1071,20 +1038,17 @@ def create_schedule_config(current_user):
         
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"Salvando configuração: plant_id={plant_id}, date={target_date}, time={target_time}, is_available={data['is_available']}")
         
         # Criar ou atualizar registro (tanto para bloquear quanto para desbloquear)
         # Isso permite marcar explicitamente que o horário foi configurado
         if existing_config:
             # Atualizar existente
-            logger.info(f"Atualizando configuração existente: id={existing_config.id}, is_available: {existing_config.is_available} -> {data['is_available']}")
             existing_config.is_available = data['is_available']
             existing_config.reason = data.get('reason', '') if not data['is_available'] else ''
             existing_config.updated_at = datetime.utcnow()
             config = existing_config
         else:
             # Criar novo
-            logger.info(f"Criando nova configuração: is_available={data['is_available']}")
             config = ScheduleConfig(
                 plant_id=plant_id,
                 date=target_date,
@@ -1242,7 +1206,6 @@ def get_available_times(current_user):
         
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"Carregando horários para {target_date}: {len(configs)} configurações específicas encontradas")
         
         available_times = []
         for time_str in default_times:
@@ -1297,8 +1260,8 @@ def get_available_times(current_user):
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
-        logger.error(f"Erro em get_available_times: {str(e)}\n{error_trace}")
-        return jsonify({'error': str(e), 'traceback': error_trace}), 500
+        logger.error(f"Erro em get_available_times: {str(e)}")
+        return jsonify({'error': 'Erro ao processar horários disponíveis'}), 500
 
 @admin_bp.route('/plants/<int:plant_id>/time-slots', methods=['GET'])
 @permission_required('view_appointments', 'viewer')
@@ -1438,7 +1401,7 @@ def get_plant_time_slots(current_user, plant_id):
         }), 200
         
     except Exception as e:
-        logger.error(f"Erro em get_plant_time_slots: {e}", exc_info=True)
+        logger.error(f"Erro em get_plant_time_slots: {e}")
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/default-schedule', methods=['GET'])
@@ -1714,7 +1677,7 @@ def set_plant_max_capacity(current_user, plant_id):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao salvar max_capacity da planta: {e}", exc_info=True)
+        logger.error(f"Erro ao salvar max_capacity da planta: {e}")
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/plants', methods=['GET'])
@@ -1753,7 +1716,7 @@ def get_plants(current_user):
         return jsonify(result), 200
         
     except Exception as e:
-        logger.error(f"Erro ao buscar plantas: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao buscar plantas: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/plants', methods=['POST'])
@@ -1845,12 +1808,10 @@ def create_plant(current_user):
                     }), 400
             # Se o usuário existe mas está inativo, podemos reutilizar
             # Mas primeiro vamos deletar o usuário antigo para evitar conflitos
-            logger.info("Usuário inativo encontrado, removendo para permitir recriação")
             db.session.delete(existing_user)
             db.session.flush()  # Aplicar a deleção antes de criar o novo
         
         # Criar planta associada à mesma company do admin
-        logger.info("Criando nova planta")
         plant = Plant(
             name=data['name'],
             code=data['code'],
@@ -1868,7 +1829,6 @@ def create_plant(current_user):
         )
         db.session.add(plant)
         db.session.flush()  # Para obter o ID da planta
-        logger.info(f"Planta criada com ID {plant.id}")
         
         # Gerar senha temporária
         temp_password = generate_temp_password()
@@ -1887,7 +1847,6 @@ def create_plant(current_user):
         
         # Log para verificar o que está sendo retornado
         plant_dict = plant.to_dict()
-        logger.info(f"Planta criada e retornada com sucesso - ID: {plant.id}")
         
         return jsonify({
             'message': 'Planta criada com sucesso',
@@ -1898,7 +1857,7 @@ def create_plant(current_user):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao criar planta: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao criar planta: {str(e)}")
         # Verificar se é erro de integridade (duplicata) - fallback caso as validações anteriores não tenham capturado
         if 'UNIQUE constraint' in str(e) or 'IntegrityError' in str(type(e).__name__):
             if 'name' in str(e).lower():
@@ -2132,7 +2091,6 @@ def save_operating_hours_by_plant(current_user, plant_id):
         from src.models.operating_hours import OperatingHours
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"Salvando horários para planta ID {plant_id} (via path): {data}")
         
         # Desativar todas as configurações existentes desta planta
         # Multi-tenant: filtrar por company_id
@@ -2281,7 +2239,6 @@ def save_operating_hours_by_plant(current_user, plant_id):
                     return jsonify({'error': 'Formato de horário inválido para feriados'}), 400
         
         db.session.commit()
-        logger.info(f"Horários de funcionamento salvos com sucesso para planta ID {plant_id}")
         
         return jsonify({
             'message': 'Horários de funcionamento salvos com sucesso',
@@ -2290,7 +2247,7 @@ def save_operating_hours_by_plant(current_user, plant_id):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao salvar horários para planta ID {plant_id}: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao salvar horários para planta ID {plant_id}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/plants/<int:plant_id>', methods=['DELETE'])
@@ -2371,7 +2328,7 @@ def delete_plant(current_user, plant_id):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao deletar planta ID {plant_id}: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao deletar planta ID {plant_id}: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/operating-hours', methods=['GET'])
@@ -2447,14 +2404,12 @@ def save_operating_hours(current_user):
         
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"Dados recebidos para salvar horários: {data}")
         
         # Obter plant_id do body (opcional)
         plant_id = data.get('plant_id', None)
         if plant_id is not None and plant_id != '' and str(plant_id).lower() != 'null':
             try:
                 plant_id = int(plant_id)
-                logger.info(f"Salvando configurações para planta ID: {plant_id}")
                 
                 # Validar se a planta existe e pertence à mesma company
                 plant = Plant.query.filter_by(
@@ -2468,7 +2423,6 @@ def save_operating_hours(current_user):
                 plant_id = None
         else:
             plant_id = None
-            logger.info("Salvando configurações globais (plant_id=None)")
         
         # Desativar todas as configurações existentes da mesma planta (ou globais)
         # Multi-tenant: filtrar por company_id
@@ -2490,7 +2444,6 @@ def save_operating_hours(current_user):
             operating_start = weekdays.get('operating_start')
             operating_end = weekdays.get('operating_end')
             
-            logger.info(f"Dias úteis habilitados - Start: {operating_start} (tipo: {type(operating_start)}), End: {operating_end} (tipo: {type(operating_end)})")
             
             # Se não houver horários, não salvar (será considerado 24h)
             # Verificar se são strings não vazias
@@ -2500,7 +2453,6 @@ def save_operating_hours(current_user):
                 try:
                     start_time = datetime.strptime(operating_start.strip(), '%H:%M').time()
                     end_time = datetime.strptime(operating_end.strip(), '%H:%M').time()
-                    logger.info(f"Horários parseados - Start: {start_time}, End: {end_time}")
                     
                     # Verificar se já existe (multi-tenant: filtrar por company_id)
                     existing = OperatingHours.query.filter_by(
@@ -2585,7 +2537,6 @@ def save_operating_hours(current_user):
             operating_start = holiday.get('operating_start')
             operating_end = holiday.get('operating_end')
             
-            logger.info(f"Feriados habilitados - Start: {operating_start}, End: {operating_end}")
             
             if (operating_start and operating_end and 
                 isinstance(operating_start, str) and isinstance(operating_end, str) and
@@ -2623,20 +2574,19 @@ def save_operating_hours(current_user):
         
         try:
             db.session.commit()
-            logger.info("Horários de funcionamento salvos com sucesso")
             return jsonify({'message': 'Horários de funcionamento salvos com sucesso'}), 200
         except IntegrityError as integrity_error:
             db.session.rollback()
-            logger.error(f"Erro de integridade ao salvar horários: {integrity_error}", exc_info=True)
+            logger.error(f"Erro de integridade ao salvar horários: {integrity_error}")
             return jsonify({'error': 'Erro ao salvar: conflito com configuração existente. Tente novamente.'}), 400
         except Exception as commit_error:
-            logger.error(f"Erro ao fazer commit: {commit_error}", exc_info=True)
+            logger.error(f"Erro ao fazer commit: {commit_error}")
             db.session.rollback()
             raise
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao salvar horários de funcionamento: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao salvar horários de funcionamento: {str(e)}")
         import traceback
         logger.error(f"Traceback completo: {traceback.format_exc()}")
         return jsonify({'error': f'Erro ao salvar horários: {str(e)}'}), 500
@@ -2687,7 +2637,7 @@ def get_users(current_user):
         return jsonify(result), 200
         
     except Exception as e:
-        logger.error(f"Erro ao listar usuários: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao listar usuários: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/users', methods=['POST'])
@@ -2755,7 +2705,7 @@ def create_user(current_user):
         
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao criar usuário: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao criar usuário: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @admin_bp.route('/users/<int:user_id>', methods=['PUT'])
@@ -2875,7 +2825,6 @@ def delete_user(current_user, user_id):
         appointments_count = 0
         if user.supplier_id:
             appointments_count = Appointment.query.filter_by(supplier_id=user.supplier_id).count()
-            logger.info(f"Usuário tem {appointments_count} agendamentos vinculados ao fornecedor")
         
         if appointments_count > 0:
             logger.warning(f"Não é possível excluir usuário com {appointments_count} agendamentos")
@@ -3066,7 +3015,6 @@ def get_my_permissions():
                 }
             # Se não há permissão configurada, não incluir (frontend usará padrão)
         
-        logger.info(f"Permissões filtradas para role {user_role}: Total de funções: {len(filtered_permissions)}")
         if len(filtered_permissions) < 29:
             logger.warning(f"⚠️ ATENÇÃO: Apenas {len(filtered_permissions)} permissões encontradas! Esperado: 29")
             logger.warning(f"Todas as permissões filtradas: {filtered_permissions}")

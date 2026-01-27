@@ -550,7 +550,6 @@ const AccessProfilesScreen = ({ onBack, user }) => {
             setPermissions(mergedPermissions)
             setOriginalPermissions(JSON.parse(JSON.stringify(mergedPermissions)))
           } catch (e) {
-            console.error('Erro ao carregar permissões do localStorage:', e)
           }
         }
       }
