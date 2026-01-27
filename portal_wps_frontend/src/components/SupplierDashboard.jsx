@@ -13,6 +13,8 @@ import {
   Calendar, 
   ChevronLeft, 
   ChevronRight, 
+  ChevronUp,
+  ChevronDown,
   Plus, 
   LogIn, 
   LogOut, 
@@ -81,6 +83,10 @@ const SupplierDashboard = ({ user, token }) => {
   const [timeSlots, setTimeSlots] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [operatingHours, setOperatingHours] = useState({ start: '08:00', end: '17:00' })
+  
+  // Estados para controlar expansão de horários fora do padrão
+  const [showBeforeHours, setShowBeforeHours] = useState(false)
+  const [showAfterHours, setShowAfterHours] = useState(false)
 
   // Helper para escolher API baseada em permissões
   const getAPI = (resource) => {
@@ -1115,6 +1121,118 @@ const SupplierDashboard = ({ user, token }) => {
 
   // Calcular altura da timeline - sempre mostrar todos os 24 horários
   const timelineHeight = 24 * HOUR_HEIGHT
+  
+  // Funções auxiliares para calcular posições do horário padrão
+  const getOperatingHoursTop = useMemo(() => {
+    if (!operatingHours || !operatingHours.start) return 0
+    try {
+      const [startHour, startMin] = operatingHours.start.split(':').map(Number)
+      if (isNaN(startHour) || isNaN(startMin)) return 0
+      return (startHour * 60 + startMin) / 60 * HOUR_HEIGHT
+    } catch (error) {
+      console.error('Erro ao calcular top do horário padrão:', error)
+      return 0
+    }
+  }, [operatingHours?.start])
+  
+  const getOperatingHoursHeight = useMemo(() => {
+    if (!operatingHours || !operatingHours.start || !operatingHours.end) return timelineHeight
+    try {
+      const [startHour, startMin] = operatingHours.start.split(':').map(Number)
+      const [endHour, endMin] = operatingHours.end.split(':').map(Number)
+      if (isNaN(startHour) || isNaN(startMin) || isNaN(endHour) || isNaN(endMin)) return timelineHeight
+      const startTop = (startHour * 60 + startMin) / 60 * HOUR_HEIGHT
+      const endTop = (endHour * 60 + endMin) / 60 * HOUR_HEIGHT
+      return Math.max(0, endTop - startTop)
+    } catch (error) {
+      console.error('Erro ao calcular altura do horário padrão:', error)
+      return timelineHeight
+    }
+  }, [operatingHours?.start, operatingHours?.end, timelineHeight])
+  
+  const getOperatingHoursBottom = useMemo(() => {
+    return getOperatingHoursTop + getOperatingHoursHeight
+  }, [getOperatingHoursTop, getOperatingHoursHeight])
+  
+  // Verificar se há horários antes/depois do padrão
+  const hasHoursBefore = useMemo(() => {
+    return getOperatingHoursTop > 0
+  }, [getOperatingHoursTop])
+  
+  const hasHoursAfter = useMemo(() => {
+    return getOperatingHoursBottom < timelineHeight
+  }, [getOperatingHoursBottom, timelineHeight])
+  
+  // Verificar se há agendamentos fora do horário padrão (para expandir automaticamente)
+  const hasAppointmentsOutsideHours = useMemo(() => {
+    if (!selectedPlantId || !filteredAppointments || filteredAppointments.length === 0) return false
+    if (!operatingHours.start || !operatingHours.end) return false
+    
+    return filteredAppointments.some(appointment => {
+      if (!appointment || !appointment.time) return false
+      try {
+        const startTime = dateUtils.formatTime(appointment.time)
+        if (!startTime) return false
+        
+        const [timeHour, timeMin] = startTime.split(':').map(Number)
+        const [startHour, startMin] = operatingHours.start.split(':').map(Number)
+        const [endHour, endMin] = operatingHours.end.split(':').map(Number)
+        
+        // Validar se os valores são números válidos
+        if (isNaN(timeHour) || isNaN(timeMin) || isNaN(startHour) || isNaN(startMin) || isNaN(endHour) || isNaN(endMin)) {
+          return false
+        }
+        
+        const timeMinutes = timeHour * 60 + timeMin
+        const startMinutes = startHour * 60 + startMin
+        const endMinutes = endHour * 60 + endMin
+        
+        // Retornar true se estiver FORA do horário padrão
+        return !(timeMinutes >= startMinutes && timeMinutes < endMinutes)
+      } catch (error) {
+        console.error('Erro ao verificar horário do agendamento:', error)
+        return false
+      }
+    })
+  }, [selectedPlantId, filteredAppointments, operatingHours])
+  
+  // Altura visível do calendário baseada no horário padrão + áreas expandidas
+  const visibleCalendarHeight = useMemo(() => {
+    const baseHeight = getOperatingHoursHeight
+    let beforeHeight = 0
+    let afterHeight = 0
+    
+    // Se expandido ou se há agendamentos fora do horário padrão, mostrar área anterior
+    if (showBeforeHours || (hasAppointmentsOutsideHours && hasHoursBefore)) {
+      beforeHeight = getOperatingHoursTop
+    }
+    
+    // Se expandido ou se há agendamentos fora do horário padrão, mostrar área posterior
+    if (showAfterHours || (hasAppointmentsOutsideHours && hasHoursAfter)) {
+      afterHeight = timelineHeight - getOperatingHoursBottom
+    }
+    
+    // Retornar altura total, mas nunca menor que a altura base
+    return Math.max(baseHeight, baseHeight + beforeHeight + afterHeight)
+  }, [
+    getOperatingHoursHeight,
+    getOperatingHoursTop,
+    getOperatingHoursBottom,
+    showBeforeHours,
+    showAfterHours,
+    hasAppointmentsOutsideHours,
+    hasHoursBefore,
+    hasHoursAfter,
+    timelineHeight
+  ])
+  
+  // Expandir automaticamente se houver agendamentos fora do horário padrão
+  useEffect(() => {
+    if (hasAppointmentsOutsideHours) {
+      if (hasHoursBefore) setShowBeforeHours(true)
+      if (hasHoursAfter) setShowAfterHours(true)
+    }
+  }, [hasAppointmentsOutsideHours, hasHoursBefore, hasHoursAfter])
 
   const stats = useMemo(() => {
     // Filtrar agendamentos pela planta selecionada
@@ -1734,8 +1852,62 @@ const SupplierDashboard = ({ user, token }) => {
           {/* Visualização Tipo Agenda Diária - Layout Estilo Agenda Visual */}
           {selectedPlantId && (
           <Card className="overflow-hidden">
-            <div className="h-[calc(100vh-400px)] min-h-[600px] overflow-y-auto overflow-x-auto">
-              <div className="hidden md:flex relative" style={{ minHeight: `${timelineHeight}px`, minWidth: maxCapacity >= 5 ? `${maxCapacity * 200}px` : '100%' }}>
+            <div className="h-[calc(100vh-400px)] min-h-[600px] overflow-x-auto relative">
+              {/* Botão para expandir horários anteriores */}
+              {hasHoursBefore && !showBeforeHours && (
+                <div 
+                  className="absolute top-0 left-0 right-0 z-20 flex justify-center py-2 bg-gradient-to-b from-white via-white/95 to-transparent"
+                  style={{ height: '60px' }}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowBeforeHours(true)}
+                    className="shadow-md hover:shadow-lg transition-shadow"
+                  >
+                    <ChevronUp className="w-4 h-4 mr-2" />
+                    Mostrar horários anteriores ({operatingHours.start || '00:00'} - {operatingHours.start || '00:00'})
+                  </Button>
+                </div>
+              )}
+              
+              {/* Botão para recolher horários anteriores */}
+              {hasHoursBefore && showBeforeHours && (
+                <div 
+                  className="absolute top-0 left-0 right-0 z-20 flex justify-center py-2 bg-gradient-to-b from-white via-white/95 to-transparent"
+                  style={{ height: '60px' }}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowBeforeHours(false)}
+                    className="shadow-md hover:shadow-lg transition-shadow"
+                  >
+                    <ChevronDown className="w-4 h-4 mr-2" />
+                    Ocultar horários anteriores
+                  </Button>
+                </div>
+              )}
+              
+              {/* Container com scroll apenas na área visível */}
+              <div 
+                className="overflow-y-auto overflow-x-hidden"
+                style={{ 
+                  height: `${Math.min(visibleCalendarHeight, typeof window !== 'undefined' ? window.innerHeight - 400 : 600)}px`,
+                  maxHeight: 'calc(100vh - 400px)',
+                  paddingTop: hasHoursBefore && !showBeforeHours ? '60px' : '0',
+                  paddingBottom: hasHoursAfter && !showAfterHours ? '60px' : '0'
+                }}
+                ref={(el) => {
+                  // Scroll inicial para o início do horário padrão quando carregar
+                  if (el && !showBeforeHours && !showAfterHours && !hasAppointmentsOutsideHours) {
+                    setTimeout(() => {
+                      el.scrollTop = getOperatingHoursTop
+                    }, 100)
+                  }
+                }}
+              >
+                <div className="hidden md:flex relative" style={{ minHeight: `${timelineHeight}px`, minWidth: maxCapacity >= 5 ? `${maxCapacity * 200}px` : '100%' }}>
                 {/* Coluna de Horários */}
                 <div className="w-24 flex-shrink-0 bg-gray-50 border-r border-gray-200 relative sticky left-0 z-10" style={{ minHeight: `${timelineHeight}px` }}>
                   {Array.from({ length: 24 }, (_, i) => {
@@ -2269,7 +2441,44 @@ const SupplierDashboard = ({ user, token }) => {
                     )
                   })}
               </div>
-            </div>
+                </div>
+              </div>
+              
+              {/* Botão para expandir horários posteriores */}
+              {hasHoursAfter && !showAfterHours && (
+                <div 
+                  className="absolute bottom-0 left-0 right-0 z-20 flex justify-center py-2 bg-gradient-to-t from-white via-white/95 to-transparent"
+                  style={{ height: '60px' }}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAfterHours(true)}
+                    className="shadow-md hover:shadow-lg transition-shadow"
+                  >
+                    <ChevronDown className="w-4 h-4 mr-2" />
+                    Mostrar horários posteriores ({operatingHours.end || '23:59'} - 23:59)
+                  </Button>
+                </div>
+              )}
+              
+              {/* Botão para recolher horários posteriores */}
+              {hasHoursAfter && showAfterHours && (
+                <div 
+                  className="absolute bottom-0 left-0 right-0 z-20 flex justify-center py-2 bg-gradient-to-t from-white via-white/95 to-transparent"
+                  style={{ height: '60px' }}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAfterHours(false)}
+                    className="shadow-md hover:shadow-lg transition-shadow"
+                  >
+                    <ChevronUp className="w-4 h-4 mr-2" />
+                    Ocultar horários posteriores
+                  </Button>
+                </div>
+              )}
           </Card>
           )}
         </TabsContent>
