@@ -1,9 +1,9 @@
-const Logo = ({ className = "", showText = true, size = "default" }) => {
-  const iconSize = size === "small" ? "w-8 h-8" : size === "large" ? "w-16 h-16" : "w-10 h-10"
-  const textSize = size === "small" ? "text-lg" : size === "large" ? "text-2xl" : "text-xl"
+const Logo = ({ className = "", showText = false, size = "default" }) => {
+  // Tamanhos maiores para o logo sem texto
+  const iconSize = size === "small" ? "w-12 h-12" : size === "large" ? "w-24 h-24" : "w-16 h-16"
   
   return (
-    <div className={`flex items-center space-x-3 ${className}`}>
+    <div className={`flex items-center justify-center ${className}`}>
       {/* Logo SVG Original */}
       <div className={`${iconSize} relative flex-shrink-0 overflow-visible`}>
         <svg 
@@ -33,14 +33,6 @@ const Logo = ({ className = "", showText = true, size = "default" }) => {
           <path d="M0 0 C0 0.33 0 0.66 0 1 C-2.31 1 -4.62 1 -7 1 C-7 1.66 -7 2.32 -7 3 C-9.97 2.67 -12.94 2.34 -16 2 C-16 1.67 -16 1.34 -16 1 C-10.63904667 -0.12862175 -5.44693314 -0.09688221 0 0 Z " fill="#FD943B" transform="translate(62,253)"/>
         </svg>
       </div>
-      
-      {/* Texto: CargoFlow */}
-      {showText && (
-        <div className={textSize}>
-          <span className="font-bold text-gray-900">Cargo</span>
-          <span className="font-bold text-[#FF6B35]">Flow</span>
-        </div>
-      )}
     </div>
   )
 }
