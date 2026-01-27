@@ -1859,6 +1859,19 @@ const SupplierDashboard = ({ user, token }) => {
                         // Verificar se este slot está indisponível (há outros fornecedores e esta é a última coluna disponível)
                         const isUnavailable = hasOtherSuppliers && colIndex === lastAvailableColumn
                         
+                        // Debug temporário - remover depois
+                        if (timeString === '13:00' && colIndex === 0 && hasOtherSuppliers) {
+                          console.log('Slot indisponível detectado:', {
+                            timeString,
+                            colIndex,
+                            hasOtherSuppliers,
+                            lastAvailableColumn,
+                            isUnavailable,
+                            timeSlotsLength: timeSlots.length,
+                            slot: timeSlots.find(s => s.time === timeString)
+                          })
+                        }
+                        
                         // Área clicável apenas se: dentro da capacidade, dentro do funcionamento, tem capacidade, está vazia, e não está indisponível
                         const isClickable = isWithinCapacity && isWithinHours && hasCapacity && isEmpty && !isUnavailable
                         
