@@ -899,6 +899,14 @@ def get_plant_time_slots(current_user, plant_id):
             start_time = operating_hours_config.operating_start
             end_time = operating_hours_config.operating_end
         
+        # OTIMIZAÇÃO: Buscar todos os agendamentos do dia de uma vez em vez de fazer query por slot
+        from sqlalchemy import or_, and_
+        all_appointments = Appointment.query.filter(
+            Appointment.date == target_date,
+            Appointment.plant_id == plant_id,
+            Appointment.company_id == current_user.company_id
+        ).all()
+        
         # Gerar slots de 30 minutos dentro do horário de funcionamento
         # IMPORTANTE: Não incluir o último slot se for igual ao horário final
         # Exemplo: se funcionamento é 08:00-17:00, último slot é 16:30 (não 17:00)
@@ -914,53 +922,38 @@ def get_plant_time_slots(current_user, plant_id):
             if slot_time >= end_time:
                 break
             
-            # Verificar capacidade para este slot de 30 minutos
-            # Um agendamento ocupa um slot de 30 minutos se se sobrepõe a ele
-            # Exemplo: slot 13:00-13:30 é ocupado por agendamento 13:00-13:30 ou 12:30-14:00
-            from sqlalchemy import or_, and_
-            
             # Calcular início e fim do slot de 30 minutos
-            slot_start = slot_time
-            slot_end_minutes = (slot_time.hour * 60 + slot_time.minute + 30) % (24 * 60)
-            slot_end_hour = slot_end_minutes // 60
-            slot_end_min = slot_end_minutes % 60
-            slot_end = time(slot_end_hour, slot_end_min)
+            slot_start_minutes = slot_time.hour * 60 + slot_time.minute
+            slot_end_minutes = (slot_start_minutes + 30) % (24 * 60)
             
-            # Calcular slot_start - 1h para verificar agendamentos antigos
-            # Agendamentos antigos (sem time_end) duram 1 hora
-            if slot_start.hour > 0:
-                slot_start_minus_1h = time(slot_start.hour - 1, slot_start.minute)
-            else:
-                slot_start_minus_1h = time(23, slot_start.minute)
-            
-            # Contar agendamentos que se sobrepõem a este slot de 30 minutos
-            # Um agendamento se sobrepõe se: start < slot_end && slot_start < end
-            # Para agendamentos antigos (sem time_end), assumir duração de 1 hora
-            # Então um agendamento antigo que começa em T ocupa T até T+1h
-            # Se sobrepõe se: T < slot_end && T + 1h > slot_start
-            # Isso é equivalente a: T < slot_end && T > slot_start - 1h
-            count = Appointment.query.filter(
-                Appointment.date == target_date,
-                Appointment.plant_id == plant_id,
-                Appointment.company_id == current_user.company_id
-            ).filter(
-                or_(
-                    # Agendamento antigo (sem time_end) - assumir duração de 1 hora
-                    # Se sobrepõe se: time < slot_end && time > slot_start - 1h
-                    and_(
-                        Appointment.time_end.is_(None),
-                        Appointment.time < slot_end,
-                        Appointment.time > slot_start_minus_1h
-                    ),
-                    # Agendamento com intervalo que se sobrepõe ao slot
-                    # start < slot_end && slot_start < end
-                    and_(
-                        Appointment.time_end.isnot(None),
-                        Appointment.time < slot_end,
-                        Appointment.time_end > slot_start
-                    )
-                )
-            ).count()
+            # Contar agendamentos que se sobrepõem a este slot em memória
+            count = 0
+            for apt in all_appointments:
+                apt_start = apt.time
+                apt_start_minutes = apt_start.hour * 60 + apt_start.minute
+                
+                # Se não tem time_end, assumir duração de 1 hora
+                if apt.time_end is None:
+                    apt_end_minutes = (apt_start_minutes + 60) % (24 * 60)
+                else:
+                    apt_end = apt.time_end
+                    apt_end_minutes = apt_end.hour * 60 + apt_end.minute
+                
+                # Verificar sobreposição: start < slot_end && slot_start < end
+                # Converter para minutos para facilitar comparação
+                slot_start_mins = slot_start_minutes
+                slot_end_mins = slot_end_minutes
+                
+                # Tratar casos onde o slot ou agendamento cruza meia-noite
+                if slot_end_mins < slot_start_mins:  # Slot cruza meia-noite
+                    slot_end_mins += 24 * 60
+                
+                if apt_end_minutes < apt_start_minutes:  # Agendamento cruza meia-noite
+                    apt_end_minutes += 24 * 60
+                
+                # Verificar sobreposição
+                if apt_start_minutes < slot_end_mins and slot_start_mins < apt_end_minutes:
+                    count += 1
             
             is_available = count < max_capacity
             
