@@ -246,15 +246,9 @@ const SupplierDashboard = ({ user, token }) => {
     // Criar uma cópia da data para garantir que não seja modificada
     const dateToLoad = new Date(currentDate.getTime())
     
-    // Verificar se a data não é no passado para timeSlots
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const selectedDate = new Date(currentDate)
-    selectedDate.setHours(0, 0, 0, 0)
-    const canLoadTimeSlots = selectedDate >= today
-    
     // Carregar agendamentos e timeSlots em paralelo para melhor performance
-    if (selectedPlantId && canLoadTimeSlots) {
+    // Agora permitimos carregar timeSlots para datas anteriores também (apenas para visualização)
+    if (selectedPlantId) {
       // Carregar ambos em paralelo usando Promise.all
       Promise.all([
         loadAppointments(dateToLoad, selectedPlantId),
@@ -263,11 +257,9 @@ const SupplierDashboard = ({ user, token }) => {
         console.error('Erro ao carregar dados em paralelo:', err)
       })
     } else {
-      // Carregar apenas agendamentos se não houver planta ou data no passado
-      loadAppointments(dateToLoad, selectedPlantId || null)
-      if (!canLoadTimeSlots || !selectedPlantId) {
-        setTimeSlots([])
-      }
+      // Carregar apenas agendamentos se não houver planta selecionada
+      loadAppointments(dateToLoad, null)
+      setTimeSlots([])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate?.getTime(), activeTab, selectedPlantId])

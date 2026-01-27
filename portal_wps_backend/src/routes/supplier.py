@@ -846,9 +846,8 @@ def get_plant_time_slots(current_user, plant_id):
         except ValueError:
             return jsonify({'error': 'Formato de data inválido. Use YYYY-MM-DD'}), 400
         
-        # Verificar se a data não é no passado
-        if target_date < datetime.now().date():
-            return jsonify({'error': 'Não é possível agendar para datas passadas'}), 400
+        # Permitir consultar timeSlots de datas anteriores apenas para visualização
+        # (não bloqueamos porque o frontend precisa calcular slots indisponíveis para datas anteriores)
         
         # Buscar planta
         from src.models.plant import Plant
