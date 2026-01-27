@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { 
-  Truck, 
   Clock, 
   Shield, 
   Users, 
@@ -13,6 +12,7 @@ import {
   Calendar,
   Lock
 } from 'lucide-react'
+import Logo from './Logo'
 
 const LandingPage = () => {
   const navigate = useNavigate()
@@ -79,15 +79,10 @@ const LandingPage = () => {
       <header className="fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-b border-gray-200 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Truck className="w-6 h-6 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-900">CargoFlow</span>
-            </div>
+            <Logo showText={true} size="default" />
             <Button 
               onClick={() => navigate('/login')}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white"
             >
               Entrar
             </Button>
@@ -96,13 +91,13 @@ const LandingPage = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      <section className="pt-24 pb-16 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-orange-50 via-white to-orange-50/30">
         <div className="max-w-7xl mx-auto">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
                 Agendamentos logísticos{' '}
-                <span className="text-blue-600">simples, rápidos</span> e inteligentes.
+                <span className="text-[#FF6B35]">simples, rápidos</span> e inteligentes.
               </h1>
               <p className="text-xl text-gray-600 leading-relaxed">
                 Centralize fornecedores, plantas e horários em uma única plataforma.
@@ -110,7 +105,7 @@ const LandingPage = () => {
               <Button
                 onClick={() => navigate('/login')}
                 size="lg"
-                className="bg-blue-600 hover:bg-blue-700 text-white text-lg px-8 py-6 h-auto group"
+                className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white text-lg px-8 py-6 h-auto group"
               >
                 Começar agora
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -118,11 +113,11 @@ const LandingPage = () => {
             </div>
             <div className="hidden lg:block">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-2xl transform rotate-3 opacity-20"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-orange-400 to-orange-500 rounded-2xl transform rotate-3 opacity-20"></div>
                 <Card className="relative shadow-2xl border-0 bg-white rounded-2xl overflow-hidden">
                   <CardContent className="p-0">
                     {/* Header do Dashboard */}
-                    <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 border-b border-blue-500">
+                    <div className="bg-gradient-to-r from-[#FF6B35] to-[#E55A2B] p-4 border-b border-orange-500">
                       <div className="flex items-center justify-between">
                         <h3 className="text-lg font-semibold text-white">Calendário de Agendamentos</h3>
                         <Calendar className="w-5 h-5 text-white" />
@@ -159,7 +154,7 @@ const LandingPage = () => {
                             
                             {/* Card 1: 09:00 - 10:30 (3 linhas) */}
                             <div 
-                              className="absolute left-1 right-1 bg-blue-500 text-white rounded px-2 py-1.5 text-xs font-medium shadow-sm z-10"
+                              className="absolute left-1 right-1 bg-[#FF6B35] text-white rounded px-2 py-1.5 text-xs font-medium shadow-sm z-10"
                               style={{ top: '48px', height: '96px' }}
                             >
                               <div className="flex items-center justify-between mb-1">
@@ -236,7 +231,7 @@ const LandingPage = () => {
                             {Array.from({ length: 8 }, (_, idx) => (
                               <div 
                                 key={`col3-line-${idx}`}
-                                className="absolute left-0 right-0 border-b border-dashed border-gray-200 hover:bg-blue-50/50 transition-colors"
+                                className="absolute left-0 right-0 border-b border-dashed border-gray-200 hover:bg-orange-50/50 transition-colors"
                                 style={{ top: `${idx * 48}px`, height: '48px' }}
                               />
                             ))}
@@ -245,10 +240,10 @@ const LandingPage = () => {
                             {[0, 4, 7].map((idx) => (
                               <div 
                                 key={`available-${idx}`}
-                                className="absolute inset-1 border-2 border-dashed border-blue-300 rounded bg-blue-50/30 flex items-center justify-center z-10"
+                                className="absolute inset-1 border-2 border-dashed border-orange-300 rounded bg-orange-50/30 flex items-center justify-center z-10"
                                 style={{ top: `${idx * 48 + 4}px`, height: '40px' }}
                               >
-                                <span className="text-[10px] text-blue-600 font-medium">Disponível</span>
+                                <span className="text-[10px] text-[#FF6B35] font-medium">Disponível</span>
                               </div>
                             ))}
                           </div>
@@ -258,11 +253,11 @@ const LandingPage = () => {
                       {/* Legenda */}
                       <div className="mt-4 flex items-center justify-center gap-4 text-xs text-gray-600">
                         <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 bg-blue-500 rounded"></div>
+                          <div className="w-3 h-3 bg-[#FF6B35] rounded"></div>
                           <span>Agendado</span>
                         </div>
                         <div className="flex items-center gap-1">
-                          <div className="w-3 h-3 border-2 border-dashed border-blue-300 rounded bg-blue-50/30"></div>
+                          <div className="w-3 h-3 border-2 border-dashed border-orange-300 rounded bg-orange-50/30"></div>
                           <span>Disponível</span>
                         </div>
                       </div>
@@ -306,11 +301,11 @@ const LandingPage = () => {
               return (
                 <Card 
                   key={index}
-                  className="border border-gray-200 hover:border-blue-300 hover:shadow-lg transition-all duration-300 group cursor-default"
+                  className="border border-gray-200 hover:border-orange-300 hover:shadow-lg transition-all duration-300 group cursor-default"
                 >
                   <CardContent className="p-6 space-y-3">
-                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-600 transition-colors">
-                      <Icon className="w-6 h-6 text-blue-600 group-hover:text-white transition-colors" />
+                    <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center group-hover:bg-[#FF6B35] transition-colors">
+                      <Icon className="w-6 h-6 text-[#FF6B35] group-hover:text-white transition-colors" />
                     </div>
                     <h3 className="text-xl font-semibold text-gray-900">
                       {feature.title}
@@ -343,12 +338,12 @@ const LandingPage = () => {
                 <Card className="border border-gray-200 hover:shadow-lg transition-all duration-300 h-full">
                   <CardContent className="p-6 space-y-4">
                     <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0">
+                      <div className="w-12 h-12 bg-[#FF6B35] text-white rounded-full flex items-center justify-center text-xl font-bold flex-shrink-0">
                         {step.number}
                       </div>
                       {index < steps.length - 1 && (
                         <div className="hidden lg:block absolute top-12 left-full w-full h-0.5 bg-gray-200 -z-10">
-                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-blue-600 rounded-full"></div>
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-[#FF6B35] rounded-full"></div>
                         </div>
                       )}
                     </div>
@@ -367,18 +362,18 @@ const LandingPage = () => {
       </section>
 
       {/* Call to Action Final */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-blue-600 to-indigo-700">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-[#FF6B35] to-[#E55A2B]">
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <h2 className="text-3xl sm:text-4xl font-bold text-white">
             Pronto para organizar sua logística?
           </h2>
-          <p className="text-xl text-blue-100">
+          <p className="text-xl text-orange-100">
             Acesse o sistema e comece a gerenciar seus agendamentos hoje mesmo.
           </p>
           <Button
             onClick={() => navigate('/login')}
             size="lg"
-            className="bg-white text-blue-600 hover:bg-gray-100 text-lg px-8 py-6 h-auto group"
+            className="bg-white text-[#FF6B35] hover:bg-gray-100 text-lg px-8 py-6 h-auto group"
           >
             Acessar sistema
             <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
@@ -390,10 +385,7 @@ const LandingPage = () => {
       <footer className="py-8 px-4 sm:px-6 lg:px-8 bg-gray-900 text-gray-400">
         <div className="max-w-7xl mx-auto text-center">
           <div className="flex items-center justify-center space-x-3 mb-4">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Truck className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-lg font-semibold text-white">CargoFlow</span>
+            <Logo showText={true} size="small" />
           </div>
           <p className="text-sm">
             © {new Date().getFullYear()} CargoFlow. Todos os direitos reservados.

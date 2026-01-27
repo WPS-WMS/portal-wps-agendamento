@@ -6,8 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Loader2, Truck, Eye, EyeOff } from 'lucide-react'
+import { Loader2, Eye, EyeOff } from 'lucide-react'
 import { authAPI } from '../lib/api'
+import Logo from './Logo'
 
 const Login = ({ onLogin }) => {
   const navigate = useNavigate()
@@ -205,13 +206,11 @@ const Login = ({ onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100/50 p-4">
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
-            <Truck className="w-8 h-8 text-white" />
-          </div>
-          <CardTitle className="text-2xl font-bold text-gray-900">Cargo Flow</CardTitle>
+          <Logo showText={true} size="large" className="mx-auto justify-center" />
+          <CardTitle className="text-2xl font-bold text-gray-900 sr-only">CargoFlow</CardTitle>
           <CardDescription className="text-gray-600">
             Sistema de Agendamento de Carga
           </CardDescription>
@@ -320,7 +319,7 @@ const Login = ({ onLogin }) => {
               <button
                 type="button"
                 onClick={() => setShowForgotPassword(true)}
-                className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                className="text-sm text-[#FF6B35] hover:text-[#E55A2B] hover:underline"
                 disabled={loading}
               >
                 Esqueci minha senha

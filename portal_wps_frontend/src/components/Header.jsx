@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { LogOut, Truck, User, Settings } from 'lucide-react'
+import { LogOut, User, Settings } from 'lucide-react'
 import ProfileModal from './ProfileModal'
 import SettingsModal from './SettingsModal'
+import Logo from './Logo'
 
 const Header = ({ user, onLogout }) => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
@@ -78,11 +79,8 @@ const Header = ({ user, onLogout }) => {
         <div className="flex justify-between items-center h-16 relative">
           {/* Logo e Título */}
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Truck className="w-6 h-6 text-white" />
-            </div>
+            <Logo showText={true} size="default" />
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Cargo Flow</h1>
               <p className="text-sm text-gray-500">Agendamento de Carga</p>
             </div>
           </div>
@@ -98,12 +96,12 @@ const Header = ({ user, onLogout }) => {
             <div className="relative" ref={dropdownRef}>
               <Button 
                 variant="ghost" 
-                className="relative h-10 w-10 rounded-full hover:ring-2 hover:ring-blue-500 hover:ring-offset-2 transition-all p-0"
+                className="relative h-10 w-10 rounded-full hover:ring-2 hover:ring-[#FF6B35] hover:ring-offset-2 transition-all p-0"
                 aria-label="Menu do usuário"
                 onClick={handleToggleDropdown}
               >
                 <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold cursor-pointer">
+                  <AvatarFallback className="bg-orange-100 text-[#FF6B35] font-semibold cursor-pointer">
                     {getUserInitials(user?.email)}
                   </AvatarFallback>
                 </Avatar>

@@ -1553,7 +1553,7 @@ const SupplierDashboard = ({ user, token }) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-blue-600 transition-all duration-300">{stats.total}</p>
+            <p className="text-2xl font-bold text-[#FF6B35] transition-all duration-300">{stats.total}</p>
           </CardContent>
         </Card>
 
@@ -1684,7 +1684,7 @@ const SupplierDashboard = ({ user, token }) => {
                         {dateUtils.getDayName(currentDate)} - {dateUtils.formatDate(currentDate)}
                       </CardTitle>
                       {dateUtils.isToday(currentDate) && (
-                        <p className="text-xs text-blue-600 mt-1 font-medium">Hoje</p>
+                        <p className="text-xs text-[#FF6B35] mt-1 font-medium">Hoje</p>
                       )}
                     </div>
                   </div>
@@ -1859,7 +1859,7 @@ const SupplierDashboard = ({ user, token }) => {
                               isUnavailable
                                 ? 'border-2 border-dashed border-red-300/60 bg-red-50/20 rounded'
                                 : isClickable
-                                ? 'border-2 border-dashed border-blue-300 bg-blue-50/30 hover:border-blue-400 hover:bg-blue-100/50 cursor-pointer group rounded'
+                                ? 'border-2 border-dashed border-orange-300 bg-orange-50/30 hover:border-orange-400 hover:bg-orange-100/50 cursor-pointer group rounded'
                                 : 'border-transparent'
                             }`}
                             style={{ 
@@ -1900,11 +1900,11 @@ const SupplierDashboard = ({ user, token }) => {
                               <>
                                 {/* Texto "Disponível" sempre visível, mas mais sutil */}
                                 <div className="absolute inset-0 flex items-center justify-center opacity-40 group-hover:opacity-0 transition-opacity duration-200 pointer-events-none">
-                                  <span className="text-[10px] text-blue-600 font-medium">Disponível</span>
+                                  <span className="text-[10px] text-[#FF6B35] font-medium">Disponível</span>
                                 </div>
                                 {/* Badge com horário no hover */}
                                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-                                  <div className="bg-blue-500/90 text-white text-xs font-medium px-2 py-1 rounded shadow-lg">
+                                  <div className="bg-orange-500/90 text-white text-xs font-medium px-2 py-1 rounded shadow-lg">
                                     {timeString}
                                   </div>
                                 </div>
@@ -1958,7 +1958,7 @@ const SupplierDashboard = ({ user, token }) => {
                                         <div className="flex-1 min-w-0">
                                           {/* Número do agendamento no canto superior esquerdo */}
                                           {appointment.appointment_number && (
-                                            <p className="text-xs font-mono font-semibold text-blue-600 truncate leading-tight mb-0.5">
+                                            <p className="text-xs font-mono font-semibold text-[#FF6B35] truncate leading-tight mb-0.5">
                                               {appointment.appointment_number}
                                             </p>
                                           )}
@@ -2022,7 +2022,7 @@ const SupplierDashboard = ({ user, token }) => {
                                     </div>
                                     <div className="space-y-1 text-xs border-t pt-2">
                                       {appointment.appointment_number && (
-                                        <p className="font-mono text-blue-600">
+                                        <p className="font-mono text-[#FF6B35]">
                                           <span className="font-medium">Nº:</span> {appointment.appointment_number}
                                         </p>
                                       )}
@@ -2119,7 +2119,7 @@ const SupplierDashboard = ({ user, token }) => {
                                     }}
                                     aria-label="Check-out"
                                   >
-                                    <LogOut className="w-3.5 h-3.5 text-blue-600" />
+                                    <LogOut className="w-3.5 h-3.5 text-[#FF6B35]" />
                                   </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>Realizar check-out</TooltipContent>
@@ -2182,7 +2182,7 @@ const SupplierDashboard = ({ user, token }) => {
                                     {dateUtils.formatTimeRange(appointment.time, appointment.time_end)}
                                   </p>
                                   {appointment.appointment_number && (
-                                    <p className="text-xs font-mono text-blue-600 mt-0.5">
+                                    <p className="text-xs font-mono text-[#FF6B35] mt-0.5">
                                       Nº: {appointment.appointment_number}
                                     </p>
                                   )}
@@ -2194,7 +2194,7 @@ const SupplierDashboard = ({ user, token }) => {
                               
                               <div className="space-y-1 text-xs text-gray-600 mb-3">
                                 {appointment.appointment_number && (
-                                  <p className="truncate font-mono text-blue-600">
+                                  <p className="truncate font-mono text-[#FF6B35]">
                                     <span className="font-medium">Nº:</span> {appointment.appointment_number}
                                   </p>
                                 )}
@@ -2258,7 +2258,7 @@ const SupplierDashboard = ({ user, token }) => {
                                     onClick={() => handleCheckOut(appointment.id)}
                                     title="Check-out"
                                   >
-                                    <LogOut className="w-4 h-4 text-blue-600" />
+                                    <LogOut className="w-4 h-4 text-[#FF6B35]" />
                                   </Button>
                                 )}
                               </div>
@@ -2364,7 +2364,7 @@ const SupplierDashboard = ({ user, token }) => {
                   {selectedAppointment.appointment_number && (
                     <div className="pb-4 border-b">
                       <Label className="text-xs text-gray-500">Número do Agendamento</Label>
-                      <p className="text-sm font-medium font-mono text-blue-600">
+                      <p className="text-sm font-medium font-mono text-[#FF6B35]">
                         {selectedAppointment.appointment_number}
                       </p>
                     </div>
