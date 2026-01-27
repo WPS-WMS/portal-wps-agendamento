@@ -197,6 +197,10 @@ const SupplierDashboard = ({ user, token }) => {
     } catch (err) {
       console.error('Erro ao carregar slots de tempo:', err)
       setTimeSlots([])
+      // Log para debug: verificar se há erro ao carregar timeSlots para datas anteriores
+      if (err.response?.status === 400) {
+        console.warn('Erro 400 ao carregar timeSlots:', err.response?.data)
+      }
     } finally {
       setLoadingSlots(false)
     }
@@ -791,7 +795,8 @@ const SupplierDashboard = ({ user, token }) => {
       return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
     }).length
     
-    // Se há timeSlots carregados, usar capacity_used do backend
+    // Sempre tentar usar timeSlots primeiro (incluindo datas anteriores)
+    // O backend agora permite consultar timeSlots de datas anteriores para visualização
     if (timeSlots.length > 0) {
       const slot = timeSlots.find(s => s.time === timeString)
       if (!slot) {
@@ -808,29 +813,11 @@ const SupplierDashboard = ({ user, token }) => {
       return slot.capacity_used > ownAppointmentsCount
     }
     
-    // Se não há timeSlots (datas anteriores), calcular capacity_used baseado em dayAppointments
-    // Contar todos os agendamentos (de todos os fornecedores) que se sobrepõem a este slot
-    const totalAppointmentsCount = dayAppointments.filter(apt => {
-      if (!apt.date) return false
-      const aptDate = getDateString(apt.date)
-      if (aptDate !== currentDateISO) return false
-      
-      const aptStartTime = dateUtils.formatTime(apt.time)
-      const aptEndTime = apt.time_end ? dateUtils.formatTime(apt.time_end) : aptStartTime
-      
-      const [aptStartHour, aptStartMin] = aptStartTime.split(':').map(Number)
-      const [aptEndHour, aptEndMin] = aptEndTime.split(':').map(Number)
-      
-      const aptStartMinutes = aptStartHour * 60 + aptStartMin
-      const aptEndMinutes = aptEndHour * 60 + aptEndMin
-      
-      // Verificar sobreposição: o slot se sobrepõe ao agendamento
-      return slotMinutes < aptEndMinutes && slotEndMinutes > aptStartMinutes
-    }).length
-    
-    // Se há mais agendamentos totais do que os do fornecedor logado,
-    // significa que há outros fornecedores com agendamentos
-    return totalAppointmentsCount > ownAppointmentsCount
+    // Fallback: Se não há timeSlots carregados (pode acontecer se houver erro),
+    // não podemos calcular corretamente porque dayAppointments só contém agendamentos do fornecedor logado
+    // Neste caso, retornar false para não mostrar slots indisponíveis incorretamente
+    // O ideal é que os timeSlots sejam sempre carregados (incluindo datas anteriores)
+    return false
   }
 
   // Função para encontrar a última coluna disponível (sem agendamentos do fornecedor logado)
