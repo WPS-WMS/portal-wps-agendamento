@@ -12,7 +12,7 @@ import {
   Users, 
   Calendar, 
   ChevronLeft, 
-  ChevronRight,
+  ChevronRight, 
   ChevronUp,
   ChevronDown, 
   Plus, 
@@ -855,16 +855,16 @@ const AdminDashboard = ({ user, token }) => {
   // Altura padrão para 24 horas (00:00 até 23:30)
   const timelineHeight = useMemo(() => {
     let height = 24 * HOUR_HEIGHT
-    if (filteredAppointments.length > 0) {
-      const lastAppointment = filteredAppointments.reduce((latest, apt) => {
-        const aptTime = dateUtils.formatTime(apt.time_end || apt.time)
-        const latestTime = dateUtils.formatTime(latest.time_end || latest.time)
-        return aptTime > latestTime ? apt : latest
-      }, filteredAppointments[0])
-      
-      const lastTime = dateUtils.formatTime(lastAppointment.time_end || lastAppointment.time)
+  if (filteredAppointments.length > 0) {
+    const lastAppointment = filteredAppointments.reduce((latest, apt) => {
+      const aptTime = dateUtils.formatTime(apt.time_end || apt.time)
+      const latestTime = dateUtils.formatTime(latest.time_end || latest.time)
+      return aptTime > latestTime ? apt : latest
+    }, filteredAppointments[0])
+    
+    const lastTime = dateUtils.formatTime(lastAppointment.time_end || lastAppointment.time)
       height = Math.max(calculateCardTop(lastTime) + calculateCardHeight(lastAppointment) + 100, 24 * HOUR_HEIGHT)
-    }
+  }
     return height
   }, [filteredAppointments])
   
@@ -1512,7 +1512,7 @@ const AdminDashboard = ({ user, token }) => {
             </Card>
           )}
           </div>
-
+          
           {/* Visualização Tipo Agenda Diária - Layout Estilo Agenda Visual */}
           {selectedPlantId && (
           <>
