@@ -215,6 +215,12 @@ const SupplierDashboard = ({ user, token }) => {
     }
   }
 
+  // Garantir que se a permissão de configurações for removida, volte para a aba de agendamentos
+  useEffect(() => {
+    if (activeTab === 'suppliers' && !hasPermission('view_system_config', 'viewer')) {
+      setActiveTab('appointments')
+    }
+  }, [hasPermission, activeTab])
 
   // Carregar plantas e fornecedores quando o componente montar ou o usuário mudar
   useEffect(() => {
@@ -1819,9 +1825,11 @@ const SupplierDashboard = ({ user, token }) => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className={`grid w-full ${hasPermission('view_system_config', 'viewer') ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <TabsTrigger value="appointments">Agendamentos</TabsTrigger>
-          <TabsTrigger value="suppliers">Configurações</TabsTrigger>
+          {hasPermission('view_system_config', 'viewer') && (
+            <TabsTrigger value="suppliers">Configurações</TabsTrigger>
+          )}
         </TabsList>
 
         {/* Tab de Agendamentos */}
@@ -2590,6 +2598,7 @@ const SupplierDashboard = ({ user, token }) => {
         </TabsContent>
 
         {/* Tab de Configurações */}
+        {hasPermission('view_system_config', 'viewer') && (
         <TabsContent value="suppliers" className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">Configurações</h2>
@@ -2652,6 +2661,7 @@ const SupplierDashboard = ({ user, token }) => {
             )
           })()}
         </TabsContent>
+        )}
       </Tabs>
 
       {loading && (

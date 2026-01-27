@@ -58,6 +58,14 @@ const MODULES = [
     ]
   },
   {
+    id: 'system_config',
+    name: 'Configurações',
+    color: 'bg-orange-100 text-orange-700 border-orange-300',
+    functions: [
+      { id: 'view_system_config', name: 'Configurações', icon: '⚙️' }
+    ]
+  },
+  {
     id: 'suppliers',
     name: 'Fornecedores',
     color: 'bg-purple-100 text-purple-700 border-purple-300',
