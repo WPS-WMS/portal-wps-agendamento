@@ -1814,25 +1814,6 @@ const SupplierDashboard = ({ user, token }) => {
               </CardHeader>
             </Card>
 
-            {hasPermission('create_appointment', 'editor') && (
-              <div className="flex justify-center sm:justify-start">
-                <Button
-                  onClick={() => {
-                    setEditingAppointment({
-                      date: currentDateISO,
-                      plant_id: selectedPlantId
-                    })
-                    setShowAppointmentForm(true)
-                  }}
-                  className="w-full sm:w-auto bg-[#FF6B35] hover:bg-[#E55A2B] text-white shadow-lg hover:shadow-xl transition-all duration-200 px-8 py-6 text-base font-semibold rounded-lg flex items-center justify-center gap-2"
-                  size="lg"
-                >
-                  <Plus className="w-5 h-5" />
-                  <span>Novo Agendamento</span>
-                </Button>
-              </div>
-            )}
-
             {/* Estado vazio quando nenhuma planta está selecionada */}
             {!selectedPlantId && (
               <Card className="py-12">
@@ -1851,53 +1832,64 @@ const SupplierDashboard = ({ user, token }) => {
 
           {/* Visualização Tipo Agenda Diária - Layout Estilo Agenda Visual */}
           {selectedPlantId && (
+          <>
+          <div className="space-y-2">
+            {/* Botão para expandir horários anteriores - ACIMA do calendário */}
+            {hasHoursBefore && !showBeforeHours && (
+              <div className="flex justify-center py-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBeforeHours(true)}
+                  className="shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <ChevronUp className="w-4 h-4 mr-2" />
+                  Mostrar horários anteriores (00:00 até {operatingHours.start || '00:00'})
+                </Button>
+              </div>
+            )}
+            
+            {/* Botão para recolher horários anteriores - ACIMA do calendário */}
+            {hasHoursBefore && showBeforeHours && (
+              <div className="flex justify-center py-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBeforeHours(false)}
+                  className="shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <ChevronDown className="w-4 h-4 mr-2" />
+                  Ocultar horários anteriores
+                </Button>
+              </div>
+            )}
+
+            {/* Botão Novo Agendamento - ACIMA do calendário */}
+            {hasPermission('create_appointment', 'editor') && (
+              <div className="flex justify-center">
+                <Button
+                  onClick={() => {
+                    setEditingAppointment({
+                      date: currentDateISO,
+                      plant_id: selectedPlantId
+                    })
+                    setShowAppointmentForm(true)
+                  }}
+                  className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white shadow-lg hover:shadow-xl transition-all duration-200 px-8 py-6 text-base font-semibold rounded-lg flex items-center justify-center gap-2"
+                  size="lg"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span>Novo Agendamento</span>
+                </Button>
+              </div>
+            )}
+
           <Card className="overflow-hidden">
-            <div className="h-[calc(100vh-400px)] min-h-[600px] overflow-x-auto relative">
-              {/* Botão para expandir horários anteriores */}
-              {hasHoursBefore && !showBeforeHours && (
-                <div 
-                  className="absolute top-0 left-0 right-0 z-20 flex justify-center py-2 bg-gradient-to-b from-white via-white/95 to-transparent"
-                  style={{ height: '60px' }}
-                >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowBeforeHours(true)}
-                    className="shadow-md hover:shadow-lg transition-shadow"
-                  >
-                    <ChevronUp className="w-4 h-4 mr-2" />
-                    Mostrar horários anteriores ({operatingHours.start || '00:00'} - {operatingHours.start || '00:00'})
-                  </Button>
-                </div>
-              )}
-              
-              {/* Botão para recolher horários anteriores */}
-              {hasHoursBefore && showBeforeHours && (
-                <div 
-                  className="absolute top-0 left-0 right-0 z-20 flex justify-center py-2 bg-gradient-to-b from-white via-white/95 to-transparent"
-                  style={{ height: '60px' }}
-                >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowBeforeHours(false)}
-                    className="shadow-md hover:shadow-lg transition-shadow"
-                  >
-                    <ChevronDown className="w-4 h-4 mr-2" />
-                    Ocultar horários anteriores
-                  </Button>
-                </div>
-              )}
-              
-              {/* Container com scroll apenas na área visível */}
+            <div className="h-[calc(100vh-450px)] min-h-[500px] overflow-x-auto">
+              {/* Container com scroll - aproveitando todo o espaço */}
               <div 
-                className="overflow-y-auto overflow-x-hidden"
-                style={{ 
-                  height: `${Math.min(visibleCalendarHeight, typeof window !== 'undefined' ? window.innerHeight - 400 : 600)}px`,
-                  maxHeight: 'calc(100vh - 400px)',
-                  paddingTop: hasHoursBefore && !showBeforeHours ? '60px' : '0',
-                  paddingBottom: hasHoursAfter && !showAfterHours ? '60px' : '0'
-                }}
+                className="overflow-y-auto overflow-x-hidden w-full"
+                style={{ height: '100%' }}
                 ref={(el) => {
                   // Scroll inicial para o início do horário padrão quando carregar
                   if (el && !showBeforeHours && !showAfterHours && !hasAppointmentsOutsideHours) {
@@ -2440,46 +2432,42 @@ const SupplierDashboard = ({ user, token }) => {
                       </div>
                     )
                   })}
-              </div>
                 </div>
               </div>
-              
-              {/* Botão para expandir horários posteriores */}
-              {hasHoursAfter && !showAfterHours && (
-                <div 
-                  className="absolute bottom-0 left-0 right-0 z-20 flex justify-center py-2 bg-gradient-to-t from-white via-white/95 to-transparent"
-                  style={{ height: '60px' }}
-                >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowAfterHours(true)}
-                    className="shadow-md hover:shadow-lg transition-shadow"
-                  >
-                    <ChevronDown className="w-4 h-4 mr-2" />
-                    Mostrar horários posteriores ({operatingHours.end || '23:59'} - 23:59)
-                  </Button>
-                </div>
-              )}
-              
-              {/* Botão para recolher horários posteriores */}
-              {hasHoursAfter && showAfterHours && (
-                <div 
-                  className="absolute bottom-0 left-0 right-0 z-20 flex justify-center py-2 bg-gradient-to-t from-white via-white/95 to-transparent"
-                  style={{ height: '60px' }}
-                >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowAfterHours(false)}
-                    className="shadow-md hover:shadow-lg transition-shadow"
-                  >
-                    <ChevronUp className="w-4 h-4 mr-2" />
-                    Ocultar horários posteriores
-                  </Button>
-                </div>
-              )}
+            </div>
           </Card>
+
+            {/* Botão para expandir horários posteriores - ABAIXO do calendário */}
+            {hasHoursAfter && !showAfterHours && (
+              <div className="flex justify-center py-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAfterHours(true)}
+                  className="shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <ChevronDown className="w-4 h-4 mr-2" />
+                  Mostrar horários posteriores ({operatingHours.end || '23:59'} - 23:59)
+                </Button>
+              </div>
+            )}
+            
+            {/* Botão para recolher horários posteriores - ABAIXO do calendário */}
+            {hasHoursAfter && showAfterHours && (
+              <div className="flex justify-center py-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAfterHours(false)}
+                  className="shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <ChevronUp className="w-4 h-4 mr-2" />
+                  Ocultar horários posteriores
+                </Button>
+              </div>
+            )}
+          </div>
+          </>
           )}
         </TabsContent>
 
