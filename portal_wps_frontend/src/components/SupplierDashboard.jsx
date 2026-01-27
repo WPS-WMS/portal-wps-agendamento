@@ -87,6 +87,9 @@ const SupplierDashboard = ({ user, token }) => {
   // Estados para controlar expansão de horários fora do padrão
   const [showBeforeHours, setShowBeforeHours] = useState(false)
   const [showAfterHours, setShowAfterHours] = useState(false)
+  
+  // Ref para o container de scroll do calendário
+  const calendarScrollRef = useRef(null)
 
   // Helper para escolher API baseada em permissões
   const getAPI = (resource) => {
@@ -1233,6 +1236,61 @@ const SupplierDashboard = ({ user, token }) => {
       if (hasHoursAfter) setShowAfterHours(true)
     }
   }, [hasAppointmentsOutsideHours, hasHoursBefore, hasHoursAfter])
+  
+  // Handler para controlar o scroll e bloquear áreas não expandidas
+  const handleCalendarScroll = (e) => {
+    const scrollContainer = e.target
+    if (!scrollContainer) return
+    
+    const scrollTop = scrollContainer.scrollTop
+    const scrollHeight = scrollContainer.scrollHeight
+    const clientHeight = scrollContainer.clientHeight
+    
+    // Calcular limites de scroll baseado no estado dos botões
+    let minScrollTop = 0
+    let maxScrollTop = scrollHeight - clientHeight
+    
+    // Se showBeforeHours está false, não permitir scroll acima do início do horário padrão
+    if (!showBeforeHours) {
+      minScrollTop = getOperatingHoursTop
+    }
+    
+    // Se showAfterHours está false, não permitir scroll abaixo do fim do horário padrão
+    if (!showAfterHours) {
+      // maxScrollTop deve ser o ponto onde o fim do horário padrão fica visível no topo do container
+      // Isso é: getOperatingHoursBottom - clientHeight
+      maxScrollTop = Math.max(0, getOperatingHoursBottom - clientHeight)
+    }
+    
+    // Se o scroll está fora dos limites permitidos, forçar de volta
+    if (scrollTop < minScrollTop) {
+      scrollContainer.scrollTop = minScrollTop
+    } else if (scrollTop > maxScrollTop) {
+      scrollContainer.scrollTop = maxScrollTop
+    }
+  }
+  
+  // Ajustar scroll quando os botões são clicados para expandir/recolher
+  useEffect(() => {
+    if (!calendarScrollRef.current) return
+    
+    const scrollContainer = calendarScrollRef.current
+    const scrollTop = scrollContainer.scrollTop
+    const clientHeight = scrollContainer.clientHeight
+    
+    // Se recolheu horários anteriores, garantir que não está acima do início do horário padrão
+    if (!showBeforeHours && scrollTop < getOperatingHoursTop) {
+      scrollContainer.scrollTop = getOperatingHoursTop
+    }
+    
+    // Se recolheu horários posteriores, garantir que não está abaixo do fim do horário padrão
+    if (!showAfterHours) {
+      const maxScrollTop = Math.max(0, getOperatingHoursBottom - clientHeight)
+      if (scrollTop > maxScrollTop) {
+        scrollContainer.scrollTop = maxScrollTop
+      }
+    }
+  }, [showBeforeHours, showAfterHours, getOperatingHoursTop, getOperatingHoursBottom])
 
   const stats = useMemo(() => {
     // Filtrar agendamentos pela planta selecionada
@@ -1888,14 +1946,72 @@ const SupplierDashboard = ({ user, token }) => {
             <div className="h-[calc(100vh-450px)] min-h-[500px] overflow-x-auto">
               {/* Container com scroll - aproveitando todo o espaço */}
               <div 
-                className="overflow-y-auto overflow-x-hidden w-full"
-                style={{ height: '100%' }}
                 ref={(el) => {
+                  calendarScrollRef.current = el
                   // Scroll inicial para o início do horário padrão quando carregar
                   if (el && !showBeforeHours && !showAfterHours && !hasAppointmentsOutsideHours) {
                     setTimeout(() => {
                       el.scrollTop = getOperatingHoursTop
                     }, 100)
+                  }
+                }}
+                className="overflow-y-auto overflow-x-hidden w-full"
+                style={{ height: '100%' }}
+                onScroll={handleCalendarScroll}
+                onWheel={(e) => {
+                  // Prevenir scroll com wheel quando os botões estão ocultos
+                  const scrollContainer = e.currentTarget
+                  if (!scrollContainer) return
+                  
+                  const scrollTop = scrollContainer.scrollTop
+                  const scrollHeight = scrollContainer.scrollHeight
+                  const clientHeight = scrollContainer.clientHeight
+                  
+                  let minScrollTop = 0
+                  let maxScrollTop = scrollHeight - clientHeight
+                  
+                  if (!showBeforeHours) {
+                    minScrollTop = getOperatingHoursTop
+                  }
+                  
+                  if (!showAfterHours) {
+                    maxScrollTop = Math.max(0, getOperatingHoursBottom - clientHeight)
+                  }
+                  
+                  // Se está tentando rolar para cima e já está no limite mínimo
+                  if (e.deltaY < 0 && scrollTop <= minScrollTop && !showBeforeHours) {
+                    e.preventDefault()
+                    return
+                  }
+                  
+                  // Se está tentando rolar para baixo e já está no limite máximo
+                  if (e.deltaY > 0 && scrollTop >= maxScrollTop && !showAfterHours) {
+                    e.preventDefault()
+                    return
+                  }
+                }}
+                onTouchMove={(e) => {
+                  // Prevenir scroll touch quando os botões estão ocultos
+                  const scrollContainer = e.currentTarget
+                  if (!scrollContainer) return
+                  
+                  const scrollTop = scrollContainer.scrollTop
+                  const scrollHeight = scrollContainer.scrollHeight
+                  const clientHeight = scrollContainer.clientHeight
+                  
+                  let minScrollTop = 0
+                  let maxScrollTop = scrollHeight - clientHeight
+                  
+                  if (!showBeforeHours) {
+                    minScrollTop = getOperatingHoursTop
+                  }
+                  
+                  if (!showAfterHours) {
+                    maxScrollTop = Math.max(0, getOperatingHoursBottom - clientHeight)
+                  }
+                  
+                  if (scrollTop < minScrollTop || scrollTop > maxScrollTop) {
+                    e.preventDefault()
                   }
                 }}
               >
