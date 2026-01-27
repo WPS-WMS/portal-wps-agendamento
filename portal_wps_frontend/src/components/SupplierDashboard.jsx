@@ -164,18 +164,8 @@ const SupplierDashboard = ({ user, token }) => {
       setAppointments(Array.isArray(data) ? data : [])
       setError('')
       
-      // Recarregar timeSlots após carregar agendamentos para garantir sincronização
-      // Isso é importante para detectar agendamentos de outros fornecedores já existentes
-      if (plantId && date && !isNaN(date.getTime())) {
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        const selectedDate = new Date(date)
-        selectedDate.setHours(0, 0, 0, 0)
-        
-        if (selectedDate >= today) {
-          await loadTimeSlots(plantId, date)
-        }
-      }
+      // NOTA: timeSlots é carregado em paralelo pelo useEffect separado
+      // Não precisamos carregar aqui para evitar carregamento duplicado
     } catch (err) {
       setError('Erro ao carregar agendamentos: ' + (err.response?.data?.error || err.message))
       setAppointments([])
