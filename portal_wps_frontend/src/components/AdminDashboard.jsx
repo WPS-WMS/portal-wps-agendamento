@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -12,7 +12,9 @@ import {
   Users, 
   Calendar, 
   ChevronLeft, 
-  ChevronRight, 
+  ChevronRight,
+  ChevronUp,
+  ChevronDown, 
   Plus, 
   LogIn, 
   LogOut, 
@@ -77,6 +79,13 @@ const AdminDashboard = ({ user, token }) => {
   const [timeSlots, setTimeSlots] = useState([])
   const [operatingHours, setOperatingHours] = useState({ start: '08:00', end: '17:00' })
   const [loadingSlots, setLoadingSlots] = useState(false)
+  
+  // Estados para controlar expansão de horários fora do padrão
+  const [showBeforeHours, setShowBeforeHours] = useState(false)
+  const [showAfterHours, setShowAfterHours] = useState(false)
+  
+  // Ref para o container de scroll do calendário
+  const calendarScrollRef = useRef(null)
 
   const loadSuppliers = async () => {
     try {
@@ -844,17 +853,114 @@ const AdminDashboard = ({ user, token }) => {
 
   // Calcular altura da timeline baseada no último agendamento (proporcional)
   // Altura padrão para 24 horas (00:00 até 23:30)
-  let timelineHeight = 24 * HOUR_HEIGHT
-  if (filteredAppointments.length > 0) {
-    const lastAppointment = filteredAppointments.reduce((latest, apt) => {
-      const aptTime = dateUtils.formatTime(apt.time_end || apt.time)
-      const latestTime = dateUtils.formatTime(latest.time_end || latest.time)
-      return aptTime > latestTime ? apt : latest
-    }, filteredAppointments[0])
+  const timelineHeight = useMemo(() => {
+    let height = 24 * HOUR_HEIGHT
+    if (filteredAppointments.length > 0) {
+      const lastAppointment = filteredAppointments.reduce((latest, apt) => {
+        const aptTime = dateUtils.formatTime(apt.time_end || apt.time)
+        const latestTime = dateUtils.formatTime(latest.time_end || latest.time)
+        return aptTime > latestTime ? apt : latest
+      }, filteredAppointments[0])
+      
+      const lastTime = dateUtils.formatTime(lastAppointment.time_end || lastAppointment.time)
+      height = Math.max(calculateCardTop(lastTime) + calculateCardHeight(lastAppointment) + 100, 24 * HOUR_HEIGHT)
+    }
+    return height
+  }, [filteredAppointments])
+  
+  // Funções auxiliares para calcular posições do horário padrão
+  const getOperatingHoursTop = useMemo(() => {
+    if (!operatingHours || !operatingHours.start) return 0
+    try {
+      const [startHour, startMin] = operatingHours.start.split(':').map(Number)
+      if (isNaN(startHour) || isNaN(startMin)) return 0
+      return (startHour * 60 + startMin) / 60 * HOUR_HEIGHT
+    } catch (error) {
+      console.error('Erro ao calcular top do horário padrão:', error)
+      return 0
+    }
+  }, [operatingHours?.start])
+  
+  const getOperatingHoursHeight = useMemo(() => {
+    if (!operatingHours || !operatingHours.start || !operatingHours.end) return timelineHeight
+    try {
+      const [startHour, startMin] = operatingHours.start.split(':').map(Number)
+      const [endHour, endMin] = operatingHours.end.split(':').map(Number)
+      if (isNaN(startHour) || isNaN(startMin) || isNaN(endHour) || isNaN(endMin)) return timelineHeight
+      const startTop = (startHour * 60 + startMin) / 60 * HOUR_HEIGHT
+      const endTop = (endHour * 60 + endMin) / 60 * HOUR_HEIGHT
+      return Math.max(0, endTop - startTop)
+    } catch (error) {
+      console.error('Erro ao calcular altura do horário padrão:', error)
+      return timelineHeight
+    }
+  }, [operatingHours?.start, operatingHours?.end, timelineHeight])
+  
+  const getOperatingHoursBottom = useMemo(() => {
+    return getOperatingHoursTop + getOperatingHoursHeight
+  }, [getOperatingHoursTop, getOperatingHoursHeight])
+  
+  // Verificar se há horários antes/depois do padrão
+  const hasHoursBefore = useMemo(() => {
+    return getOperatingHoursTop > 0
+  }, [getOperatingHoursTop])
+  
+  const hasHoursAfter = useMemo(() => {
+    return getOperatingHoursBottom < timelineHeight
+  }, [getOperatingHoursBottom, timelineHeight])
+  
+  // Handler para controlar o scroll e bloquear áreas não expandidas
+  const handleCalendarScroll = (e) => {
+    const scrollContainer = e.target
+    if (!scrollContainer) return
     
-    const lastTime = dateUtils.formatTime(lastAppointment.time_end || lastAppointment.time)
-    timelineHeight = Math.max(calculateCardTop(lastTime) + calculateCardHeight(lastAppointment) + 100, 24 * HOUR_HEIGHT)
+    const scrollTop = scrollContainer.scrollTop
+    const scrollHeight = scrollContainer.scrollHeight
+    const clientHeight = scrollContainer.clientHeight
+    
+    // Calcular limites de scroll baseado no estado dos botões
+    let minScrollTop = 0
+    let maxScrollTop = scrollHeight - clientHeight
+    
+    // Se showBeforeHours está false, não permitir scroll acima do início do horário padrão
+    if (!showBeforeHours) {
+      minScrollTop = getOperatingHoursTop
+    }
+    
+    // Se showAfterHours está false, não permitir scroll abaixo do fim do horário padrão
+    if (!showAfterHours) {
+      maxScrollTop = Math.max(0, getOperatingHoursBottom - clientHeight)
+    }
+    
+    // Se o scroll está fora dos limites permitidos, forçar de volta
+    if (scrollTop < minScrollTop) {
+      scrollContainer.scrollTop = minScrollTop
+    } else if (scrollTop > maxScrollTop) {
+      scrollContainer.scrollTop = maxScrollTop
+    }
   }
+  
+  // Ajustar scroll quando os botões são clicados para expandir/recolher
+  useEffect(() => {
+    if (!calendarScrollRef.current) return
+    
+    const scrollContainer = calendarScrollRef.current
+    const scrollTop = scrollContainer.scrollTop
+    const clientHeight = scrollContainer.clientHeight
+    
+    // Se recolheu horários anteriores, garantir que não está acima do início do horário padrão
+    if (!showBeforeHours && scrollTop < getOperatingHoursTop) {
+      scrollContainer.scrollTop = getOperatingHoursTop
+    }
+    
+    // Se recolheu horários posteriores, garantir que não está abaixo do fim do horário padrão
+    if (!showAfterHours) {
+      const maxScrollTop = Math.max(0, getOperatingHoursBottom - clientHeight)
+      if (scrollTop > maxScrollTop) {
+        scrollContainer.scrollTop = maxScrollTop
+      }
+    }
+  }, [showBeforeHours, showAfterHours, getOperatingHoursTop, getOperatingHoursBottom])
 
   // Estatísticas do dia selecionado
   const stats = useMemo(() => {
@@ -1391,25 +1497,6 @@ const AdminDashboard = ({ user, token }) => {
               </CardHeader>
             </Card>
 
-            {/* Botão Agendar - Único, Destacado e Funcional */}
-            <div className="flex justify-center sm:justify-start">
-              <Button
-                onClick={() => {
-                  setEditingAppointment({
-                    date: currentDateISO,
-                    plant_id: selectedPlantId
-                  })
-                  setShowAppointmentForm(true)
-                }}
-                className="w-full sm:w-auto bg-[#FF6B35] hover:bg-[#E55A2B] text-white shadow-lg hover:shadow-xl transition-all duration-200 px-8 py-6 text-base font-semibold rounded-lg flex items-center justify-center gap-2"
-                size="lg"
-              >
-                <Plus className="w-5 h-5" />
-                <span>Novo Agendamento</span>
-              </Button>
-            </div>
-          </div>
-
           {/* Estado vazio quando nenhuma planta está selecionada */}
           {!selectedPlantId && (
             <Card className="py-12">
@@ -1424,11 +1511,133 @@ const AdminDashboard = ({ user, token }) => {
               </CardContent>
             </Card>
           )}
-          
+          </div>
+
           {/* Visualização Tipo Agenda Diária - Layout Estilo Agenda Visual */}
           {selectedPlantId && (
+          <>
+          <div className="space-y-2">
+            {/* Linha com botões: Novo Agendamento à esquerda e Mostrar horários anteriores próximo ao calendário */}
+            <div className="flex items-center justify-between gap-4">
+              {/* Botão Novo Agendamento - À ESQUERDA */}
+              <Button
+                onClick={() => {
+                  setEditingAppointment({
+                    date: currentDateISO,
+                    plant_id: selectedPlantId
+                  })
+                  setShowAppointmentForm(true)
+                }}
+                className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white shadow-lg hover:shadow-xl transition-all duration-200 px-8 py-6 text-base font-semibold rounded-lg flex items-center justify-center gap-2"
+                size="lg"
+              >
+                <Plus className="w-5 h-5" />
+                <span>Novo Agendamento</span>
+              </Button>
+              
+              {/* Espaço flexível no meio */}
+              <div className="flex-1"></div>
+              
+              {/* Botão para expandir horários anteriores - PRÓXIMO À DIVISA DO CALENDÁRIO */}
+              {hasHoursBefore && !showBeforeHours && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBeforeHours(true)}
+                  className="shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <ChevronUp className="w-4 h-4 mr-2" />
+                  Mostrar horário (00:00 - {operatingHours.start || '00:00'})
+                </Button>
+              )}
+              
+              {/* Botão para recolher horários anteriores */}
+              {hasHoursBefore && showBeforeHours && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBeforeHours(false)}
+                  className="shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <ChevronDown className="w-4 h-4 mr-2" />
+                  Ocultar horário (00:00 - {operatingHours.start || '00:00'})
+                </Button>
+              )}
+            </div>
+
           <Card className="overflow-hidden">
-            <div className="h-[calc(100vh-400px)] min-h-[600px] overflow-y-auto">
+            <div className="h-[calc(100vh-450px)] min-h-[500px] overflow-x-auto">
+              {/* Container com scroll - aproveitando todo o espaço */}
+              <div 
+                ref={(el) => {
+                  calendarScrollRef.current = el
+                  // Scroll inicial para o início do horário padrão quando carregar (sempre, já que ambos vêm ocultos por padrão)
+                  if (el && !showBeforeHours && !showAfterHours) {
+                    setTimeout(() => {
+                      el.scrollTop = getOperatingHoursTop
+                    }, 100)
+                  }
+                }}
+                className="overflow-y-auto overflow-x-hidden w-full"
+                style={{ height: '100%' }}
+                onScroll={handleCalendarScroll}
+                onWheel={(e) => {
+                  // Prevenir scroll com wheel quando os botões estão ocultos
+                  const scrollContainer = e.currentTarget
+                  if (!scrollContainer) return
+                  
+                  const scrollTop = scrollContainer.scrollTop
+                  const scrollHeight = scrollContainer.scrollHeight
+                  const clientHeight = scrollContainer.clientHeight
+                  
+                  let minScrollTop = 0
+                  let maxScrollTop = scrollHeight - clientHeight
+                  
+                  if (!showBeforeHours) {
+                    minScrollTop = getOperatingHoursTop
+                  }
+                  
+                  if (!showAfterHours) {
+                    maxScrollTop = Math.max(0, getOperatingHoursBottom - clientHeight)
+                  }
+                  
+                  // Se está tentando rolar para cima e já está no limite mínimo
+                  if (e.deltaY < 0 && scrollTop <= minScrollTop && !showBeforeHours) {
+                    e.preventDefault()
+                    return
+                  }
+                  
+                  // Se está tentando rolar para baixo e já está no limite máximo
+                  if (e.deltaY > 0 && scrollTop >= maxScrollTop && !showAfterHours) {
+                    e.preventDefault()
+                    return
+                  }
+                }}
+                onTouchMove={(e) => {
+                  // Prevenir scroll touch quando os botões estão ocultos
+                  const scrollContainer = e.currentTarget
+                  if (!scrollContainer) return
+                  
+                  const scrollTop = scrollContainer.scrollTop
+                  const scrollHeight = scrollContainer.scrollHeight
+                  const clientHeight = scrollContainer.clientHeight
+                  
+                  let minScrollTop = 0
+                  let maxScrollTop = scrollHeight - clientHeight
+                  
+                  if (!showBeforeHours) {
+                    minScrollTop = getOperatingHoursTop
+                  }
+                  
+                  if (!showAfterHours) {
+                    maxScrollTop = Math.max(0, getOperatingHoursBottom - clientHeight)
+                  }
+                  
+                  if (scrollTop < minScrollTop || scrollTop > maxScrollTop) {
+                    e.preventDefault()
+                  }
+                }}
+              >
               {/* Container Principal - Desktop: Layout com Colunas Verticais */}
               <div className="hidden md:flex relative" style={{ minHeight: `${timelineHeight}px` }}>
                 {/* Coluna de Horários - Fixa à Esquerda */}
@@ -1949,9 +2158,42 @@ const AdminDashboard = ({ user, token }) => {
                       </div>
                     )
                   })}
+                </div>
               </div>
             </div>
           </Card>
+
+          {/* Botão para expandir horários posteriores - ABAIXO do calendário */}
+            {hasHoursAfter && !showAfterHours && (
+              <div className="flex justify-end py-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAfterHours(true)}
+                  className="shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <ChevronDown className="w-4 h-4 mr-2" />
+                  Mostrar horário ({operatingHours.end || '23:59'} - 23:59)
+                </Button>
+              </div>
+            )}
+            
+            {/* Botão para recolher horários posteriores - ABAIXO do calendário */}
+            {hasHoursAfter && showAfterHours && (
+              <div className="flex justify-end py-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAfterHours(false)}
+                  className="shadow-md hover:shadow-lg transition-shadow"
+                >
+                  <ChevronUp className="w-4 h-4 mr-2" />
+                  Ocultar horário ({operatingHours.end || '23:59'} - 23:59)
+                </Button>
+              </div>
+            )}
+          </div>
+          </>
           )}
         </TabsContent>
 
