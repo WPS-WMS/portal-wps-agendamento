@@ -5,12 +5,13 @@ const Logo = ({ className = "", showText = true, size = "default" }) => {
   return (
     <div className={`flex items-center space-x-3 ${className}`}>
       {/* Ícone: Caixa/Cubo Laranja 3D com linhas de movimento */}
-      <div className={`${iconSize} relative flex-shrink-0`}>
+      <div className={`${iconSize} relative flex-shrink-0 overflow-visible`}>
         <svg 
-          viewBox="0 0 40 40" 
+          viewBox="0 0 42 40" 
           fill="none" 
           xmlns="http://www.w3.org/2000/svg"
           className="w-full h-full"
+          preserveAspectRatio="xMidYMid meet"
         >
           {/* Linhas horizontais de movimento (à esquerda) */}
           <line x1="2" y1="18" x2="8" y2="18" stroke="#FF6B35" strokeWidth="2.5" strokeLinecap="round"/>
