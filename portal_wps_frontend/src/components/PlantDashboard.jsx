@@ -1228,7 +1228,7 @@ const PlantDashboard = ({ user, token }) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-[#FF6B35] transition-all duration-300">{stats.total}</p>
+            <p className="text-2xl font-bold text-blue-600 transition-all duration-300">{stats.total}</p>
           </CardContent>
         </Card>
 
