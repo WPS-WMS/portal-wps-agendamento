@@ -225,7 +225,7 @@ const SupplierDashboard = ({ user, token }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]) // Executar quando usuário mudar
 
-  // Carregar agendamentos quando a data, aba ou planta selecionada mudar
+  // Carregar agendamentos e timeSlots em paralelo quando a data, aba ou planta selecionada mudar
   useEffect(() => {
     if (!currentDate || isNaN(currentDate.getTime())) {
       return
@@ -246,30 +246,31 @@ const SupplierDashboard = ({ user, token }) => {
     // Criar uma cópia da data para garantir que não seja modificada
     const dateToLoad = new Date(currentDate.getTime())
     
-    // Carregar agendamentos
-    loadAppointments(dateToLoad, selectedPlantId || null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentDate?.getTime(), activeTab, selectedPlantId])
-
-  // Carregar slots de tempo quando planta ou data mudarem
-  useEffect(() => {
-    if (selectedPlantId && currentDate && !isNaN(currentDate.getTime())) {
-      // Verificar se a data não é no passado
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      const selectedDate = new Date(currentDate)
-      selectedDate.setHours(0, 0, 0, 0)
-      
-      if (selectedDate >= today) {
+    // Verificar se a data não é no passado para timeSlots
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const selectedDate = new Date(currentDate)
+    selectedDate.setHours(0, 0, 0, 0)
+    const canLoadTimeSlots = selectedDate >= today
+    
+    // Carregar agendamentos e timeSlots em paralelo para melhor performance
+    if (selectedPlantId && canLoadTimeSlots) {
+      // Carregar ambos em paralelo usando Promise.all
+      Promise.all([
+        loadAppointments(dateToLoad, selectedPlantId),
         loadTimeSlots(selectedPlantId, currentDate)
-      } else {
+      ]).catch(err => {
+        console.error('Erro ao carregar dados em paralelo:', err)
+      })
+    } else {
+      // Carregar apenas agendamentos se não houver planta ou data no passado
+      loadAppointments(dateToLoad, selectedPlantId || null)
+      if (!canLoadTimeSlots || !selectedPlantId) {
         setTimeSlots([])
       }
-    } else {
-      setTimeSlots([])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPlantId, currentDate?.getTime()])
+  }, [currentDate?.getTime(), activeTab, selectedPlantId])
   
   // Handler para mudança de planta
   const handlePlantChange = (plantId) => {
