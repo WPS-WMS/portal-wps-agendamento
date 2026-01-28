@@ -3,7 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { BarChart3, Calendar, TrendingUp, Users, Building2, Loader2 } from 'lucide-react'
 import { adminAPI } from '../lib/api'
@@ -148,70 +147,88 @@ const ReportsTab = ({ user, token }) => {
       </div>
 
       {/* Filtros de Período */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Filtros</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="start-date">Data Inicial</Label>
-              <Input
-                id="start-date"
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="end-date">Data Final</Label>
-              <Input
-                id="end-date"
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Período Rápido</Label>
-              <Select
-                value=""
-                onValueChange={(value) => {
+      <Card className="border-2">
+        <CardContent className="pt-6">
+          <div className="flex flex-col gap-4">
+            {/* Períodos Rápidos */}
+            <div className="flex flex-wrap gap-2">
+              <span className="text-sm font-medium text-gray-700 self-center mr-2">Período:</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
                   const today = new Date()
                   const end = today.toISOString().split('T')[0]
-                  let start = new Date(today)
-                  
-                  switch(value) {
-                    case '7':
-                      start.setDate(today.getDate() - 7)
-                      break
-                    case '30':
-                      start.setDate(today.getDate() - 30)
-                      break
-                    case '90':
-                      start.setDate(today.getDate() - 90)
-                      break
-                    default:
-                      return
-                  }
-                  
+                  const start = new Date(today)
+                  start.setDate(today.getDate() - 7)
                   setStartDate(start.toISOString().split('T')[0])
                   setEndDate(end)
                 }}
+                className="text-xs"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7">Últimos 7 dias</SelectItem>
-                  <SelectItem value="30">Últimos 30 dias</SelectItem>
-                  <SelectItem value="90">Últimos 90 dias</SelectItem>
-                </SelectContent>
-              </Select>
+                7 dias
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const today = new Date()
+                  const end = today.toISOString().split('T')[0]
+                  const start = new Date(today)
+                  start.setDate(today.getDate() - 30)
+                  setStartDate(start.toISOString().split('T')[0])
+                  setEndDate(end)
+                }}
+                className="text-xs"
+              >
+                30 dias
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const today = new Date()
+                  const end = today.toISOString().split('T')[0]
+                  const start = new Date(today)
+                  start.setDate(today.getDate() - 90)
+                  setStartDate(start.toISOString().split('T')[0])
+                  setEndDate(end)
+                }}
+                className="text-xs"
+              >
+                90 dias
+              </Button>
             </div>
-            <div className="flex items-end">
-              <Button onClick={loadSummaryData} className="w-full">
-                Atualizar
+
+            {/* Datas Customizadas */}
+            <div className="flex flex-col sm:flex-row gap-3 items-end">
+              <div className="flex-1 grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="start-date" className="text-xs text-gray-600">Data Inicial</Label>
+                  <Input
+                    id="start-date"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="end-date" className="text-xs text-gray-600">Data Final</Label>
+                  <Input
+                    id="end-date"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="h-9"
+                  />
+                </div>
+              </div>
+              <Button 
+                onClick={loadSummaryData} 
+                className="bg-[#FF6B35] hover:bg-[#E55A2B] text-white h-9 px-6"
+              >
+                Aplicar
               </Button>
             </div>
           </div>
