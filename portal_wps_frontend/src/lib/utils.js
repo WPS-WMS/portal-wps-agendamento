@@ -147,3 +147,93 @@ export const validation = {
     return true
   }
 }
+
+// Utilitários para exportação CSV
+export const csvUtils = {
+  /**
+   * Converte array de objetos para formato CSV
+   * @param {Array} data - Array de objetos a serem convertidos
+   * @param {Array} headers - Array com os cabeçalhos das colunas
+   * @param {Object} fieldMap - Mapeamento de campos do objeto para colunas do CSV
+   * @returns {string} - String CSV formatada
+   */
+  arrayToCSV: (data, headers, fieldMap = {}) => {
+    if (!data || data.length === 0) {
+      return headers.join(',') + '\n'
+    }
+
+    // Criar linha de cabeçalhos
+    const csvHeaders = headers.join(',')
+    
+    // Criar linhas de dados
+    const csvRows = data.map(item => {
+      const row = headers.map(header => {
+        const field = fieldMap[header] || header.toLowerCase().replace(/\s+/g, '_')
+        let value = item[field] || ''
+        
+        // Se o valor contém vírgula, aspas ou quebra de linha, envolver em aspas
+        if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
+          value = `"${value.replace(/"/g, '""')}"`
+        }
+        
+        return value
+      })
+      return row.join(',')
+    })
+    
+    return [csvHeaders, ...csvRows].join('\n')
+  },
+
+  /**
+   * Converte objeto de status para formato CSV
+   * @param {Object} statusData - Objeto com status como chave e contagem como valor
+   * @param {Object} statusLabels - Mapeamento de status para labels
+   * @returns {string} - String CSV formatada
+   */
+  statusToCSV: (statusData, statusLabels = {}) => {
+    const headers = ['Status', 'Quantidade']
+    const rows = Object.entries(statusData).map(([status, count]) => [
+      statusLabels[status] || status,
+      count
+    ])
+    return [headers.join(','), ...rows.map(row => row.join(','))].join('\n')
+  },
+
+  /**
+   * Faz download de um arquivo CSV
+   * @param {string} csvContent - Conteúdo CSV como string
+   * @param {string} filename - Nome do arquivo (sem extensão .csv)
+   */
+  downloadCSV: (csvContent, filename) => {
+    // Adicionar BOM para suporte a caracteres especiais no Excel
+    const BOM = '\uFEFF'
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    
+    link.setAttribute('href', url)
+    link.setAttribute('download', `${filename}.csv`)
+    link.style.visibility = 'hidden'
+    
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
+    URL.revokeObjectURL(url)
+  },
+
+  /**
+   * Formata data para CSV (DD/MM/YYYY)
+   */
+  formatDateForCSV: (dateString) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return dateString
+    
+    const day = String(date.getDate()).padStart(2, '0')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const year = date.getFullYear()
+    
+    return `${day}/${month}/${year}`
+  }
+}

@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { BarChart3, Calendar, TrendingUp, Users, Building2, Loader2 } from 'lucide-react'
+import { BarChart3, Calendar, TrendingUp, Users, Building2, Loader2, Download } from 'lucide-react'
 import { adminAPI } from '../lib/api'
 import { toast } from 'sonner'
+import { csvUtils, dateUtils } from '../lib/utils'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
@@ -141,6 +142,130 @@ const ReportsTab = ({ user, token }) => {
 
   // Preparar dados para gráfico de linha (agendamentos por dia)
   const dailyChartData = plantStats?.daily_appointments || supplierStats?.daily_appointments || []
+
+  // Funções de exportação CSV
+  const exportSummaryCSV = () => {
+    if (!summaryData) {
+      toast.error('Nenhum dado disponível para exportar')
+      return
+    }
+
+    const lines = []
+    lines.push('Relatório Geral - Resumo')
+    lines.push(`Período: ${dateUtils.formatDate(summaryData.period.start_date)} a ${dateUtils.formatDate(summaryData.period.end_date)}`)
+    lines.push('')
+    lines.push('Métricas Gerais')
+    lines.push('Métrica,Valor')
+    lines.push(`Total de Agendamentos,${summaryData.total_appointments}`)
+    lines.push(`Taxa de Ocupação Média,${summaryData.average_occupation_rate?.toFixed(2)}%`)
+    lines.push(`Fornecedores Ativos,${summaryData.active_suppliers}`)
+    lines.push(`Plantas Ativas,${summaryData.active_plants}`)
+    lines.push('')
+    lines.push('Agendamentos por Status')
+    lines.push('Status,Quantidade')
+    
+    Object.entries(summaryData.appointments_by_status || {}).forEach(([status, count]) => {
+      lines.push(`${statusLabels[status] || status},${count}`)
+    })
+
+    const csvContent = lines.join('\n')
+    const filename = `relatorio_geral_${startDate}_${endDate}`
+    csvUtils.downloadCSV(csvContent, filename)
+    toast.success('Relatório exportado com sucesso!')
+  }
+
+  const exportPlantStatsCSV = () => {
+    if (!plantStats) {
+      toast.error('Nenhum dado disponível para exportar')
+      return
+    }
+
+    const lines = []
+    lines.push(`Relatório de Planta - ${plantStats.plant?.name || 'N/A'}`)
+    lines.push(`Período: ${dateUtils.formatDate(plantStats.period.start_date)} a ${dateUtils.formatDate(plantStats.period.end_date)}`)
+    lines.push('')
+    lines.push('Métricas da Planta')
+    lines.push('Métrica,Valor')
+    lines.push(`Total de Agendamentos,${plantStats.total_appointments}`)
+    lines.push(`Taxa de Ocupação,${plantStats.occupation_rate?.toFixed(2)}%`)
+    lines.push(`Capacidade Máxima,${plantStats.plant?.max_capacity || 'N/A'}`)
+    lines.push('')
+    lines.push('Agendamentos por Status')
+    lines.push('Status,Quantidade')
+    
+    Object.entries(plantStats.appointments_by_status || {}).forEach(([status, count]) => {
+      lines.push(`${statusLabels[status] || status},${count}`)
+    })
+
+    if (plantStats.daily_appointments && plantStats.daily_appointments.length > 0) {
+      lines.push('')
+      lines.push('Agendamentos por Dia')
+      lines.push('Data,Quantidade')
+      plantStats.daily_appointments.forEach(item => {
+        lines.push(`${csvUtils.formatDateForCSV(item.date)},${item.count}`)
+      })
+    }
+
+    if (plantStats.top_suppliers && plantStats.top_suppliers.length > 0) {
+      lines.push('')
+      lines.push('Top Fornecedores')
+      lines.push('Posição,Fornecedor,Quantidade de Agendamentos')
+      plantStats.top_suppliers.forEach((supplier, index) => {
+        lines.push(`${index + 1},${supplier.supplier_name},${supplier.count}`)
+      })
+    }
+
+    const csvContent = lines.join('\n')
+    const filename = `relatorio_planta_${plantStats.plant?.name?.replace(/\s+/g, '_') || 'planta'}_${startDate}_${endDate}`
+    csvUtils.downloadCSV(csvContent, filename)
+    toast.success('Relatório exportado com sucesso!')
+  }
+
+  const exportSupplierStatsCSV = () => {
+    if (!supplierStats) {
+      toast.error('Nenhum dado disponível para exportar')
+      return
+    }
+
+    const lines = []
+    lines.push(`Relatório de Fornecedor - ${supplierStats.supplier?.description || 'N/A'}`)
+    lines.push(`Período: ${dateUtils.formatDate(supplierStats.period.start_date)} a ${dateUtils.formatDate(supplierStats.period.end_date)}`)
+    lines.push('')
+    lines.push('Métricas do Fornecedor')
+    lines.push('Métrica,Valor')
+    lines.push(`Total de Agendamentos,${supplierStats.total_appointments}`)
+    lines.push(`Taxa de Comparecimento,${supplierStats.attendance_rate?.toFixed(2)}%`)
+    lines.push('')
+    lines.push('Agendamentos por Status')
+    lines.push('Status,Quantidade')
+    
+    Object.entries(supplierStats.appointments_by_status || {}).forEach(([status, count]) => {
+      lines.push(`${statusLabels[status] || status},${count}`)
+    })
+
+    if (supplierStats.daily_appointments && supplierStats.daily_appointments.length > 0) {
+      lines.push('')
+      lines.push('Agendamentos por Dia')
+      lines.push('Data,Quantidade')
+      supplierStats.daily_appointments.forEach(item => {
+        lines.push(`${csvUtils.formatDateForCSV(item.date)},${item.count}`)
+      })
+    }
+
+    if (supplierStats.top_plants && supplierStats.top_plants.length > 0) {
+      lines.push('')
+      lines.push('Top Plantas')
+      lines.push('Posição,Planta,Quantidade de Agendamentos')
+      supplierStats.top_plants.forEach((plant, index) => {
+        lines.push(`${index + 1},${plant.plant_name},${plant.count}`)
+      })
+    }
+
+    const csvContent = lines.join('\n')
+    const filename = `relatorio_fornecedor_${supplierStats.supplier?.description?.replace(/\s+/g, '_') || 'fornecedor'}_${startDate}_${endDate}`
+    csvUtils.downloadCSV(csvContent, filename)
+    toast.success('Relatório exportado com sucesso!')
+  }
 
   return (
     <div className="space-y-4">
@@ -348,10 +473,23 @@ const ReportsTab = ({ user, token }) => {
               {statusChartData.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Agendamentos por Status</CardTitle>
-                    <CardDescription>
-                      Distribuição de agendamentos no período selecionado
-                    </CardDescription>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle>Agendamentos por Status</CardTitle>
+                        <CardDescription>
+                          Distribuição de agendamentos no período selecionado
+                        </CardDescription>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={exportSummaryCSV}
+                        className="gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        Exportar CSV
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="flex flex-col md:flex-row gap-6 md:items-center">
@@ -420,7 +558,20 @@ const ReportsTab = ({ user, token }) => {
         <TabsContent value="plant" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Selecionar Planta</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Selecionar Planta</CardTitle>
+                {selectedPlantId && plantStats && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportPlantStatsCSV}
+                    className="gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Exportar CSV
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <Select value={selectedPlantId?.toString() || ''} onValueChange={(value) => setSelectedPlantId(parseInt(value))}>
@@ -544,7 +695,20 @@ const ReportsTab = ({ user, token }) => {
         <TabsContent value="supplier" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Selecionar Fornecedor</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Selecionar Fornecedor</CardTitle>
+                {selectedSupplierId && supplierStats && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportSupplierStatsCSV}
+                    className="gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Exportar CSV
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <Select value={selectedSupplierId?.toString() || ''} onValueChange={(value) => setSelectedSupplierId(parseInt(value))}>

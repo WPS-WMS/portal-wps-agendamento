@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { BarChart3, Calendar, TrendingUp, Users, Building2, Loader2 } from 'lucide-react'
+import { BarChart3, Calendar, TrendingUp, Users, Building2, Loader2, Download } from 'lucide-react'
 import { plantAPI } from '../lib/api'
 import { toast } from 'sonner'
+import { csvUtils, dateUtils } from '../lib/utils'
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart'
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid } from 'recharts'
 
@@ -108,6 +109,75 @@ const ReportsTabPlant = ({ user, token, plantInfo }) => {
 
   // Preparar dados para gráfico de barras (agendamentos por dia)
   const dailyChartData = supplierStats?.daily_appointments || []
+
+  // Funções de exportação CSV
+  const exportSummaryCSV = () => {
+    if (!summaryData) {
+      toast.error('Nenhum dado disponível para exportar')
+      return
+    }
+
+    const lines = []
+    lines.push(`Relatório da Planta - ${summaryData.plant?.name || plantInfo?.name || 'N/A'}`)
+    lines.push(`Período: ${dateUtils.formatDate(summaryData.period.start_date)} a ${dateUtils.formatDate(summaryData.period.end_date)}`)
+    lines.push('')
+    lines.push('Métricas da Planta')
+    lines.push('Métrica,Valor')
+    lines.push(`Total de Agendamentos,${summaryData.total_appointments}`)
+    lines.push(`Taxa de Ocupação,${summaryData.occupation_rate?.toFixed(2)}%`)
+    lines.push(`Capacidade Máxima,${summaryData.plant?.max_capacity || plantInfo?.max_capacity || 'N/A'}`)
+    lines.push(`Fornecedores Ativos,${summaryData.active_suppliers}`)
+    lines.push('')
+    lines.push('Agendamentos por Status')
+    lines.push('Status,Quantidade')
+    
+    Object.entries(summaryData.appointments_by_status || {}).forEach(([status, count]) => {
+      lines.push(`${statusLabels[status] || status},${count}`)
+    })
+
+    const csvContent = lines.join('\n')
+    const filename = `relatorio_planta_${summaryData.plant?.name?.replace(/\s+/g, '_') || plantInfo?.name?.replace(/\s+/g, '_') || 'planta'}_${startDate}_${endDate}`
+    csvUtils.downloadCSV(csvContent, filename)
+    toast.success('Relatório exportado com sucesso!')
+  }
+
+  const exportSupplierStatsCSV = () => {
+    if (!supplierStats) {
+      toast.error('Nenhum dado disponível para exportar')
+      return
+    }
+
+    const lines = []
+    lines.push(`Relatório de Fornecedor - ${supplierStats.supplier?.description || 'N/A'}`)
+    lines.push(`Planta: ${summaryData?.plant?.name || plantInfo?.name || 'N/A'}`)
+    lines.push(`Período: ${dateUtils.formatDate(supplierStats.period.start_date)} a ${dateUtils.formatDate(supplierStats.period.end_date)}`)
+    lines.push('')
+    lines.push('Métricas do Fornecedor')
+    lines.push('Métrica,Valor')
+    lines.push(`Total de Agendamentos,${supplierStats.total_appointments}`)
+    lines.push(`Taxa de Comparecimento,${supplierStats.attendance_rate?.toFixed(2)}%`)
+    lines.push('')
+    lines.push('Agendamentos por Status')
+    lines.push('Status,Quantidade')
+    
+    Object.entries(supplierStats.appointments_by_status || {}).forEach(([status, count]) => {
+      lines.push(`${statusLabels[status] || status},${count}`)
+    })
+
+    if (supplierStats.daily_appointments && supplierStats.daily_appointments.length > 0) {
+      lines.push('')
+      lines.push('Agendamentos por Dia')
+      lines.push('Data,Quantidade')
+      supplierStats.daily_appointments.forEach(item => {
+        lines.push(`${csvUtils.formatDateForCSV(item.date)},${item.count}`)
+      })
+    }
+
+    const csvContent = lines.join('\n')
+    const filename = `relatorio_fornecedor_${supplierStats.supplier?.description?.replace(/\s+/g, '_') || 'fornecedor'}_${startDate}_${endDate}`
+    csvUtils.downloadCSV(csvContent, filename)
+    toast.success('Relatório exportado com sucesso!')
+  }
 
   return (
     <div className="space-y-4">
@@ -314,10 +384,23 @@ const ReportsTabPlant = ({ user, token, plantInfo }) => {
               {statusChartData.length > 0 && (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Agendamentos por Status</CardTitle>
-                    <CardDescription>
-                      Distribuição de agendamentos no período selecionado
-                    </CardDescription>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle>Agendamentos por Status</CardTitle>
+                        <CardDescription>
+                          Distribuição de agendamentos no período selecionado
+                        </CardDescription>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={exportSummaryCSV}
+                        className="gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        Exportar CSV
+                      </Button>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <div className="flex flex-col md:flex-row gap-6 md:items-center">
@@ -386,7 +469,20 @@ const ReportsTabPlant = ({ user, token, plantInfo }) => {
         <TabsContent value="supplier" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Selecionar Fornecedor</CardTitle>
+              <div className="flex justify-between items-center">
+                <CardTitle>Selecionar Fornecedor</CardTitle>
+                {selectedSupplierId && supplierStats && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportSupplierStatsCSV}
+                    className="gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Exportar CSV
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               <Select value={selectedSupplierId?.toString() || ''} onValueChange={(value) => setSelectedSupplierId(parseInt(value))}>
