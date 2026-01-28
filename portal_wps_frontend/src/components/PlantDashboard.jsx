@@ -46,14 +46,7 @@ const HOUR_HEIGHT = UI_CONFIG.HOUR_HEIGHT
 
 const PlantDashboard = ({ user, token }) => {
   const { hasPermission, hasViewPermission, getPermissionType, loading: permissionsLoading } = usePermissions(user)
-  
-  // Garantir que se a permissão de configurações for removida, volte para a aba de agendamentos
-  useEffect(() => {
-    if (activeTab === 'suppliers' && !hasPermission('view_system_config', 'viewer')) {
-      setActiveTab('appointments')
-    }
-  }, [hasPermission, activeTab])
-  
+
   const [suppliers, setSuppliers] = useState([])
   const [appointments, setAppointments] = useState([])
   const [loading, setLoading] = useState(true)
@@ -74,6 +67,14 @@ const PlantDashboard = ({ user, token }) => {
   const [editingAppointment, setEditingAppointment] = useState(null)
   const [activeTab, setActiveTab] = useState('appointments')
   const [activeFilter, setActiveFilter] = useState('all')
+
+  // Garantir que se a permissão de configurações for removida, volte para a aba de agendamentos
+  useEffect(() => {
+    if (activeTab === 'suppliers' && !hasPermission('view_system_config', 'viewer')) {
+      setActiveTab('appointments')
+    }
+  }, [hasPermission, activeTab])
+
   // Capacidade máxima da planta do usuário
   const [maxCapacity, setMaxCapacity] = useState(1)
   const [drawerOpen, setDrawerOpen] = useState(false)
