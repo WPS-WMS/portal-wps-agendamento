@@ -7,7 +7,7 @@ from urllib.parse import quote_plus, urlparse, urlunparse
 # DON'T CHANGE THIS !!!
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, send_from_directory, jsonify, request
 from flask_cors import CORS
 from src.models.user import db
 from src.models.company import Company
@@ -60,26 +60,35 @@ default_origins = [
     'http://localhost:3000',  # Desenvolvimento alternativo
 ]
 
+# Sempre incluir cargoflow.app.br - domínio crítico para produção
+critical_origins = ['https://cargoflow.app.br']
+
 # Permitir adicionar mais origens via variável de ambiente
 cors_origins_env = os.environ.get('CORS_ORIGINS', '')
-if cors_origins_env:
-    # Se CORS_ORIGINS estiver definida, usar ela (pode ser uma lista separada por vírgula)
-    allowed_origins = [origin.strip() for origin in cors_origins_env.split(',')]
-    # Adicionar domínios padrão se não estiverem na lista
-    for origin in default_origins:
+if cors_origins_env and cors_origins_env.strip() != '*':
+    # Se CORS_ORIGINS estiver definida e não for '*', usar ela (pode ser uma lista separada por vírgula)
+    allowed_origins = [origin.strip() for origin in cors_origins_env.split(',') if origin.strip()]
+    # SEMPRE adicionar domínios críticos e padrão se não estiverem na lista
+    for origin in critical_origins + default_origins:
         if origin not in allowed_origins:
             allowed_origins.append(origin)
 else:
-    # Se não estiver definida, usar apenas os domínios padrão
+    # Se não estiver definida ou for '*', usar apenas os domínios padrão (que já incluem cargoflow.app.br)
     allowed_origins = default_origins
+
+# Remover duplicatas mantendo a ordem
+seen = set()
+allowed_origins = [x for x in allowed_origins if not (x in seen or seen.add(x))]
 
 # Configuração completa de CORS com suporte a credenciais e métodos
 CORS(app, 
      resources={r"/api/*": {
          "origins": allowed_origins,
-         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-         "allow_headers": ["Content-Type", "Authorization"],
-         "supports_credentials": True
+         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+         "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+         "expose_headers": ["Content-Type", "Authorization"],
+         "supports_credentials": True,
+         "max_age": 3600
      }})
 
 logger.info(f"CORS configurado com as seguintes origens permitidas: {', '.join(allowed_origins)}")
@@ -176,6 +185,21 @@ app.register_blueprint(admin_bp, url_prefix='/api/admin')
 app.register_blueprint(supplier_bp, url_prefix='/api/supplier')
 app.register_blueprint(plant_bp, url_prefix='/api/plant')
 logger.info("Blueprints registrados com sucesso")
+
+# Handler manual para requisições OPTIONS (preflight) - garante que CORS funcione
+@app.before_request
+def handle_preflight():
+    """Handler para requisições OPTIONS (preflight)"""
+    if request.method == "OPTIONS":
+        origin = request.headers.get('Origin')
+        if origin in allowed_origins:
+            response = jsonify({})
+            response.headers.add("Access-Control-Allow-Origin", origin)
+            response.headers.add('Access-Control-Allow-Headers', "Content-Type,Authorization,X-Requested-With")
+            response.headers.add('Access-Control-Allow-Methods', "GET,POST,PUT,DELETE,OPTIONS,PATCH")
+            response.headers.add('Access-Control-Allow-Credentials', "true")
+            response.headers.add('Access-Control-Max-Age', "3600")
+            return response
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
