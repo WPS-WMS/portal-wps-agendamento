@@ -873,7 +873,6 @@ def update_supplier(current_user, supplier_id):
                 
                 # Forçar flush para garantir que a atualização seja aplicada antes do commit
                 db.session.flush()
-            else:
         
         supplier.updated_at = datetime.utcnow()
         
