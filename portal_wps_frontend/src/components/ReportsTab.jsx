@@ -113,18 +113,19 @@ const ReportsTab = ({ user, token }) => {
     }
   }
 
+  // Cores alinhadas com os cards de agendamento
   const statusColors = {
-    scheduled: '#3b82f6',
-    checked_in: '#10b981',
-    checked_out: '#6366f1',
-    rescheduled: '#f59e0b',
+    scheduled: '#3b82f6', // Azul
+    checked_in: '#f97316', // Laranja
+    checked_out: '#22c55e', // Verde (finalizados)
+    rescheduled: '#8b5cf6', // Roxo
     cancelled: '#ef4444'
   }
 
   const statusLabels = {
     scheduled: 'Agendados',
     checked_in: 'Check-in',
-    checked_out: 'Check-out',
+    checked_out: 'Finalizados',
     rescheduled: 'Reagendados',
     cancelled: 'Cancelados'
   }
@@ -353,32 +354,61 @@ const ReportsTab = ({ user, token }) => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <ChartContainer
-                      config={{
-                        scheduled: { label: 'Agendados', color: '#3b82f6' },
-                        checked_in: { label: 'Check-in', color: '#10b981' },
-                        checked_out: { label: 'Check-out', color: '#6366f1' },
-                        rescheduled: { label: 'Reagendados', color: '#f59e0b' },
-                        cancelled: { label: 'Cancelados', color: '#ef4444' }
-                      }}
-                    >
-                      <PieChart>
-                        <Pie
-                          data={statusChartData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          label
-                        >
-                          {statusChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                    <div className="flex flex-col md:flex-row gap-6 md:items-center">
+                      {/* Legenda à esquerda */}
+                      <div className="md:w-56">
+                        <div className="text-sm font-medium text-gray-700 mb-3">Legenda</div>
+                        <div className="space-y-2">
+                          {statusChartData.map((item) => (
+                            <div key={item.name} className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className="h-3 w-3 rounded-sm shrink-0"
+                                  style={{ backgroundColor: item.fill }}
+                                />
+                                <span className="text-sm text-gray-700 truncate">{item.name}</span>
+                              </div>
+                              <span className="text-sm font-semibold text-gray-900 tabular-nums">
+                                {item.value}
+                              </span>
+                            </div>
                           ))}
-                        </Pie>
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                      </PieChart>
-                    </ChartContainer>
+                        </div>
+                      </div>
+
+                      {/* Gráfico maior */}
+                      <div className="flex-1">
+                        <ChartContainer
+                          className="h-[360px] md:h-[440px] w-full"
+                          config={{
+                            scheduled: { label: 'Agendados', color: statusColors.scheduled },
+                            checked_in: { label: 'Check-in', color: statusColors.checked_in },
+                            checked_out: { label: 'Finalizados', color: statusColors.checked_out },
+                            rescheduled: { label: 'Reagendados', color: statusColors.rescheduled },
+                            cancelled: { label: 'Cancelados', color: statusColors.cancelled }
+                          }}
+                        >
+                          <PieChart>
+                            <Pie
+                              data={statusChartData}
+                              dataKey="value"
+                              nameKey="name"
+                              cx="50%"
+                              cy="50%"
+                              outerRadius={140}
+                              innerRadius={55}
+                              paddingAngle={2}
+                              labelLine={false}
+                            >
+                              {statusChartData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                              ))}
+                            </Pie>
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                          </PieChart>
+                        </ChartContainer>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               )}
