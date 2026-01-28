@@ -315,50 +315,6 @@ const SupplierDashboard = ({ user, token }) => {
     }
   }, [showPlantsScreen, showPlantManagement, showPlantForm, user?.id])
 
-  // Configurar event listener para wheel com passive: false para permitir preventDefault
-  useEffect(() => {
-    const scrollContainer = calendarScrollRef.current
-    if (!scrollContainer) return
-
-    const handleWheel = (e) => {
-      // Prevenir scroll com wheel quando os botões estão ocultos
-      if (!scrollContainer) return
-      
-      const scrollTop = scrollContainer.scrollTop
-      const scrollHeight = scrollContainer.scrollHeight
-      const clientHeight = scrollContainer.clientHeight
-      
-      let minScrollTop = 0
-      let maxScrollTop = scrollHeight - clientHeight
-      
-      if (!showBeforeHours) {
-        minScrollTop = getOperatingHoursTop
-      }
-      
-      if (!showAfterHours) {
-        maxScrollTop = Math.max(0, getOperatingHoursBottom - clientHeight)
-      }
-      
-      // Se está tentando rolar para cima e já está no limite mínimo
-      if (e.deltaY < 0 && scrollTop <= minScrollTop && !showBeforeHours) {
-        e.preventDefault()
-        return
-      }
-      
-      // Se está tentando rolar para baixo e já está no limite máximo
-      if (e.deltaY > 0 && scrollTop >= maxScrollTop && !showAfterHours) {
-        e.preventDefault()
-        return
-      }
-    }
-
-    scrollContainer.addEventListener('wheel', handleWheel, { passive: false })
-
-    return () => {
-      scrollContainer.removeEventListener('wheel', handleWheel)
-    }
-  }, [showBeforeHours, showAfterHours, getOperatingHoursTop, getOperatingHoursBottom])
-
   // Carregar fornecedores quando a tela de fornecedores é aberta
   useEffect(() => {
     if (showSuppliersScreen && hasPermission('view_suppliers', 'viewer')) {
@@ -1207,6 +1163,50 @@ const SupplierDashboard = ({ user, token }) => {
   const hasHoursAfter = useMemo(() => {
     return getOperatingHoursBottom < timelineHeight
   }, [getOperatingHoursBottom, timelineHeight])
+  
+  // Configurar event listener para wheel com passive: false para permitir preventDefault
+  useEffect(() => {
+    const scrollContainer = calendarScrollRef.current
+    if (!scrollContainer) return
+
+    const handleWheel = (e) => {
+      // Prevenir scroll com wheel quando os botões estão ocultos
+      if (!scrollContainer) return
+      
+      const scrollTop = scrollContainer.scrollTop
+      const scrollHeight = scrollContainer.scrollHeight
+      const clientHeight = scrollContainer.clientHeight
+      
+      let minScrollTop = 0
+      let maxScrollTop = scrollHeight - clientHeight
+      
+      if (!showBeforeHours) {
+        minScrollTop = getOperatingHoursTop
+      }
+      
+      if (!showAfterHours) {
+        maxScrollTop = Math.max(0, getOperatingHoursBottom - clientHeight)
+      }
+      
+      // Se está tentando rolar para cima e já está no limite mínimo
+      if (e.deltaY < 0 && scrollTop <= minScrollTop && !showBeforeHours) {
+        e.preventDefault()
+        return
+      }
+      
+      // Se está tentando rolar para baixo e já está no limite máximo
+      if (e.deltaY > 0 && scrollTop >= maxScrollTop && !showAfterHours) {
+        e.preventDefault()
+        return
+      }
+    }
+
+    scrollContainer.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      scrollContainer.removeEventListener('wheel', handleWheel)
+    }
+  }, [showBeforeHours, showAfterHours, getOperatingHoursTop, getOperatingHoursBottom])
   
   // Verificar se há agendamentos fora do horário padrão (para expandir automaticamente)
   const hasAppointmentsOutsideHours = useMemo(() => {
