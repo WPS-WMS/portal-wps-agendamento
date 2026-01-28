@@ -354,5 +354,19 @@ export const plantAPI = {
   deleteAppointment: async (appointmentId) => {
     const response = await apiClient.delete(`/plant/appointments/${appointmentId}`)
     return response.data
+  },
+
+  // Reports
+  getDashboardSummary: async (startDate, endDate) => {
+    const response = await apiClient.get('/plant/reports/dashboard-summary', {
+      params: { start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  },
+  getSupplierStats: async (supplierId, startDate, endDate) => {
+    const response = await apiClient.get('/plant/reports/supplier-stats', {
+      params: { supplier_id: supplierId, start_date: startDate, end_date: endDate }
+    })
+    return response.data
   }
 }

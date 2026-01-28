@@ -40,6 +40,7 @@ import AppointmentEditForm from './AppointmentEditForm'
 import PlantForm from './PlantForm'
 import UsersScreen from './UsersScreen'
 import usePermissions from '../hooks/usePermissions'
+import ReportsTabPlant from './ReportsTabPlant'
 
 // Constante para altura proporcional por hora
 const HOUR_HEIGHT = UI_CONFIG.HOUR_HEIGHT
@@ -1471,8 +1472,9 @@ const PlantDashboard = ({ user, token }) => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className={`grid w-full ${hasPermission('view_system_config', 'viewer') ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <TabsList className={`grid w-full ${hasPermission('view_system_config', 'viewer') ? 'grid-cols-3' : 'grid-cols-2'}`}>
           <TabsTrigger value="appointments">Agendamentos</TabsTrigger>
+          <TabsTrigger value="reports">Relatórios</TabsTrigger>
           {hasPermission('view_system_config', 'viewer') && (
             <TabsTrigger value="suppliers">Configurações</TabsTrigger>
           )}
@@ -2149,6 +2151,11 @@ const PlantDashboard = ({ user, token }) => {
           )}
           </div>
           </>
+        </TabsContent>
+
+        {/* Tab de Relatórios */}
+        <TabsContent value="reports" className="space-y-4">
+          <ReportsTabPlant user={user} token={token} plantInfo={plantInfo} />
         </TabsContent>
 
         {/* Tab de Configurações */}

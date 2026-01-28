@@ -1,8 +1,10 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta, time, date
+from sqlalchemy import func
 from src.models.user import User, db
 from src.models.appointment import Appointment
 from src.models.plant import Plant
+from src.models.supplier import Supplier
 from src.routes.auth import token_required, plant_required
 from src.utils.permissions import permission_required
 from src.utils.helpers import generate_appointment_number
@@ -712,5 +714,186 @@ def set_max_capacity(current_user):
     except Exception as e:
         logger.error(f"Erro ao salvar max_capacity: {e}", exc_info=True)
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@plant_bp.route('/reports/dashboard-summary', methods=['GET'])
+@token_required
+def get_plant_dashboard_summary(current_user):
+    """Retorna resumo geral da própria planta para o dashboard de relatórios"""
+    try:
+        if current_user.role != 'plant':
+            return jsonify({'error': 'Acesso negado. Apenas plantas podem acessar'}), 403
+        
+        if not current_user.plant_id:
+            return jsonify({'error': 'Usuário não está vinculado a uma planta'}), 400
+        
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        
+        # Se não fornecido, usar últimos 30 dias
+        if not start_date_str or not end_date_str:
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=30)
+        else:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        
+        # Buscar a planta
+        plant = Plant.query.get(current_user.plant_id)
+        if not plant:
+            return jsonify({'error': 'Planta não encontrada'}), 404
+        
+        # Total de agendamentos da planta no período
+        total_appointments = Appointment.query.filter(
+            Appointment.plant_id == current_user.plant_id,
+            Appointment.date >= start_date,
+            Appointment.date <= end_date
+        ).count()
+        
+        # Agendamentos por status
+        appointments_by_status = db.session.query(
+            Appointment.status,
+            func.count(Appointment.id).label('count')
+        ).filter(
+            Appointment.plant_id == current_user.plant_id,
+            Appointment.date >= start_date,
+            Appointment.date <= end_date
+        ).group_by(Appointment.status).all()
+        
+        status_counts = {status: count for status, count in appointments_by_status}
+        
+        # Total de fornecedores ativos que agendam nesta planta
+        supplier_ids = db.session.query(Appointment.supplier_id).filter(
+            Appointment.plant_id == current_user.plant_id,
+            Appointment.date >= start_date,
+            Appointment.date <= end_date
+        ).distinct().all()
+        
+        supplier_ids_list = [sid[0] for sid in supplier_ids if sid[0]]
+        active_suppliers = Supplier.query.filter(
+            Supplier.id.in_(supplier_ids_list),
+            Supplier.is_active == True,
+            Supplier.is_deleted == False,
+            Supplier.company_id == current_user.company_id
+        ).count() if supplier_ids_list else 0
+        
+        # Taxa de ocupação da planta
+        plant_appointments = Appointment.query.filter(
+            Appointment.plant_id == current_user.plant_id,
+            Appointment.date >= start_date,
+            Appointment.date <= end_date,
+            Appointment.status.in_(['scheduled', 'checked_in', 'checked_out'])
+        ).count()
+        
+        days_in_period = (end_date - start_date).days + 1
+        max_capacity = plant.max_capacity or 1
+        total_slots = days_in_period * max_capacity
+        
+        occupation_rate = (plant_appointments / total_slots * 100) if total_slots > 0 else 0
+        
+        return jsonify({
+            'total_appointments': total_appointments,
+            'appointments_by_status': status_counts,
+            'active_suppliers': active_suppliers,
+            'occupation_rate': round(occupation_rate, 2),
+            'plant': {
+                'id': plant.id,
+                'name': plant.name,
+                'max_capacity': plant.max_capacity
+            },
+            'period': {
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat()
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar resumo do dashboard da planta: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@plant_bp.route('/reports/supplier-stats', methods=['GET'])
+@token_required
+def get_plant_supplier_stats(current_user):
+    """Retorna estatísticas de um fornecedor específico que agenda nesta planta"""
+    try:
+        if current_user.role != 'plant':
+            return jsonify({'error': 'Acesso negado. Apenas plantas podem acessar'}), 403
+        
+        if not current_user.plant_id:
+            return jsonify({'error': 'Usuário não está vinculado a uma planta'}), 400
+        
+        supplier_id = request.args.get('supplier_id', type=int)
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        
+        if not supplier_id:
+            return jsonify({'error': 'supplier_id é obrigatório'}), 400
+        
+        # Verificar se o fornecedor pertence à mesma company
+        supplier = Supplier.query.filter_by(
+            id=supplier_id,
+            company_id=current_user.company_id
+        ).first()
+        
+        if not supplier:
+            return jsonify({'error': 'Fornecedor não encontrado'}), 404
+        
+        # Se não fornecido, usar últimos 30 dias
+        if not start_date_str or not end_date_str:
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=30)
+        else:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        
+        # Agendamentos do fornecedor nesta planta no período
+        appointments = Appointment.query.filter(
+            Appointment.supplier_id == supplier_id,
+            Appointment.plant_id == current_user.plant_id,
+            Appointment.date >= start_date,
+            Appointment.date <= end_date
+        ).all()
+        
+        total_appointments = len(appointments)
+        
+        # Agendamentos por status
+        status_counts = {}
+        for apt in appointments:
+            status_counts[apt.status] = status_counts.get(apt.status, 0) + 1
+        
+        # Agendamentos por dia
+        appointments_by_date = db.session.query(
+            Appointment.date,
+            func.count(Appointment.id).label('count')
+        ).filter(
+            Appointment.supplier_id == supplier_id,
+            Appointment.plant_id == current_user.plant_id,
+            Appointment.date >= start_date,
+            Appointment.date <= end_date
+        ).group_by(Appointment.date).order_by(Appointment.date).all()
+        
+        daily_data = [{'date': date.isoformat(), 'count': count} for date, count in appointments_by_date]
+        
+        # Taxa de comparecimento (checked_in + checked_out / total)
+        confirmed = sum(1 for apt in appointments if apt.status in ['checked_in', 'checked_out'])
+        attendance_rate = (confirmed / total_appointments * 100) if total_appointments > 0 else 0
+        
+        return jsonify({
+            'supplier': {
+                'id': supplier.id,
+                'description': supplier.description
+            },
+            'total_appointments': total_appointments,
+            'appointments_by_status': status_counts,
+            'daily_appointments': daily_data,
+            'attendance_rate': round(attendance_rate, 2),
+            'period': {
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat()
+            }
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar estatísticas do fornecedor na planta: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
