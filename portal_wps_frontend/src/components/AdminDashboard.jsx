@@ -41,6 +41,7 @@ import PlantForm from './PlantForm'
 import AccessProfilesScreen from './AccessProfilesScreen'
 import UsersScreen from './UsersScreen'
 import PlantSelector from './PlantSelector'
+import ReportsTab from './ReportsTab'
 
 // Constante para altura proporcional por hora
 const HOUR_HEIGHT = UI_CONFIG.HOUR_HEIGHT
@@ -1482,8 +1483,9 @@ const AdminDashboard = ({ user, token }) => {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="appointments">Agendamentos</TabsTrigger>
+          <TabsTrigger value="reports">Relatórios</TabsTrigger>
           <TabsTrigger value="suppliers">Configurações</TabsTrigger>
         </TabsList>
 
@@ -2204,6 +2206,11 @@ const AdminDashboard = ({ user, token }) => {
           </div>
           </>
           )}
+        </TabsContent>
+
+        {/* Tab de Relatórios */}
+        <TabsContent value="reports" className="space-y-4">
+          <ReportsTab user={user} token={token} />
         </TabsContent>
 
         {/* Tab de Configurações */}
