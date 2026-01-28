@@ -229,6 +229,26 @@ export const adminAPI = {
   createScheduleConfig: async (data) => {
     const response = await apiClient.post('/admin/schedule-config', data)
     return response.data
+  },
+
+  // Reports
+  getDashboardSummary: async (startDate, endDate) => {
+    const response = await apiClient.get('/admin/reports/dashboard-summary', {
+      params: { start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  },
+  getPlantStats: async (plantId, startDate, endDate) => {
+    const response = await apiClient.get('/admin/reports/plant-stats', {
+      params: { plant_id: plantId, start_date: startDate, end_date: endDate }
+    })
+    return response.data
+  },
+  getSupplierStats: async (supplierId, startDate, endDate) => {
+    const response = await apiClient.get('/admin/reports/supplier-stats', {
+      params: { supplier_id: supplierId, start_date: startDate, end_date: endDate }
+    })
+    return response.data
   }
 }
 
