@@ -50,10 +50,28 @@ if not SECRET_KEY:
 app.config['SECRET_KEY'] = SECRET_KEY
 
 # Habilitar CORS para permitir requisições do frontend
-# Em produção, aceitar origens específicas do Firebase Hosting
-allowed_origins = os.environ.get('CORS_ORIGINS', '*')
-if allowed_origins != '*':
-    allowed_origins = [origin.strip() for origin in allowed_origins.split(',')]
+# Em produção, aceitar origens específicas do Firebase Hosting e domínio customizado
+# Domínios padrão: Firebase Hosting e domínio customizado cargoflow.app.br
+default_origins = [
+    'https://portal-agendamentos-cargoflow.web.app',
+    'https://portal-agendamentos-cargoflow.firebaseapp.com',
+    'https://cargoflow.app.br',
+    'http://localhost:5173',  # Vite dev server
+    'http://localhost:3000',  # Desenvolvimento alternativo
+]
+
+# Permitir adicionar mais origens via variável de ambiente
+cors_origins_env = os.environ.get('CORS_ORIGINS', '')
+if cors_origins_env:
+    # Se CORS_ORIGINS estiver definida, usar ela (pode ser uma lista separada por vírgula)
+    allowed_origins = [origin.strip() for origin in cors_origins_env.split(',')]
+    # Adicionar domínios padrão se não estiverem na lista
+    for origin in default_origins:
+        if origin not in allowed_origins:
+            allowed_origins.append(origin)
+else:
+    # Se não estiver definida, usar apenas os domínios padrão
+    allowed_origins = default_origins
 
 # Configuração completa de CORS com suporte a credenciais e métodos
 CORS(app, 
@@ -63,6 +81,8 @@ CORS(app,
          "allow_headers": ["Content-Type", "Authorization"],
          "supports_credentials": True
      }})
+
+logger.info(f"CORS configurado com as seguintes origens permitidas: {', '.join(allowed_origins)}")
 
 # Configurar banco de dados PostgreSQL
 DATABASE_URL = os.environ.get("DATABASE_URL")
