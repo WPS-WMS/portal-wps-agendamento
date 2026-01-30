@@ -708,6 +708,9 @@ O sistema registra todas as operações importantes:
 ## Referências
 
 Para mais informações, consulte:
+- **Requisitos do Sistema**: `docs/REQUISITOS_PORTAL_WPS.md` - Documentação de requisitos (personas, histórias de usuário, regras de negócio, fluxos, critérios de aceite)
+- **Documentação da API**: `docs/API_PORTAL_WPS.md` - Endpoints, payloads, headers, exemplos e erros
+- **Guia do Desenvolvedor**: `docs/GUIA_DESENVOLVEDOR.md` - Rodar local, deploy, estrutura de pastas, padrões de commit, scripts
 - **Guia de Instalação**: `docs/GUIA_INSTALACAO.md` - Passo a passo de instalação
 - **Guia de Segurança**: `docs/SEGURANCA.md` - Configurações de segurança e variáveis de ambiente
 - **Modelagem do Banco**: `docs/MODELAGEM_BANCO_DE_DADOS.md` - Estrutura completa do banco
