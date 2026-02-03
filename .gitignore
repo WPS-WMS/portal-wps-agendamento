@@ -64,6 +64,10 @@ dist/
 dist-ssr/
 *.local
 
+# Exceção: frontend src/lib deve ser versionado (api.js etc.)
+!portal_wps_frontend/src/lib/
+!portal_wps_frontend/src/lib/**
+
 # Editor directories and files
 .vscode/
 .idea/
