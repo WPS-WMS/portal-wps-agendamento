@@ -196,6 +196,7 @@ const Login = ({ onLogin }) => {
       // RN03 - Mesmo em caso de erro, exibir mensagem genérica
       setResetMessage('Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.')
       setResetEmail('')
+      // Timeout ou erro de rede: fechar e parar loading
       setTimeout(() => {
         setShowForgotPassword(false)
         setResetMessage('')

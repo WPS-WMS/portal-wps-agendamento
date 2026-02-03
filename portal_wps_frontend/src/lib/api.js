@@ -60,7 +60,7 @@ export const authAPI = {
     return response.data
   },
   forgotPassword: async (email) => {
-    const response = await apiClient.post('/forgot-password', { email })
+    const response = await apiClient.post('/forgot-password', { email }, { timeout: 15000 })
     return response.data
   },
   verify: async () => {
