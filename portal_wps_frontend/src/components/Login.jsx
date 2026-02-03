@@ -178,30 +178,45 @@ const Login = ({ onLogin }) => {
       return
     }
 
+    const apiUrl = import.meta.env.VITE_API_URL || '/api'
+    console.log('[Recuperação de senha] Iniciando. API base:', apiUrl, '| E-mail (mascarado):', resetEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3'))
     setResetLoading(true)
 
+    // Timeout de segurança: se a requisição demorar mais que 16s, parar loading e mostrar mensagem
+    const safetyTimer = setTimeout(() => {
+      console.warn('[Recuperação de senha] Timeout de segurança (16s) atingido — requisição não retornou a tempo.')
+      setResetLoading(false)
+      setResetMessage('Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha. Se não receber em alguns minutos, verifique a pasta de spam ou tente novamente.')
+    }, 16000)
+
+    const showSuccessAndClose = () => {
+      setResetMessage('Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.')
+      setResetEmail('')
+      setTimeout(() => {
+        setShowForgotPassword(false)
+        setResetMessage('')
+      }, 3000)
+    }
+
     try {
+      console.log('[Recuperação de senha] Enviando requisição POST para /forgot-password...')
       await authAPI.forgotPassword(resetEmail)
-      
-      // RN03 - Sempre exibir mensagem genérica, não informar se email existe
-      setResetMessage('Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.')
-      setResetEmail('')
-      
-      // Fechar modal após 3 segundos
-      setTimeout(() => {
-        setShowForgotPassword(false)
-        setResetMessage('')
-      }, 3000)
+      clearTimeout(safetyTimer)
+      console.log('[Recuperação de senha] Resposta recebida com sucesso (200).')
+      showSuccessAndClose()
     } catch (err) {
-      // RN03 - Mesmo em caso de erro, exibir mensagem genérica
-      setResetMessage('Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.')
-      setResetEmail('')
-      // Timeout ou erro de rede: fechar e parar loading
-      setTimeout(() => {
-        setShowForgotPassword(false)
-        setResetMessage('')
-      }, 3000)
+      clearTimeout(safetyTimer)
+      console.error('[Recuperação de senha] Erro na requisição:', {
+        message: err?.message,
+        code: err?.code,
+        status: err?.response?.status,
+        statusText: err?.response?.statusText,
+        url: err?.config?.baseURL + err?.config?.url
+      })
+      // RN03 - Mesmo em caso de erro (timeout, CORS, rede), exibir mensagem genérica
+      showSuccessAndClose()
     } finally {
+      clearTimeout(safetyTimer)
       setResetLoading(false)
     }
   }

@@ -202,46 +202,55 @@ def plant_required(f):
 def forgot_password():
     """Endpoint para solicitar recuperação de senha (RN03)"""
     try:
+        logger.info("[forgot-password] Requisição recebida")
         data = request.get_json()
         
         if not data or not data.get('email'):
+            logger.info("[forgot-password] E-mail não fornecido no body, retornando 200 genérico")
             # RN03 - Sempre retornar mensagem genérica
             return jsonify({
                 'message': 'Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.'
             }), 200
         
         email = data['email']
+        logger.info("[forgot-password] Buscando usuário para o e-mail informado")
         user = User.query.filter_by(email=email).first()
         
         # RN03 - Mesmo que o usuário não exista, retornar sucesso
         # Isso evita enumerar emails válidos no sistema
         if user and user.is_active:
+            logger.info("[forgot-password] Usuário encontrado e ativo, criando token e enviando e-mail")
             try:
                 # Obter tempo de expiração (padrão: 60 minutos)
                 expiry_minutes = int(os.environ.get('RESET_TOKEN_EXPIRY', 60))
                 
                 # Criar token de recuperação
                 reset_token = PasswordResetToken.create_token(user.id, expiry_minutes)
+                logger.info("[forgot-password] Token criado, enviando e-mail...")
                 
                 # Enviar e-mail com link de recuperação
                 email_sent = email_service.send_password_reset_email(user.email, reset_token.token)
                 
-                if not email_sent:
-                    logger.warning(f"Falha ao enviar e-mail de recuperação para {user.email}")
-                    # Não expor erro ao usuário por segurança
+                if email_sent:
+                    logger.info("[forgot-password] E-mail enviado com sucesso")
+                else:
+                    logger.warning("[forgot-password] Falha ao enviar e-mail de recuperação (send_password_reset_email retornou False)")
                 
             except Exception as e:
-                logger.error(f"Erro ao processar recuperação de senha para {email}: {str(e)}")
+                logger.error(f"[forgot-password] Erro ao processar recuperação: {str(e)}", exc_info=True)
                 # Não expor erro ao usuário por segurança
+        else:
+            logger.info("[forgot-password] Usuário não encontrado ou inativo, retornando 200 genérico (segurança)")
         
         # RN03 - Sempre mesma mensagem, não informar se email existe
+        logger.info("[forgot-password] Retornando resposta 200")
         return jsonify({
             'message': 'Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.'
         }), 200
         
     except Exception as e:
         # Mesmo em caso de erro, não expor detalhes
-        logger.error(f"Erro em forgot_password: {e}")
+        logger.error(f"[forgot-password] Erro inesperado: {e}", exc_info=True)
         return jsonify({
             'message': 'Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.'
         }), 200

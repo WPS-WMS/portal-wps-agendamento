@@ -32,10 +32,11 @@ class EmailService:
     def send_email(self, to_email, subject, html_body, text_body=None):
         """Envia um e-mail"""
         if not self.is_configured:
-            logger.error(f"Tentativa de enviar e-mail para {to_email}, mas SMTP não está configurado")
+            logger.error("SMTP não configurado (SMTP_HOST, SMTP_USER ou SMTP_PASSWORD ausentes)")
             return False
         
         try:
+            logger.info(f"SMTP: Conectando a {self.smtp_host}:{self.smtp_port}...")
             # Criar mensagem
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
@@ -53,19 +54,22 @@ class EmailService:
             # Conectar e enviar
             with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
                 server.starttls()
+                logger.info("SMTP: STARTTLS OK, fazendo login...")
                 server.login(self.smtp_user, self.smtp_password)
+                logger.info("SMTP: Login OK, enviando mensagem...")
                 server.send_message(msg)
             
-            logger.info("E-mail enviado com sucesso")
+            logger.info(f"SMTP: E-mail enviado com sucesso para {to_email}")
             return True
             
         except Exception as e:
-            logger.error(f"Erro ao enviar e-mail para {to_email}: {str(e)}")
+            logger.error(f"SMTP: Erro ao enviar e-mail para {to_email}: {type(e).__name__}: {str(e)}", exc_info=True)
             return False
     
     def send_password_reset_email(self, to_email, reset_token):
         """Envia e-mail de recuperação de senha"""
         reset_url = f"{self.frontend_url}/reset-password?token={reset_token}"
+        logger.info(f"Enviando e-mail de recuperação para {to_email} | link: {self.frontend_url}/reset-password?token=***")
         
         subject = "Recuperação de Senha - Portal WPS Agendamento"
         

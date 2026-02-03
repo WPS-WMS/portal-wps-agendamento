@@ -37,7 +37,7 @@ apiClient.interceptors.response.use(
       const url = error.config?.url || ''
       
       // Deixar o erro passar para ser tratado pelo componente nestes casos:
-      if (url.includes('/profile') || url.includes('/login')) {
+      if (url.includes('/profile') || url.includes('/login') || url.includes('/forgot-password')) {
         return Promise.reject(error)
       }
       
@@ -60,7 +60,10 @@ export const authAPI = {
     return response.data
   },
   forgotPassword: async (email) => {
+    const url = `${apiClient.defaults.baseURL}/forgot-password`
+    console.log('[API] POST forgot-password →', url, '(timeout: 15s)')
     const response = await apiClient.post('/forgot-password', { email }, { timeout: 15000 })
+    console.log('[API] POST forgot-password ←', response.status, response.data)
     return response.data
   },
   verify: async () => {
