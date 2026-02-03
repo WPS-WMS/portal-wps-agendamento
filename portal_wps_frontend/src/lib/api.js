@@ -61,8 +61,8 @@ export const authAPI = {
   },
   forgotPassword: async (email) => {
     const url = `${apiClient.defaults.baseURL}/forgot-password`
-    console.log('[API] POST forgot-password →', url, '(timeout: 15s)')
-    const response = await apiClient.post('/forgot-password', { email }, { timeout: 15000 })
+    // 30s para dar tempo de cold start no Railway; timeout ainda é tratado como sucesso (RN03)
+    const response = await apiClient.post('/forgot-password', { email }, { timeout: 30000 })
     console.log('[API] POST forgot-password ←', response.status, response.data)
     return response.data
   },

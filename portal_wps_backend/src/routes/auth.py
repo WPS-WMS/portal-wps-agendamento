@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 import jwt
 from datetime import datetime, timedelta
 from src.models.user import User, db
@@ -6,6 +6,7 @@ from src.models.password_reset_token import PasswordResetToken
 from src.utils.email_service import EmailService
 import logging
 import os
+import threading
 
 logger = logging.getLogger(__name__)
 
@@ -198,70 +199,46 @@ def plant_required(f):
     decorated.__name__ = f.__name__
     return decorated
 
+def _forgot_password_background(email_str, flask_app):
+    """Executa em thread: busca usuário, cria token e envia e-mail. Resposta HTTP já foi enviada."""
+    with flask_app.app_context():
+        try:
+            user = User.query.filter_by(email=email_str).first()
+            if not user or not user.is_active:
+                logger.info("[forgot-password] Usuário não encontrado ou inativo (background)")
+                return
+            expiry_minutes = int(os.environ.get('RESET_TOKEN_EXPIRY', 60))
+            reset_token = PasswordResetToken.create_token(user.id, expiry_minutes)
+            to_email = str(user.email)
+            token_str = str(reset_token.token)
+            sent = email_service.send_password_reset_email(to_email, token_str)
+            if sent:
+                logger.info("[forgot-password] E-mail enviado com sucesso (background)")
+            else:
+                logger.warning("[forgot-password] Falha ao enviar e-mail (background)")
+        except Exception as e:
+            logger.error(f"[forgot-password] Erro em background: {e}", exc_info=True)
+
+
 @auth_bp.route('/forgot-password', methods=['POST'])
 def forgot_password():
-    """Endpoint para solicitar recuperação de senha (RN03)"""
+    """Endpoint para solicitar recuperação de senha (RN03). Responde 200 imediatamente; lógica em background."""
+    generic_message = {
+        'message': 'Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.'
+    }
     try:
-        logger.info("[forgot-password] Requisição recebida")
-        data = request.get_json()
-        
-        if not data or not data.get('email'):
-            logger.info("[forgot-password] E-mail não fornecido no body, retornando 200 genérico")
-            # RN03 - Sempre retornar mensagem genérica
-            return jsonify({
-                'message': 'Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.'
-            }), 200
-        
-        email = data['email']
-        logger.info("[forgot-password] Buscando usuário para o e-mail informado")
-        user = User.query.filter_by(email=email).first()
-        
-        # RN03 - Mesmo que o usuário não exista, retornar sucesso
-        # Isso evita enumerar emails válidos no sistema
-        if user and user.is_active:
-            logger.info("[forgot-password] Usuário encontrado e ativo, criando token")
-            try:
-                # Obter tempo de expiração (padrão: 60 minutos)
-                expiry_minutes = int(os.environ.get('RESET_TOKEN_EXPIRY', 60))
-                
-                # Criar token de recuperação
-                reset_token = PasswordResetToken.create_token(user.id, expiry_minutes)
-                to_email = str(user.email)
-                token_str = str(reset_token.token)
-                logger.info("[forgot-password] Token criado, enviando e-mail em background para não bloquear a resposta")
-                
-                # Enviar e-mail em thread em background: resposta HTTP volta logo, SMTP não bloqueia
-                import threading
-                def _send_reset_email():
-                    try:
-                        sent = email_service.send_password_reset_email(to_email, token_str)
-                        if sent:
-                            logger.info("[forgot-password] E-mail enviado com sucesso (background)")
-                        else:
-                            logger.warning("[forgot-password] Falha ao enviar e-mail (background)")
-                    except Exception as e:
-                        logger.error(f"[forgot-password] Erro ao enviar e-mail em background: {e}", exc_info=True)
-                t = threading.Thread(target=_send_reset_email, daemon=True)
-                t.start()
-                
-            except Exception as e:
-                logger.error(f"[forgot-password] Erro ao criar token/agendar e-mail: {str(e)}", exc_info=True)
-                # Não expor erro ao usuário por segurança
-        else:
-            logger.info("[forgot-password] Usuário não encontrado ou inativo, retornando 200 genérico (segurança)")
-        
-        # RN03 - Sempre mesma mensagem, não informar se email existe
-        logger.info("[forgot-password] Retornando resposta 200")
-        return jsonify({
-            'message': 'Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.'
-        }), 200
-        
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip()
+        if not email:
+            return jsonify(generic_message), 200
+        # Resposta imediata; evita timeout por cold start ou DB/SMTP lento
+        flask_app = current_app._get_current_object()
+        t = threading.Thread(target=_forgot_password_background, args=(email, flask_app), daemon=True)
+        t.start()
+        return jsonify(generic_message), 200
     except Exception as e:
-        # Mesmo em caso de erro, não expor detalhes
         logger.error(f"[forgot-password] Erro inesperado: {e}", exc_info=True)
-        return jsonify({
-            'message': 'Se o e-mail estiver cadastrado, você receberá instruções para redefinir sua senha.'
-        }), 200
+        return jsonify(generic_message), 200
 
 @auth_bp.route('/reset-password', methods=['POST'])
 def reset_password():
