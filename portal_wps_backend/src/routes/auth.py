@@ -219,25 +219,33 @@ def forgot_password():
         # RN03 - Mesmo que o usuário não exista, retornar sucesso
         # Isso evita enumerar emails válidos no sistema
         if user and user.is_active:
-            logger.info("[forgot-password] Usuário encontrado e ativo, criando token e enviando e-mail")
+            logger.info("[forgot-password] Usuário encontrado e ativo, criando token")
             try:
                 # Obter tempo de expiração (padrão: 60 minutos)
                 expiry_minutes = int(os.environ.get('RESET_TOKEN_EXPIRY', 60))
                 
                 # Criar token de recuperação
                 reset_token = PasswordResetToken.create_token(user.id, expiry_minutes)
-                logger.info("[forgot-password] Token criado, enviando e-mail...")
+                to_email = str(user.email)
+                token_str = str(reset_token.token)
+                logger.info("[forgot-password] Token criado, enviando e-mail em background para não bloquear a resposta")
                 
-                # Enviar e-mail com link de recuperação
-                email_sent = email_service.send_password_reset_email(user.email, reset_token.token)
-                
-                if email_sent:
-                    logger.info("[forgot-password] E-mail enviado com sucesso")
-                else:
-                    logger.warning("[forgot-password] Falha ao enviar e-mail de recuperação (send_password_reset_email retornou False)")
+                # Enviar e-mail em thread em background: resposta HTTP volta logo, SMTP não bloqueia
+                import threading
+                def _send_reset_email():
+                    try:
+                        sent = email_service.send_password_reset_email(to_email, token_str)
+                        if sent:
+                            logger.info("[forgot-password] E-mail enviado com sucesso (background)")
+                        else:
+                            logger.warning("[forgot-password] Falha ao enviar e-mail (background)")
+                    except Exception as e:
+                        logger.error(f"[forgot-password] Erro ao enviar e-mail em background: {e}", exc_info=True)
+                t = threading.Thread(target=_send_reset_email, daemon=True)
+                t.start()
                 
             except Exception as e:
-                logger.error(f"[forgot-password] Erro ao processar recuperação: {str(e)}", exc_info=True)
+                logger.error(f"[forgot-password] Erro ao criar token/agendar e-mail: {str(e)}", exc_info=True)
                 # Não expor erro ao usuário por segurança
         else:
             logger.info("[forgot-password] Usuário não encontrado ou inativo, retornando 200 genérico (segurança)")

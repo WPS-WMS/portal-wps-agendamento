@@ -51,8 +51,9 @@ class EmailService:
             part2 = MIMEText(html_body, 'html', 'utf-8')
             msg.attach(part2)
             
-            # Conectar e enviar
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+            # Conectar e enviar (timeout 10s para não travar se SMTP estiver lento)
+            timeout_sec = int(os.environ.get('SMTP_TIMEOUT', 10))
+            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=timeout_sec) as server:
                 server.starttls()
                 logger.info("SMTP: STARTTLS OK, fazendo login...")
                 server.login(self.smtp_user, self.smtp_password)
