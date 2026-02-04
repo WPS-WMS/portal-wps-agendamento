@@ -70,15 +70,40 @@ class EmailService:
                 logger.error(f"Resend API retornou {resp.getcode()}: {body}")
                 return False
         except urllib.error.HTTPError as e:
-            # Captura erros HTTP (403, 401, etc.) e mostra detalhes
-            error_body = e.read().decode("utf-8") if e.fp else "Sem detalhes"
-            logger.error(
+            # Captura erros HTTP (403, 401, 1010, etc.) e mostra detalhes
+            try:
+                error_body = e.read().decode("utf-8") if e.fp else "Sem detalhes"
+            except:
+                error_body = "Não foi possível ler o corpo da resposta"
+            
+            error_msg = (
                 f"Resend HTTP Error {e.code}: {e.reason}\n"
                 f"URL: {RESEND_API_URL}\n"
                 f"From: {self.from_name} <{self.from_email}>\n"
                 f"To: {to_email}\n"
                 f"Resposta: {error_body}\n"
-                f"Possíveis causas: API Key inválida, domínio não verificado, ou e-mail 'from' não corresponde ao domínio verificado."
+            )
+            
+            # Mensagens específicas por código de erro
+            if e.code == 403:
+                error_msg += "Possíveis causas: API Key inválida, domínio não verificado, ou e-mail 'from' não corresponde ao domínio verificado."
+            elif e.code == 401:
+                error_msg += "Possíveis causas: API Key inválida ou expirada. Verifique RESEND_API_KEY no Railway."
+            elif e.code == 1010:
+                error_msg += "Erro 1010: Cloudflare bloqueou a requisição (possível problema de DNS ou firewall). Verifique conectividade de rede do Railway."
+            else:
+                error_msg += f"Erro HTTP {e.code}: Verifique a documentação do Resend ou logs detalhados."
+            
+            logger.error(error_msg)
+            return False
+        except urllib.error.URLError as e:
+            # Erros de rede/DNS (não HTTP)
+            logger.error(
+                f"Resend: Erro de rede/URL ao enviar e-mail: {type(e).__name__}: {str(e)}\n"
+                f"URL: {RESEND_API_URL}\n"
+                f"From: {self.from_name} <{self.from_email}>\n"
+                f"To: {to_email}\n"
+                f"Possíveis causas: Problema de conectividade, DNS não resolve, ou firewall bloqueando acesso."
             )
             return False
         except Exception as e:
