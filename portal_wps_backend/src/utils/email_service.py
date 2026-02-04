@@ -3,6 +3,7 @@ import smtplib
 import logging
 import json
 import urllib.request
+import urllib.error
 import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -44,28 +45,44 @@ class EmailService:
     
     def _send_via_resend(self, to_email, subject, html_body):
         """Envia e-mail via Resend API (HTTPS). Funciona no Railway."""
-        payload = json.dumps({
-            "from": f"{self.from_name} <{self.from_email}>",
-            "to": [to_email],
-            "subject": subject,
-            "html": html_body,
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            RESEND_API_URL,
-            data=payload,
-            headers={
-                "Authorization": f"Bearer {self.resend_api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        ctx = ssl.create_default_context()
-        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
-            if 200 <= resp.getcode() < 300:
-                logger.info(f"Resend: E-mail enviado com sucesso para {to_email}")
-                return True
-            body = resp.read().decode("utf-8")
-            logger.error(f"Resend API retornou {resp.getcode()}: {body}")
+        try:
+            payload = json.dumps({
+                "from": f"{self.from_name} <{self.from_email}>",
+                "to": [to_email],
+                "subject": subject,
+                "html": html_body,
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                RESEND_API_URL,
+                data=payload,
+                headers={
+                    "Authorization": f"Bearer {self.resend_api_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            ctx = ssl.create_default_context()
+            with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+                if 200 <= resp.getcode() < 300:
+                    logger.info(f"Resend: E-mail enviado com sucesso para {to_email}")
+                    return True
+                body = resp.read().decode("utf-8")
+                logger.error(f"Resend API retornou {resp.getcode()}: {body}")
+                return False
+        except urllib.error.HTTPError as e:
+            # Captura erros HTTP (403, 401, etc.) e mostra detalhes
+            error_body = e.read().decode("utf-8") if e.fp else "Sem detalhes"
+            logger.error(
+                f"Resend HTTP Error {e.code}: {e.reason}\n"
+                f"URL: {RESEND_API_URL}\n"
+                f"From: {self.from_name} <{self.from_email}>\n"
+                f"To: {to_email}\n"
+                f"Resposta: {error_body}\n"
+                f"Possíveis causas: API Key inválida, domínio não verificado, ou e-mail 'from' não corresponde ao domínio verificado."
+            )
+            return False
+        except Exception as e:
+            logger.error(f"Resend: Erro inesperado ao enviar e-mail: {type(e).__name__}: {str(e)}", exc_info=True)
             return False
 
     def _send_via_smtp(self, to_email, subject, html_body, text_body=None):
