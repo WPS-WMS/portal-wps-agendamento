@@ -104,17 +104,35 @@ class EmailService:
             except:
                 error_body = "Não foi possível ler o corpo da resposta"
             
+            # Tentar parsear JSON da resposta para obter mensagem de erro detalhada
+            error_details = error_body
+            try:
+                error_json = json.loads(error_body)
+                if isinstance(error_json, dict):
+                    error_details = error_json.get('message', error_body)
+                    if 'errors' in error_json:
+                        error_details += f" | Erros: {error_json['errors']}"
+            except:
+                pass
+            
             error_msg = (
                 f"Resend HTTP Error {e.code}: {e.reason}\n"
                 f"URL: {RESEND_API_URL}\n"
-                f"From: {self.from_name} <{self.from_email}>\n"
+                f"From usado: {from_field}\n"
                 f"To: {to_email}\n"
-                f"Resposta: {error_body}\n"
+                f"Resposta completa: {error_body}\n"
+                f"Mensagem de erro: {error_details}\n"
             )
             
             # Mensagens específicas por código de erro
             if e.code == 403:
-                error_msg += "Possíveis causas: API Key inválida, domínio não verificado, ou e-mail 'from' não corresponde ao domínio verificado."
+                error_msg += (
+                    "Possíveis causas:\n"
+                    "1. API Key inválida ou sem permissões adequadas\n"
+                    "2. Domínio não verificado (se usando domínio customizado)\n"
+                    "3. E-mail 'from' não corresponde ao domínio verificado\n"
+                    "4. Se usando domínio de teste (onboarding@resend.dev), o e-mail destinatário precisa estar na lista de e-mails permitidos do Resend"
+                )
             elif e.code == 401:
                 error_msg += "Possíveis causas: API Key inválida ou expirada. Verifique RESEND_API_KEY no Railway."
             elif e.code == 1010:
