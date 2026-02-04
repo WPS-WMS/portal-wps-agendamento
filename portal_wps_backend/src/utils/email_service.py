@@ -125,7 +125,7 @@ class EmailService:
         """Envia e-mail de recuperação de senha."""
         reset_url = f"{self.frontend_url}/reset-password?token={reset_token}"
 
-        subject = "Recuperação de Senha - Portal WPS Agendamento"
+        subject = "Recuperação de Senha - Cargo Flow"
 
         html_body = f"""
         <!DOCTYPE html>
@@ -135,17 +135,17 @@ class EmailService:
             <style>
                 body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
                 .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-                .header {{ background-color: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }}
+                .header {{ background-color: #ffffff; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; border-bottom: 2px solid #FF6B35; }}
                 .content {{ background-color: #f9fafb; padding: 30px; border-radius: 0 0 5px 5px; }}
-                .button {{ display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
+                .button {{ display: inline-block; padding: 12px 24px; background-color: #FF6B35; color: white; text-decoration: none; border-radius: 5px; margin: 20px 0; }}
                 .footer {{ text-align: center; margin-top: 20px; color: #6b7280; font-size: 12px; }}
-                .warning {{ background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin: 20px 0; }}
+                .warning {{ background-color: #fff7ed; border-left: 4px solid #FF6B35; padding: 12px; margin: 20px 0; }}
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>Portal WPS Agendamento</h1>
+                    <h1 style="margin: 0; font-size: 24px;"><span style="color: #111827;">Cargo</span><span style="color: #FF6B35;"> Flow</span></h1>
                 </div>
                 <div class="content">
                     <h2>Recuperação de Senha</h2>
@@ -156,7 +156,7 @@ class EmailService:
                         <a href="{reset_url}" class="button">Redefinir Senha</a>
                     </p>
                     <p>Ou copie e cole o link abaixo no seu navegador:</p>
-                    <p style="word-break: break-all; color: #2563eb;">{reset_url}</p>
+                    <p style="word-break: break-all; color: #FF6B35;">{reset_url}</p>
                     <div class="warning">
                         <strong>⚠️ Importante:</strong>
                         <ul>
@@ -168,7 +168,7 @@ class EmailService:
                 </div>
                 <div class="footer">
                     <p>Este é um e-mail automático, por favor não responda.</p>
-                    <p>© Portal WPS Agendamento</p>
+                    <p>© Cargo Flow</p>
                 </div>
             </div>
         </body>
@@ -176,7 +176,7 @@ class EmailService:
         """
 
         text_body = f"""
-        Recuperação de Senha - Portal WPS Agendamento
+        Recuperação de Senha - Cargo Flow
 
         Olá,
 
@@ -191,7 +191,7 @@ class EmailService:
         - Não compartilhe este link com ninguém
 
         Este é um e-mail automático, por favor não responda.
-        © Portal WPS Agendamento
+        © Cargo Flow
         """
 
         return self.send_email(to_email, subject, html_body, text_body)
