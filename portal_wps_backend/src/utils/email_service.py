@@ -24,22 +24,30 @@ class EmailService:
         self.smtp_port = int(os.environ.get('SMTP_PORT', 587))
         self.smtp_user = os.environ.get('SMTP_USER')
         self.smtp_password = os.environ.get('SMTP_PASSWORD')
-        self.from_email = os.environ.get('SMTP_FROM_EMAIL') or os.environ.get('RESEND_FROM_EMAIL') or 'noreply@portalwps.com'
-        self.from_name = os.environ.get('SMTP_FROM_NAME') or os.environ.get('RESEND_FROM_NAME') or 'Portal WPS Agendamento'
-        self.frontend_url = os.environ.get('FRONTEND_URL', 'https://portal-agendamentos-cargoflow.web.app')
-
+        
+        # Determinar qual serviço usar primeiro
         self._use_resend = bool(self.resend_api_key)
         self._use_smtp = not self._use_resend and all([
             self.smtp_host,
             self.smtp_user,
             self.smtp_password
         ])
+        
+        # Se usar Resend, priorizar RESEND_FROM_EMAIL; senão, usar SMTP_FROM_EMAIL
+        if self._use_resend:
+            self.from_email = os.environ.get('RESEND_FROM_EMAIL') or os.environ.get('SMTP_FROM_EMAIL') or 'noreply@portalwps.com'
+            self.from_name = os.environ.get('RESEND_FROM_NAME') or os.environ.get('SMTP_FROM_NAME') or 'Portal WPS Agendamento'
+        else:
+            self.from_email = os.environ.get('SMTP_FROM_EMAIL') or os.environ.get('RESEND_FROM_EMAIL') or 'noreply@portalwps.com'
+            self.from_name = os.environ.get('SMTP_FROM_NAME') or os.environ.get('RESEND_FROM_NAME') or 'Portal WPS Agendamento'
+        
+        self.frontend_url = os.environ.get('FRONTEND_URL', 'https://portal-agendamentos-cargoflow.web.app')
         self.is_configured = self._use_resend or self._use_smtp
 
         if self._use_resend:
             logger.info(f"E-mail configurado via Resend API (HTTPS). From: {self.from_email}, API Key: {self.resend_api_key[:10]}...")
         elif self._use_smtp:
-            logger.info("E-mail configurado via SMTP.")
+            logger.info(f"E-mail configurado via SMTP. From: {self.from_email}")
         else:
             logger.warning("Serviço de e-mail não configurado. Defina RESEND_API_KEY (recomendado no Railway) ou SMTP_*.")
     
