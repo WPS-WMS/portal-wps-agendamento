@@ -49,6 +49,9 @@ class EmailService:
             # Formato "from": Resend aceita apenas email ou "Nome <email@domain.com>"
             # Por padrão, usar APENAS o email (sem nome) para evitar erro 1010
             # O erro 1010 geralmente ocorre quando há problema com formato ou domínio não verificado
+            
+            # SEMPRE usar apenas o email (sem nome) para evitar problemas
+            # O Resend pode rejeitar se o formato com nome tiver problemas
             from_field = self.from_email
             
             # Se RESEND_USE_NAME estiver definido como "true", tentar incluir o nome
@@ -59,6 +62,13 @@ class EmailService:
                 logger.info(f"Resend: Usando nome no 'from' (RESEND_USE_NAME=true): {from_field}")
             else:
                 logger.info(f"Resend: Usando apenas email no 'from' (sem nome): {from_field}")
+            
+            # Se RESEND_FALLBACK_TEST_DOMAIN estiver definido, usar domínio de teste do Resend
+            # Isso ajuda a isolar se o problema é com o domínio customizado
+            fallback_test = os.environ.get('RESEND_FALLBACK_TEST_DOMAIN', 'false').lower() == 'true'
+            if fallback_test:
+                from_field = 'onboarding@resend.dev'
+                logger.warning(f"Resend: Usando domínio de teste (RESEND_FALLBACK_TEST_DOMAIN=true): {from_field}")
             
             payload_data = {
                 "from": from_field,
