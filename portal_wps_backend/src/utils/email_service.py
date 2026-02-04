@@ -49,7 +49,10 @@ class EmailService:
         elif self._use_smtp:
             logger.info(f"E-mail configurado via SMTP. From: {self.from_email}")
         else:
-            logger.warning("Serviço de e-mail não configurado. Defina RESEND_API_KEY (recomendado no Railway) ou SMTP_*.")
+            logger.warning(
+                "Serviço de e-mail NÃO configurado. Defina RESEND_API_KEY nas variáveis do serviço backend no Railway. "
+                "(RESEND_API_KEY está vazia ou ausente.)"
+            )
     
     def _send_via_resend(self, to_email, subject, html_body):
         """Envia e-mail via Resend API (HTTPS). Funciona no Railway."""
@@ -183,11 +186,13 @@ class EmailService:
     def send_email(self, to_email, subject, html_body, text_body=None):
         """Envia um e-mail (Resend API ou SMTP)."""
         if not self.is_configured:
-            logger.error("E-mail não configurado (RESEND_API_KEY ou SMTP_* ausentes)")
+            logger.error("E-mail não configurado: RESEND_API_KEY ou SMTP_* ausentes. Defina RESEND_API_KEY nas variáveis do serviço no Railway.")
             return False
         try:
             if self._use_resend:
+                logger.info("Resend: Chamando API Resend (POST /emails)...")
                 return self._send_via_resend(to_email, subject, html_body)
+            logger.info("SMTP: Enviando via SMTP...")
             return self._send_via_smtp(to_email, subject, html_body, text_body)
         except Exception as e:
             logger.error(f"Erro ao enviar e-mail para {to_email}: {type(e).__name__}: {str(e)}", exc_info=True)

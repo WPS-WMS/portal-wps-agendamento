@@ -205,8 +205,9 @@ def _forgot_password_background(email_str, flask_app):
         try:
             user = User.query.filter_by(email=email_str).first()
             if not user or not user.is_active:
-                logger.info("[forgot-password] Usuário não encontrado ou inativo (background)")
+                logger.info("[forgot-password] Usuário não encontrado ou inativo (background) — e-mail NÃO enviado. Use um e-mail cadastrado no sistema para testar.")
                 return
+            logger.info(f"[forgot-password] Usuário encontrado (id={user.id}), criando token e enviando e-mail para {user.email}")
             expiry_minutes = int(os.environ.get('RESET_TOKEN_EXPIRY', 60))
             reset_token = PasswordResetToken.create_token(user.id, expiry_minutes)
             to_email = str(user.email)
