@@ -46,12 +46,23 @@ class EmailService:
     def _send_via_resend(self, to_email, subject, html_body):
         """Envia e-mail via Resend API (HTTPS). Funciona no Railway."""
         try:
-            payload = json.dumps({
-                "from": f"{self.from_name} <{self.from_email}>",
+            # Formato "from": pode ser apenas email ou "Nome <email@domain.com>"
+            # Se houver nome, usar formato com aspas para evitar problemas com espaços
+            if self.from_name and self.from_name.strip():
+                from_field = f'"{self.from_name}" <{self.from_email}>'
+            else:
+                from_field = self.from_email
+            
+            payload_data = {
+                "from": from_field,
                 "to": [to_email],
                 "subject": subject,
                 "html": html_body,
-            }).encode("utf-8")
+            }
+            
+            logger.info(f"Resend: Enviando e-mail | From: {from_field} | To: {to_email} | Subject: {subject}")
+            
+            payload = json.dumps(payload_data).encode("utf-8")
             req = urllib.request.Request(
                 RESEND_API_URL,
                 data=payload,
