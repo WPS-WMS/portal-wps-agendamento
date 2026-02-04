@@ -605,6 +605,18 @@ DEBUG=True
 CORS_ORIGINS=*
 ```
 
+**E-mail (recuperação de senha) em produção (Railway):**  
+No Railway, portas SMTP (25, 587) costumam ser bloqueadas, gerando erro "Network is unreachable". Use a **Resend** (API HTTPS):
+
+1. Crie uma conta em [resend.com](https://resend.com) e gere uma API Key.
+2. No Railway, adicione as variáveis:
+   - `RESEND_API_KEY` = sua API Key (ex.: `re_...`)
+   - `RESEND_FROM_EMAIL` = e-mail verificado no Resend (ex.: `noreply@seudominio.com`)
+   - `RESEND_FROM_NAME` = nome exibido (ex.: `Portal WPS Agendamento`)
+   - `FRONTEND_URL` = URL do frontend (ex.: `https://portal-agendamentos-cargoflow.web.app`)
+
+Se `RESEND_API_KEY` estiver definida, o sistema usa a Resend; caso contrário, tenta SMTP (útil em desenvolvimento local).
+
 > **Para Produção**: Consulte `docs/SEGURANCA.md` para configuração completa e obrigatória.
 
 ## Dados de Teste
@@ -708,9 +720,6 @@ O sistema registra todas as operações importantes:
 ## Referências
 
 Para mais informações, consulte:
-- **Requisitos do Sistema**: `docs/REQUISITOS_PORTAL_WPS.md` - Documentação de requisitos (personas, histórias de usuário, regras de negócio, fluxos, critérios de aceite)
-- **Documentação da API**: `docs/API_PORTAL_WPS.md` - Endpoints, payloads, headers, exemplos e erros
-- **Guia do Desenvolvedor**: `docs/GUIA_DESENVOLVEDOR.md` - Rodar local, deploy, estrutura de pastas, padrões de commit, scripts
 - **Guia de Instalação**: `docs/GUIA_INSTALACAO.md` - Passo a passo de instalação
 - **Guia de Segurança**: `docs/SEGURANCA.md` - Configurações de segurança e variáveis de ambiente
 - **Modelagem do Banco**: `docs/MODELAGEM_BANCO_DE_DADOS.md` - Estrutura completa do banco

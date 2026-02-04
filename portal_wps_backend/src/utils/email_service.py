@@ -1,70 +1,100 @@
 import os
 import smtplib
 import logging
+import json
+import urllib.request
+import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
 
 logger = logging.getLogger(__name__)
 
+# Resend API (HTTPS) funciona no Railway; SMTP (porta 587) costuma ser bloqueado em PaaS
+RESEND_API_URL = "https://api.resend.com/emails"
+
+
 class EmailService:
-    """Serviço para envio de e-mails"""
-    
+    """Serviço para envio de e-mails. Usa Resend API se RESEND_API_KEY estiver definida (recomendado no Railway); senão SMTP."""
+
     def __init__(self):
+        self.resend_api_key = os.environ.get('RESEND_API_KEY')
         self.smtp_host = os.environ.get('SMTP_HOST')
         self.smtp_port = int(os.environ.get('SMTP_PORT', 587))
         self.smtp_user = os.environ.get('SMTP_USER')
         self.smtp_password = os.environ.get('SMTP_PASSWORD')
-        self.from_email = os.environ.get('SMTP_FROM_EMAIL', 'noreply@portalwps.com')
-        self.from_name = os.environ.get('SMTP_FROM_NAME', 'Portal WPS Agendamento')
+        self.from_email = os.environ.get('SMTP_FROM_EMAIL') or os.environ.get('RESEND_FROM_EMAIL') or 'noreply@portalwps.com'
+        self.from_name = os.environ.get('SMTP_FROM_NAME') or os.environ.get('RESEND_FROM_NAME') or 'Portal WPS Agendamento'
         self.frontend_url = os.environ.get('FRONTEND_URL', 'https://portal-agendamentos-cargoflow.web.app')
-        
-        # Verificar se está configurado
-        self.is_configured = all([
+
+        self._use_resend = bool(self.resend_api_key)
+        self._use_smtp = not self._use_resend and all([
             self.smtp_host,
             self.smtp_user,
             self.smtp_password
         ])
-        
-        if not self.is_configured:
-            logger.warning("⚠️ Serviço de e-mail não configurado. Configure as variáveis SMTP_* no Railway.")
+        self.is_configured = self._use_resend or self._use_smtp
+
+        if self._use_resend:
+            logger.info("E-mail configurado via Resend API (HTTPS).")
+        elif self._use_smtp:
+            logger.info("E-mail configurado via SMTP.")
+        else:
+            logger.warning("Serviço de e-mail não configurado. Defina RESEND_API_KEY (recomendado no Railway) ou SMTP_*.")
     
-    def send_email(self, to_email, subject, html_body, text_body=None):
-        """Envia um e-mail"""
-        if not self.is_configured:
-            logger.error("SMTP não configurado (SMTP_HOST, SMTP_USER ou SMTP_PASSWORD ausentes)")
+    def _send_via_resend(self, to_email, subject, html_body):
+        """Envia e-mail via Resend API (HTTPS). Funciona no Railway."""
+        payload = json.dumps({
+            "from": f"{self.from_name} <{self.from_email}>",
+            "to": [to_email],
+            "subject": subject,
+            "html": html_body,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            RESEND_API_URL,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {self.resend_api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        ctx = ssl.create_default_context()
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
+            if 200 <= resp.getcode() < 300:
+                logger.info(f"Resend: E-mail enviado com sucesso para {to_email}")
+                return True
+            body = resp.read().decode("utf-8")
+            logger.error(f"Resend API retornou {resp.getcode()}: {body}")
             return False
-        
+
+    def _send_via_smtp(self, to_email, subject, html_body, text_body=None):
+        """Envia e-mail via SMTP. Pode falhar no Railway (porta 587 bloqueada)."""
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = formataddr((self.from_name, self.from_email))
+        msg['To'] = to_email
+        if text_body:
+            msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
+        msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+        timeout_sec = int(os.environ.get('SMTP_TIMEOUT', 10))
+        with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=timeout_sec) as server:
+            server.starttls()
+            server.login(self.smtp_user, self.smtp_password)
+            server.send_message(msg)
+        return True
+
+    def send_email(self, to_email, subject, html_body, text_body=None):
+        """Envia um e-mail (Resend API ou SMTP)."""
+        if not self.is_configured:
+            logger.error("E-mail não configurado (RESEND_API_KEY ou SMTP_* ausentes)")
+            return False
         try:
-            logger.info(f"SMTP: Conectando a {self.smtp_host}:{self.smtp_port}...")
-            # Criar mensagem
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            msg['From'] = formataddr((self.from_name, self.from_email))
-            msg['To'] = to_email
-            
-            # Adicionar corpo do e-mail
-            if text_body:
-                part1 = MIMEText(text_body, 'plain', 'utf-8')
-                msg.attach(part1)
-            
-            part2 = MIMEText(html_body, 'html', 'utf-8')
-            msg.attach(part2)
-            
-            # Conectar e enviar (timeout 10s para não travar se SMTP estiver lento)
-            timeout_sec = int(os.environ.get('SMTP_TIMEOUT', 10))
-            with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=timeout_sec) as server:
-                server.starttls()
-                logger.info("SMTP: STARTTLS OK, fazendo login...")
-                server.login(self.smtp_user, self.smtp_password)
-                logger.info("SMTP: Login OK, enviando mensagem...")
-                server.send_message(msg)
-            
-            logger.info(f"SMTP: E-mail enviado com sucesso para {to_email}")
-            return True
-            
+            if self._use_resend:
+                return self._send_via_resend(to_email, subject, html_body)
+            return self._send_via_smtp(to_email, subject, html_body, text_body)
         except Exception as e:
-            logger.error(f"SMTP: Erro ao enviar e-mail para {to_email}: {type(e).__name__}: {str(e)}", exc_info=True)
+            logger.error(f"Erro ao enviar e-mail para {to_email}: {type(e).__name__}: {str(e)}", exc_info=True)
             return False
     
     def send_password_reset_email(self, to_email, reset_token):
