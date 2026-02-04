@@ -37,7 +37,7 @@ class EmailService:
         self.is_configured = self._use_resend or self._use_smtp
 
         if self._use_resend:
-            logger.info("E-mail configurado via Resend API (HTTPS).")
+            logger.info(f"E-mail configurado via Resend API (HTTPS). From: {self.from_email}, API Key: {self.resend_api_key[:10]}...")
         elif self._use_smtp:
             logger.info("E-mail configurado via SMTP.")
         else:
@@ -47,8 +47,8 @@ class EmailService:
         """Envia e-mail via Resend API (HTTPS). Funciona no Railway."""
         try:
             # Formato "from": Resend aceita apenas email ou "Nome <email@domain.com>"
-            # Por enquanto, usar apenas o email para evitar problemas com formato do nome
-            # Se precisar do nome, pode ser adicionado depois quando o domínio estiver funcionando
+            # Por padrão, usar APENAS o email (sem nome) para evitar erro 1010
+            # O erro 1010 geralmente ocorre quando há problema com formato ou domínio não verificado
             from_field = self.from_email
             
             # Se RESEND_USE_NAME estiver definido como "true", tentar incluir o nome
@@ -56,6 +56,9 @@ class EmailService:
             if use_name and self.from_name and self.from_name.strip():
                 # Formato com nome: "Nome <email@domain.com>"
                 from_field = f"{self.from_name} <{self.from_email}>"
+                logger.info(f"Resend: Usando nome no 'from' (RESEND_USE_NAME=true): {from_field}")
+            else:
+                logger.info(f"Resend: Usando apenas email no 'from' (sem nome): {from_field}")
             
             payload_data = {
                 "from": from_field,
