@@ -46,12 +46,16 @@ class EmailService:
     def _send_via_resend(self, to_email, subject, html_body):
         """Envia e-mail via Resend API (HTTPS). Funciona no Railway."""
         try:
-            # Formato "from": pode ser apenas email ou "Nome <email@domain.com>"
-            # Se houver nome, usar formato com aspas para evitar problemas com espaços
-            if self.from_name and self.from_name.strip():
-                from_field = f'"{self.from_name}" <{self.from_email}>'
-            else:
-                from_field = self.from_email
+            # Formato "from": Resend aceita apenas email ou "Nome <email@domain.com>"
+            # Por enquanto, usar apenas o email para evitar problemas com formato do nome
+            # Se precisar do nome, pode ser adicionado depois quando o domínio estiver funcionando
+            from_field = self.from_email
+            
+            # Se RESEND_USE_NAME estiver definido como "true", tentar incluir o nome
+            use_name = os.environ.get('RESEND_USE_NAME', 'false').lower() == 'true'
+            if use_name and self.from_name and self.from_name.strip():
+                # Formato com nome: "Nome <email@domain.com>"
+                from_field = f"{self.from_name} <{self.from_email}>"
             
             payload_data = {
                 "from": from_field,
