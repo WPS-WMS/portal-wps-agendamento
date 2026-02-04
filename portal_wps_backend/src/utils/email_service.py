@@ -11,91 +11,62 @@ from email.utils import formataddr
 
 logger = logging.getLogger(__name__)
 
-# Resend API (HTTPS) funciona no Railway; SMTP (porta 587) costuma ser bloqueado em PaaS
-RESEND_API_URL = "https://api.resend.com/emails"
+SENDGRID_API_URL = "https://api.sendgrid.com/v3/mail/send"
 
 
 class EmailService:
-    """Serviço para envio de e-mails. Usa Resend API se RESEND_API_KEY estiver definida (recomendado no Railway); senão SMTP."""
+    """Serviço para envio de e-mails. Usa SendGrid API se SENDGRID_API_KEY estiver definida; senão SMTP."""
 
     def __init__(self):
-        self.resend_api_key = os.environ.get('RESEND_API_KEY')
+        self.sendgrid_api_key = os.environ.get('SENDGRID_API_KEY')
         self.smtp_host = os.environ.get('SMTP_HOST')
         self.smtp_port = int(os.environ.get('SMTP_PORT', 587))
         self.smtp_user = os.environ.get('SMTP_USER')
         self.smtp_password = os.environ.get('SMTP_PASSWORD')
-        
-        # Determinar qual serviço usar primeiro
-        self._use_resend = bool(self.resend_api_key)
-        self._use_smtp = not self._use_resend and all([
+
+        self._use_sendgrid = bool(self.sendgrid_api_key)
+        self._use_smtp = not self._use_sendgrid and all([
             self.smtp_host,
             self.smtp_user,
             self.smtp_password
         ])
-        
-        # Se usar Resend, priorizar RESEND_FROM_EMAIL; senão, usar SMTP_FROM_EMAIL
-        if self._use_resend:
-            self.from_email = os.environ.get('RESEND_FROM_EMAIL') or os.environ.get('SMTP_FROM_EMAIL') or 'noreply@portalwps.com'
-            self.from_name = os.environ.get('RESEND_FROM_NAME') or os.environ.get('SMTP_FROM_NAME') or 'Portal WPS Agendamento'
-        else:
-            self.from_email = os.environ.get('SMTP_FROM_EMAIL') or os.environ.get('RESEND_FROM_EMAIL') or 'noreply@portalwps.com'
-            self.from_name = os.environ.get('SMTP_FROM_NAME') or os.environ.get('RESEND_FROM_NAME') or 'Portal WPS Agendamento'
-        
-        self.frontend_url = os.environ.get('FRONTEND_URL', 'https://portal-agendamentos-cargoflow.web.app')
-        self.is_configured = self._use_resend or self._use_smtp
 
-        if self._use_resend:
-            logger.info(f"E-mail configurado via Resend API (HTTPS). From: {self.from_email}, API Key: {self.resend_api_key[:10]}...")
+        if self._use_sendgrid:
+            self.from_email = os.environ.get('SENDGRID_FROM_EMAIL') or os.environ.get('SMTP_FROM_EMAIL') or 'noreply@portalwps.com'
+            self.from_name = os.environ.get('SENDGRID_FROM_NAME') or os.environ.get('SMTP_FROM_NAME') or 'Portal WPS Agendamento'
+        else:
+            self.from_email = os.environ.get('SMTP_FROM_EMAIL') or os.environ.get('SENDGRID_FROM_EMAIL') or 'noreply@portalwps.com'
+            self.from_name = os.environ.get('SMTP_FROM_NAME') or os.environ.get('SENDGRID_FROM_NAME') or 'Portal WPS Agendamento'
+
+        self.frontend_url = os.environ.get('FRONTEND_URL', 'https://portal-agendamentos-cargoflow.web.app')
+        self.is_configured = self._use_sendgrid or self._use_smtp
+
+        if self._use_sendgrid:
+            logger.info(f"E-mail configurado via SendGrid API. From: {self.from_name} <{self.from_email}>")
         elif self._use_smtp:
             logger.info(f"E-mail configurado via SMTP. From: {self.from_email}")
         else:
-            logger.warning(
-                "Serviço de e-mail NÃO configurado. Defina RESEND_API_KEY nas variáveis do serviço backend no Railway. "
-                "(RESEND_API_KEY está vazia ou ausente.)"
-            )
-    
-    def _send_via_resend(self, to_email, subject, html_body):
-        """Envia e-mail via Resend API (HTTPS). Funciona no Railway."""
+            logger.warning("Serviço de e-mail não configurado. Defina SENDGRID_API_KEY ou SMTP_* nas variáveis do serviço no Railway.")
+
+    def _send_via_sendgrid(self, to_email, subject, html_body, text_body=None):
+        """Envia e-mail via SendGrid API (HTTPS)."""
         try:
-            # Formato "from": Resend aceita apenas email ou "Nome <email@domain.com>"
-            # Por padrão, usar APENAS o email (sem nome) para evitar erro 1010
-            # O erro 1010 geralmente ocorre quando há problema com formato ou domínio não verificado
-            
-            # SEMPRE usar apenas o email (sem nome) para evitar problemas
-            # O Resend pode rejeitar se o formato com nome tiver problemas
-            from_field = self.from_email
-            
-            # Se RESEND_USE_NAME estiver definido como "true", tentar incluir o nome
-            use_name = os.environ.get('RESEND_USE_NAME', 'false').lower() == 'true'
-            if use_name and self.from_name and self.from_name.strip():
-                # Formato com nome: "Nome <email@domain.com>"
-                from_field = f"{self.from_name} <{self.from_email}>"
-                logger.info(f"Resend: Usando nome no 'from' (RESEND_USE_NAME=true): {from_field}")
-            else:
-                logger.info(f"Resend: Usando apenas email no 'from' (sem nome): {from_field}")
-            
-            # Se RESEND_FALLBACK_TEST_DOMAIN estiver definido, usar domínio de teste do Resend
-            # Isso ajuda a isolar se o problema é com o domínio customizado
-            fallback_test = os.environ.get('RESEND_FALLBACK_TEST_DOMAIN', 'false').lower() == 'true'
-            if fallback_test:
-                from_field = 'onboarding@resend.dev'
-                logger.warning(f"Resend: Usando domínio de teste (RESEND_FALLBACK_TEST_DOMAIN=true): {from_field}")
-            
+            content = [{"type": "text/html", "value": html_body}]
+            if text_body:
+                content.insert(0, {"type": "text/plain", "value": text_body})
             payload_data = {
-                "from": from_field,
-                "to": [to_email],
+                "personalizations": [{"to": [{"email": to_email}]}],
+                "from": {"email": self.from_email, "name": self.from_name},
                 "subject": subject,
-                "html": html_body,
+                "content": content,
             }
-            
-            logger.info(f"Resend: Enviando e-mail | From: {from_field} | To: {to_email} | Subject: {subject}")
-            
+
             payload = json.dumps(payload_data).encode("utf-8")
             req = urllib.request.Request(
-                RESEND_API_URL,
+                SENDGRID_API_URL,
                 data=payload,
                 headers={
-                    "Authorization": f"Bearer {self.resend_api_key}",
+                    "Authorization": f"Bearer {self.sendgrid_api_key}",
                     "Content-Type": "application/json",
                 },
                 method="POST",
@@ -103,68 +74,22 @@ class EmailService:
             ctx = ssl.create_default_context()
             with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
                 if 200 <= resp.getcode() < 300:
-                    logger.info(f"Resend: E-mail enviado com sucesso para {to_email}")
                     return True
                 body = resp.read().decode("utf-8")
-                logger.error(f"Resend API retornou {resp.getcode()}: {body}")
+                logger.error(f"SendGrid API retornou {resp.getcode()}: {body}")
                 return False
         except urllib.error.HTTPError as e:
-            # Captura erros HTTP (403, 401, 1010, etc.) e mostra detalhes
             try:
-                error_body = e.read().decode("utf-8") if e.fp else "Sem detalhes"
-            except:
-                error_body = "Não foi possível ler o corpo da resposta"
-            
-            # Tentar parsear JSON da resposta para obter mensagem de erro detalhada
-            error_details = error_body
-            try:
-                error_json = json.loads(error_body)
-                if isinstance(error_json, dict):
-                    error_details = error_json.get('message', error_body)
-                    if 'errors' in error_json:
-                        error_details += f" | Erros: {error_json['errors']}"
-            except:
-                pass
-            
-            error_msg = (
-                f"Resend HTTP Error {e.code}: {e.reason}\n"
-                f"URL: {RESEND_API_URL}\n"
-                f"From usado: {from_field}\n"
-                f"To: {to_email}\n"
-                f"Resposta completa: {error_body}\n"
-                f"Mensagem de erro: {error_details}\n"
-            )
-            
-            # Mensagens específicas por código de erro
-            if e.code == 403:
-                error_msg += (
-                    "Possíveis causas:\n"
-                    "1. API Key inválida ou sem permissões adequadas\n"
-                    "2. Domínio não verificado (se usando domínio customizado)\n"
-                    "3. E-mail 'from' não corresponde ao domínio verificado\n"
-                    "4. Se usando domínio de teste (onboarding@resend.dev), o e-mail destinatário precisa estar na lista de e-mails permitidos do Resend"
-                )
-            elif e.code == 401:
-                error_msg += "Possíveis causas: API Key inválida ou expirada. Verifique RESEND_API_KEY no Railway."
-            elif e.code == 1010:
-                error_msg += "Erro 1010: Cloudflare bloqueou a requisição (possível problema de DNS ou firewall). Verifique conectividade de rede do Railway."
-            else:
-                error_msg += f"Erro HTTP {e.code}: Verifique a documentação do Resend ou logs detalhados."
-            
-            logger.error(error_msg)
+                error_body = e.read().decode("utf-8") if e.fp else ""
+            except Exception:
+                error_body = ""
+            logger.error(f"SendGrid HTTP Error {e.code}: {e.reason}. Resposta: {error_body}")
             return False
         except urllib.error.URLError as e:
-            # Erros de rede/DNS (não HTTP)
-            logger.error(
-                f"Resend: Erro de rede/URL ao enviar e-mail: {type(e).__name__}: {str(e)}\n"
-                f"URL: {RESEND_API_URL}\n"
-                f"From: {self.from_name} <{self.from_email}>\n"
-                f"To: {to_email}\n"
-                f"Possíveis causas: Problema de conectividade, DNS não resolve, ou firewall bloqueando acesso."
-            )
+            logger.error(f"SendGrid: Erro de rede: {type(e).__name__}: {str(e)}")
             return False
         except Exception as e:
-            logger.error(f"Resend: Erro inesperado ao enviar e-mail: {type(e).__name__}: {str(e)}", exc_info=True)
+            logger.error(f"SendGrid: Erro ao enviar e-mail: {type(e).__name__}: {str(e)}", exc_info=True)
             return False
 
     def _send_via_smtp(self, to_email, subject, html_body, text_body=None):
@@ -184,27 +109,24 @@ class EmailService:
         return True
 
     def send_email(self, to_email, subject, html_body, text_body=None):
-        """Envia um e-mail (Resend API ou SMTP)."""
+        """Envia um e-mail (SendGrid API ou SMTP)."""
         if not self.is_configured:
-            logger.error("E-mail não configurado: RESEND_API_KEY ou SMTP_* ausentes. Defina RESEND_API_KEY nas variáveis do serviço no Railway.")
+            logger.error("E-mail não configurado: SENDGRID_API_KEY ou SMTP_* ausentes.")
             return False
         try:
-            if self._use_resend:
-                logger.info("Resend: Chamando API Resend (POST /emails)...")
-                return self._send_via_resend(to_email, subject, html_body)
-            logger.info("SMTP: Enviando via SMTP...")
+            if self._use_sendgrid:
+                return self._send_via_sendgrid(to_email, subject, html_body, text_body)
             return self._send_via_smtp(to_email, subject, html_body, text_body)
         except Exception as e:
             logger.error(f"Erro ao enviar e-mail para {to_email}: {type(e).__name__}: {str(e)}", exc_info=True)
             return False
-    
+
     def send_password_reset_email(self, to_email, reset_token):
-        """Envia e-mail de recuperação de senha"""
+        """Envia e-mail de recuperação de senha."""
         reset_url = f"{self.frontend_url}/reset-password?token={reset_token}"
-        logger.info(f"Enviando e-mail de recuperação para {to_email} | link: {self.frontend_url}/reset-password?token=***")
-        
+
         subject = "Recuperação de Senha - Portal WPS Agendamento"
-        
+
         html_body = f"""
         <!DOCTYPE html>
         <html>
@@ -252,24 +174,24 @@ class EmailService:
         </body>
         </html>
         """
-        
+
         text_body = f"""
         Recuperação de Senha - Portal WPS Agendamento
-        
+
         Olá,
-        
+
         Recebemos uma solicitação para redefinir a senha da sua conta.
-        
+
         Clique no link abaixo para criar uma nova senha:
         {reset_url}
-        
+
         IMPORTANTE:
         - Este link expira em 60 minutos
         - Se você não solicitou esta recuperação, ignore este e-mail
         - Não compartilhe este link com ninguém
-        
+
         Este é um e-mail automático, por favor não responda.
         © Portal WPS Agendamento
         """
-        
+
         return self.send_email(to_email, subject, html_body, text_body)

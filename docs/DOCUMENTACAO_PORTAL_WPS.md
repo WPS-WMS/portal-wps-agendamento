@@ -606,16 +606,17 @@ CORS_ORIGINS=*
 ```
 
 **E-mail (recuperação de senha) em produção (Railway):**  
-No Railway, portas SMTP (25, 587) costumam ser bloqueadas, gerando erro "Network is unreachable". Use a **Resend** (API HTTPS):
+No Railway, portas SMTP (25, 587) costumam ser bloqueadas. Use **SendGrid** (API HTTPS):
 
-1. Crie uma conta em [resend.com](https://resend.com) e gere uma API Key.
-2. No Railway, adicione as variáveis:
-   - `RESEND_API_KEY` = sua API Key (ex.: `re_...`)
-   - `RESEND_FROM_EMAIL` = e-mail verificado no Resend (ex.: `noreply@seudominio.com`)
-   - `RESEND_FROM_NAME` = nome exibido (ex.: `Portal WPS Agendamento`)
+1. Crie uma conta em [sendgrid.com](https://sendgrid.com) e gere uma API Key (Settings → API Keys).
+2. No SendGrid, verifique o remetente (Settings → Sender Authentication).
+3. No Railway, adicione as variáveis do serviço backend:
+   - `SENDGRID_API_KEY` = sua API Key
+   - `SENDGRID_FROM_EMAIL` = e-mail verificado no SendGrid (ex.: `noreply@seudominio.com`)
+   - `SENDGRID_FROM_NAME` = nome exibido (ex.: `Portal WPS Agendamento`)
    - `FRONTEND_URL` = URL do frontend (ex.: `https://portal-agendamentos-cargoflow.web.app`)
 
-Se `RESEND_API_KEY` estiver definida, o sistema usa a Resend; caso contrário, tenta SMTP (útil em desenvolvimento local).
+Se `SENDGRID_API_KEY` estiver definida, o sistema usa SendGrid; caso contrário, tenta SMTP (útil em desenvolvimento local).
 
 > **Para Produção**: Consulte `docs/SEGURANCA.md` para configuração completa e obrigatória.
 
